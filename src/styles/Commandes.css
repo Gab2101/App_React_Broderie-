@@ -1,0 +1,175 @@
+/* --- Conteneur principal --- */
+.commandes-page {
+  padding: 40px;
+  text-align: center;
+  background-color: #f0f4f8;
+  min-height: 100vh;
+}
+
+/* --- Bouton principal --- */
+.btn-nouvelle-commande {
+  padding: 10px 20px;
+  background-color: #007BFF;
+  color: white;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-nouvelle-commande:hover {
+  background-color: #0056b3;
+}
+
+/* --- Modale --- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+
+/* --- Formulaire --- */
+.formulaire-commande label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: bold;
+  text-align: left;
+}
+
+.formulaire-commande input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-top: 5px;
+  margin-bottom: 15px;
+  font-size: 1rem;
+}
+
+/* --- Tags --- */
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tag {
+  padding: 8px 12px;
+  background-color: #007BFF;
+  color: white;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  border: 1px solid #0056b3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag:hover {
+  background-color: #0056b3;
+}
+
+.tag.active {
+  background-color: #FF8C00;
+  border-color: #cc7000;
+}
+
+.tag.readonly {
+  background-color: #d0d0d0;
+  color: black;
+  cursor: default;
+  border: none;
+}
+
+/* --- Liste des commandes --- */
+.liste-commandes {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+}
+
+/* --- Carte commande --- */
+.carte-commande {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  width: 250px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  text-align: left;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.carte-commande:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+/* --- Boutons de la modale --- */
+.btn-enregistrer {
+  background-color: #28a745;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.btn-enregistrer:hover {
+  background-color: #218838;
+}
+
+.btn-fermer {
+  margin-top: 15px;
+  background-color: #6c757d;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-fermer:hover {
+  background-color: #5a6268;
+}
+
+/* --- Message sauvegarde --- */
+.message-saved {
+  background-color: #d4edda;
+  color: #155724;
+  padding: 10px;
+  border-radius: 6px;
+  margin-top: 15px;
+  text-align: center;
+  font-weight: bold;
+}

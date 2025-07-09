@@ -1,0 +1,115 @@
+.planning-page {
+  padding: 30px;
+  text-align: center;
+}
+
+/* Espace autour du titre */
+.planning-page h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #007BFF;
+}
+
+/* Boutons */
+.navigation-buttons,
+.zoom-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.navigation-buttons button,
+.zoom-buttons button {
+  background-color: #0056b3;
+  color: white;
+  padding: 10px 18px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.navigation-buttons button:hover,
+.zoom-buttons button:hover {
+  background-color: #007BFF;
+  transform: translateY(-2px);
+}
+
+/* Tableau */
+.planning-table {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.planning-table table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 800px;
+}
+
+.planning-table th,
+.planning-table td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
+}
+
+.planning-table th {
+  background-color: #f0f0f0;
+  position: sticky;
+  top: 0;
+}
+
+/* Couleurs par jour */
+.day-0 td { background-color: #f9f3e9; }
+.day-1 td { background-color: #e6f0ff; }
+.day-2 td { background-color: #e9fbe9; }
+.day-3 td { background-color: #fffde7; }
+.day-4 td { background-color: #fce4ec; }
+.day-5 td { background-color: #f3e5f5; }
+.day-6 td { background-color: #eeeeee; }
+
+/* Cellule occupée */
+.cell-occupied {
+  font-weight: bold;
+  border: 2px solid #333;
+  position: relative;
+}
+
+/* Bande urgence */
+.cell-occupied::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 6px;
+  background-color: #888;
+}
+
+/* Urgences */
+.cell-occupied.urgence-5::before { background-color: #e74c3c; }
+.cell-occupied.urgence-4::before { background-color: #e67e22; }
+.cell-occupied.urgence-3::before { background-color: #f1c40f; }
+.cell-occupied.urgence-2::before { background-color: #2ecc71; }
+.cell-occupied.urgence-1::before { background-color: #3498db; }
+
+/* Texte lisible */
+.cell-occupied strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Couleurs uniques par commande */
+.commande-color-1 { background-color: #d1e8ff; }
+.commande-color-2 { background-color: #dfffd1; }
+.commande-color-3 { background-color: #ffe6d1; }
+.commande-color-4 { background-color: #f1d1ff; }
+.commande-color-5 { background-color: #ffd1eb; }
+.commande-color-6 { background-color: #fff3d1; }
+.commande-color-7 { background-color: #d1ffe9; }
+.commande-color-8 { background-color: #d1f0ff; }
+.commande-color-9 { background-color: #e6ffd1; }
+.commande-color-10 { background-color: #fdd1d1; }

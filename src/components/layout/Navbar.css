@@ -1,0 +1,26 @@
+.navbar {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background-color: #f0f0f0; /* Tu peux remplacer par #B71C21 si tu veux du rouge */
+  padding: 20px 0;
+  border-bottom: 2px solid #ccc;
+}
+
+.navbar a {
+  text-decoration: none;
+  color: #333;
+  font-size: 1.5rem;
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+.navbar a:hover {
+  color: #B71C21;
+}
+
+.navbar a.active {
+  color: #B71C21;
+  border-bottom: 2px solid #B71C21;
+  padding-bottom: 4px;
+}

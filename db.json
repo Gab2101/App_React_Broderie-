@@ -1,0 +1,343 @@
+{
+  "etiquettes": {
+    "articleTags": [
+      "T-shirt",
+      "Polo",
+      "Sweet-Shirt",
+      "Chemise",
+      "Bonnet",
+      "Casquette",
+      "SoftShells",
+      "Pantalon",
+      "Tote bags",
+      "Doudoune",
+      "Blouse",
+      "Tablier",
+      "BodyWarmer",
+      "Polaire",
+      "Parka",
+      "Serviette"
+    ],
+    "broderieTags": [
+      "Coeur",
+      "Anti-coeur",
+      "Dos",
+      "Manche",
+      "Col",
+      "Poche",
+      "Broderie Bouclette",
+      "Grosse Broderie ( 25cm )",
+      "Emplacement doublé",
+      "Emplacement Simple"
+    ]
+  },
+  "commandes": [
+    {
+      "id": "8417",
+      "numero": "1",
+      "client": "Client1",
+      "quantite": "50",
+      "points": "1200",
+      "urgence": 4,
+      "dateLivraison": "2025-07-11",
+      "types": [
+        "T-shirt"
+      ],
+      "options": [
+        "Coeur"
+      ],
+      "machineAssignee": "Multi têtes 1",
+      "dureeEstimee": 9
+    },
+    {
+      "id": "1d0f",
+      "numero": "2",
+      "client": "Client2",
+      "quantite": "500",
+      "points": "1500",
+      "urgence": 4,
+      "dateLivraison": "2025-07-10",
+      "types": [
+        "T-shirt"
+      ],
+      "options": [
+        "Coeur"
+      ],
+      "machineAssignee": "Multi têtes 2",
+      "dureeEstimee": 105
+    },
+    {
+      "id": "76ed",
+      "numero": "3",
+      "client": "Client3",
+      "quantite": "70",
+      "points": "1200",
+      "urgence": 4,
+      "dateLivraison": "2025-07-11",
+      "types": [
+        "T-shirt"
+      ],
+      "options": [
+        "Coeur"
+      ],
+      "machineAssignee": "Multi têtes 3",
+      "dureeEstimee": 12
+    }
+  ],
+  "machines": [
+    {
+      "id": "b343",
+      "nom": "Multi têtes 1",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "T-shirt",
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Chemise",
+        "Polo",
+        "Casquette"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "af07",
+      "nom": "Multi têtes 2",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polo",
+        "Polaire",
+        "T-shirt",
+        "Chemise",
+        "Emplacement Simple"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "c8d7",
+      "nom": "Multi têtes 3",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Casquette"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "2313",
+      "nom": "Multi têtes 4",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Emplacement Simple"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "2390",
+      "nom": "Multi têtes 5",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Casquette"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "ded7",
+      "nom": "Multi têtes 6",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Casquette"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "a04f",
+      "nom": "Multi têtes 7",
+      "nbTetes": "6",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Casquette",
+        "Grosse Broderie ( 25cm )",
+        "Coeur"
+      ],
+      "vitesseMoyenne": 600,
+      "PositionMachine": "Plat"
+    },
+    {
+      "id": "8d8b",
+      "nom": "Multi têtes 8",
+      "nbTetes": "8",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Grosse Broderie ( 25cm )",
+        "Casquette",
+        "Coeur"
+      ],
+      "vitesseMoyenne": 600,
+      "PositionMachine": "Plat"
+    },
+    {
+      "id": "e51a",
+      "nom": "Multi têtes 9",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Emplacement Simple"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "18bf",
+      "nom": "Multi têtes 10",
+      "nbTetes": "12",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Casquette"
+      ],
+      "vitesseMoyenne": 600
+    },
+    {
+      "id": "5104",
+      "nom": "Multi têtes 11",
+      "nbTetes": "6",
+      "gamme": "Standard",
+      "etiquettes": [
+        "Bonnet",
+        "Sweet-Shirt",
+        "Serviette",
+        "Polaire",
+        "Polo",
+        "Chemise",
+        "T-shirt",
+        "Emplacement Simple",
+        "Coeur"
+      ],
+      "vitesseMoyenne": 600,
+      "PositionMachine": "Normale "
+    }
+  ],
+  "operateurs": [
+    {
+      "id": "3b0f",
+      "nom": "1",
+      "prenom": "Opérateur",
+      "Pforts": [
+        "T-shirt",
+        "Coeur",
+        "Polo",
+        "Sweet-Shirt",
+        "Chemise",
+        "Bonnet",
+        "Casquette",
+        "SoftShells",
+        "Pantalon",
+        "Tote bags",
+        "Blouse",
+        "Doudoune",
+        "Serviette",
+        "Parka",
+        "Polaire",
+        "BodyWarmer",
+        "Tablier",
+        "Anti-coeur",
+        "Dos",
+        "Manche",
+        "Col",
+        "Poche",
+        "Emplacement doublé",
+        "Grosse Broderie ( 25cm )",
+        "Emplacement Simple",
+        "Broderie Bouclette"
+      ],
+      "photo": "data:image/jpeg;base64,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"
+    }
+  ],
+  "planning": [
+    {
+      "id": "a7f6",
+      "machineId": "b343",
+      "commandeId": "8417",
+      "debut": "2025-07-08T06:00:00.000Z",
+      "fin": "2025-07-08T15:00:00.000Z"
+    },
+    {
+      "id": "eb5a",
+      "machineId": "af07",
+      "commandeId": "1d0f",
+      "debut": "2025-07-08T06:00:00.000Z",
+      "fin": "2025-07-12T15:00:00.000Z"
+    },
+    {
+      "id": "b44a",
+      "machineId": "c8d7",
+      "commandeId": "76ed",
+      "debut": "2025-07-08T06:00:00.000Z",
+      "fin": "2025-07-08T18:00:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+.btn-enregistrer:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
+}
+.btn-fermer:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
+}
+h2 {
+  font-size: 1.8rem;
+  color: #007BFF;
+  margin-bottom: 20px;
+}
+
+h3 {
+  font-size: 1.3rem;
+  color: #333;
+  margin-top: 20px;
+}
+.section-content + .section-content {
+  border-top: 1px solid #eee;
+  padding-top: 30px;
+}
+.carte-machine,
+.carte-commande {
+  border: 4px solid #00ddff;
+  background-color: #fff;
+}
+.btn-nouvelle-commande,
+.btn-nouvelle-machine {
+  background-color: #007BFF;
+  color: white;
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-nouvelle-commande:hover,
+.btn-nouvelle-machine:hover {
+  background-color: #0056b3;
+}
+.page-title {
+  font-size: 1.8rem;
+  color: #007BFF;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.primary-button {
+  background-color: #007BFF;
+  color: white;
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.primary-button:hover {
+  background-color: #0056b3;
+}

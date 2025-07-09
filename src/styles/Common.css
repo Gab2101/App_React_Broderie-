@@ -1,0 +1,169 @@
+:root {
+  --primary-color: #004A93;
+  --primary-hover: #003366;
+  --success-color: #28a745;
+  --success-hover: #218838;
+  --gray-color: #6c757d;
+  --gray-hover: #5a6268;
+  --light-bg: #fafafa;
+  --border-color: #ddd;
+}
+
+/* Modale */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+.modal {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+.modal h2 {
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+/* Boutons génériques */
+button,
+.new-button {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 12px 24px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover,
+.new-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-enregistrer {
+  background-color: var(--success-color);
+}
+.btn-enregistrer:hover {
+  background-color: var(--success-hover);
+}
+.btn-fermer {
+  background-color: var(--gray-color);
+}
+.btn-fermer:hover {
+  background-color: var(--gray-hover);
+}
+
+/* Cartes génériques */
+/* Cartes */
+/* Cartes */
+.carte-commande,
+.carte-machine,
+.carte-operateur {
+  background-color: var(--light-bg);
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  box-shadow: 2px 2px 8px #004A93;  /* Ombre BLEU PUBOS */
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Survol */
+.carte-commande:hover,
+.carte-machine:hover,
+.carte-operateur:hover {
+  background-color: #F59C00; /* Fond ORANGE PUBOS */
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* État sélectionné */
+.carte-selectionnee {
+  border: 3px solid #004A93;     /* Bordure BLEU PUBOS */
+  background-color: #F59C00;     /* Fond ORANGE PUBOS */
+  color: white;                  /* Texte lisible */
+}
+
+
+
+/* Message sauvegarde */
+.message-saved {
+  background-color: #d4edda;
+  color: #155724;
+  padding: 10px;
+  border-radius: 6px;
+  margin-top: 15px;
+  text-align: center;
+  font-weight: bold;
+  animation: fadeInOut 2s forwards;
+}
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.carte-selectionnee {
+  border: 3px solid #004A93; /* Bordure BLEU PUBOS */
+  background-color: #F59C00; /* Fond ORANGE PUBOS */
+  color: white; /* Texte lisible sur fond orange */
+}
+
+/* Fond coloré commun à toutes les pages */
+[class$="-page"] {
+  background-color: #eaf3fb; /* bleu pastel doux */
+  min-height: 100vh;         /* prend toute la hauteur de la fenêtre */
+}
+/* Conteneur des étiquettes */
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 15px 0;
+  justify-content: center;
+}
+
+/* Style de base des étiquettes */
+.tag {
+  padding: 10px 16px;
+  background-color: #004A93;       /* BLEU PUBOS */
+  border-radius: 20px;
+  border: none;
+  font-size: 0.95rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Survol */
+.tag:hover {
+  background-color: #003366;       /* Bleu un peu plus foncé */
+}
+
+/* Quand l'étiquette est active (sélectionnée) */
+.tag.active {
+  background-color: #F59C00;       /* ORANGE PUBOS */
+  color: white;
+}
+
+/* Étiquettes en lecture seule */
+.tag.readonly {
+  background-color: #ccc;
+  color: black;
+  cursor: default;
+}
