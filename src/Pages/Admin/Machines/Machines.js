@@ -14,7 +14,6 @@ function Machines() {
   const [formData, setFormData] = useState({
     nom: '',
     nbTetes: '',
-    PositionMachine: '',
     etiquettes: []
   });
 
@@ -53,7 +52,7 @@ function Machines() {
       .then(res => res.json())
       .then((data) => {
         setMachines(prev => [...prev, data]);
-        setFormData({ nom: '', nbTetes: '', PositionMachine: '', etiquettes: [] });
+        setFormData({ nom: '', nbTetes: '', etiquettes: [] });
         setShowModalForm(false);
       })
       .catch(err => console.error("Erreur ajout machine :", err));
@@ -92,7 +91,7 @@ function Machines() {
   return (
     <div className="machines-page">
       <NewButton onClick={() => {
-        setFormData({ nom: '', nbTetes: '', PositionMachine: '', etiquettes: [] });
+        setFormData({ nom: '', nbTetes: '', etiquettes: [] });
         setShowModalForm(true);
         setMachineDetails(null);
         setIsEditing(false);
@@ -129,16 +128,6 @@ function Machines() {
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </select>
-              </label>
-              <label>
-                Position de la machine :
-                <input
-                  type="text"
-                  name="PositionMachine"
-                  value={formData.PositionMachine}
-                  onChange={handleChange}
-                  required
-                />
               </label>
               <label>Étiquettes :</label>
               <div className="tags-container">
@@ -180,7 +169,6 @@ function Machines() {
           >
             <h3>{machine.nom}</h3>
             <p><strong>Têtes :</strong> {machine.nbTetes}</p>
-            <p><strong>Position :</strong> {machine.PositionMachine}</p>
             {machine.etiquettes?.length > 0 && (
               <div className="tag-list">
                 {machine.etiquettes.map((t, i) => (
@@ -200,7 +188,6 @@ function Machines() {
               <>
                 <h2>{machineDetails.nom}</h2>
                 <p><strong>Nombre de têtes :</strong> {machineDetails.nbTetes}</p>
-                <p><strong>Position :</strong> {machineDetails.PositionMachine}</p>
                 {machineDetails.etiquettes?.length > 0 && (
                   <>
                     <p><strong>Étiquettes :</strong></p>
@@ -259,16 +246,6 @@ function Machines() {
                         <option key={n} value={n}>{n}</option>
                       ))}
                     </select>
-                  </label>
-                  <label>
-                    Position de la machine :
-                    <input
-                      type="text"
-                      name="PositionMachine"
-                      value={formData.PositionMachine}
-                      onChange={handleChange}
-                      required
-                    />
                   </label>
                   <label>Étiquettes :</label>
                   <div className="tags-container">

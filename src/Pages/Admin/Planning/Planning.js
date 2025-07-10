@@ -8,20 +8,46 @@ function Planning() {
   const [planning, setPlanning] = useState([]);
 
   useEffect(() => {
-    fetch("http://localhost:3001/machines")
-      .then((res) => res.json())
-      .then(setMachines)
-      .catch((err) => console.error("Erreur machines:", err));
+    const updateAndLoad = async () => {
+      const [machinesData, commandesData, planningData] = await Promise.all([
+        fetch("http://localhost:3001/machines").then((res) => res.json()),
+        fetch("http://localhost:3001/commandes").then((res) => res.json()),
+        fetch("http://localhost:3001/planning").then((res) => res.json()),
+      ]);
 
-    fetch("http://localhost:3001/commandes")
-      .then((res) => res.json())
-      .then(setCommandes)
-      .catch((err) => console.error("Erreur commandes:", err));
+      const now = new Date();
 
-    fetch("http://localhost:3001/planning")
-      .then((res) => res.json())
-      .then(setPlanning)
-      .catch((err) => console.error("Erreur planning:", err));
+      for (const p of planningData) {
+        const commande = commandesData.find((c) => c.id === p.commandeId);
+        if (!commande || commande.status === "En cours") continue;
+
+        const debutDate = new Date(p.debut);
+
+        if (debutDate.getTime() < now.getTime()) {
+          // Recalage à la prochaine heure entière future
+          const newStart = new Date();
+          newStart.setHours(newStart.getHours() + 1, 0, 0, 0);
+          const dureeMs = new Date(p.fin) - new Date(p.debut);
+          const newEnd = new Date(newStart.getTime() + dureeMs);
+
+          await fetch(`http://localhost:3001/planning/${p.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...p,
+              debut: newStart.toISOString(),
+              fin: newEnd.toISOString(),
+            }),
+          });
+        }
+      }
+
+      setMachines(machinesData);
+      setCommandes(commandesData);
+      setPlanning(await fetch("http://localhost:3001/planning").then((res) => res.json()));
+    };
+
+    updateAndLoad();
   }, []);
 
   const generateRows = () => {
@@ -73,11 +99,11 @@ function Planning() {
   };
 
   const urgencyColors = {
-    1: "#4caf50", // Vert
-    2: "#2196f3", // Bleu
-    3: "#ff9800", // Orange
-    4: "#f44336", // Rouge
-    5: "#000000"  // Noir
+    1: "#4caf50",
+    2: "#2196f3",
+    3: "#ff9800",
+    4: "#f44336",
+    5: "#000000"
   };
 
   const computeUrgency = (dateLivraison) => {
@@ -157,7 +183,6 @@ function Planning() {
                     ? commandes.find((c) => c.id === slot.commandeId)
                     : null;
 
-                  // Ajout du calcul de dépassement
                   const estDepassee =
                     slot &&
                     commandeAssociee &&
@@ -186,7 +211,7 @@ function Planning() {
                             : "1px solid #ddd"
                       }}
                     >
-                      {slot && commandeAssociee && (
+                      {slot && commandeAssociee ? (
                         <>
                           <strong>#{commandeAssociee.numero}</strong>
                           <br />
@@ -197,6 +222,8 @@ function Planning() {
                             </div>
                           )}
                         </>
+                      ) : (
+                        <span style={{ color: "#999" }}>—</span>
                       )}
                     </td>
                   );

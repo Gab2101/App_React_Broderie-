@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import "../../../styles/Commandes.css";
-import { EtiquettesContext } from "../../../context/EtiquettesContext";
 import NewButton from "../../../components/common/Newbutton";
 
 function Commandes() {
@@ -12,8 +11,6 @@ function Commandes() {
 
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [selectedMachineId, setSelectedMachineId] = useState(null);
-
-  const { articleTags, broderieTags } = useContext(EtiquettesContext);
 
   const emptyForm = {
     id: null,
@@ -47,40 +44,6 @@ function Commandes() {
     reloadData();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleDateChange = (e) => {
-    const value = e.target.value;
-    const today = new Date();
-    const selectedDate = new Date(value);
-    const diffDays = Math.ceil((selectedDate - today) / (1000 * 60 * 60 * 24));
-
-    let urgence = 1;
-    if (diffDays < 2) urgence = 5;
-    else if (diffDays < 5) urgence = 4;
-    else if (diffDays < 10) urgence = 3;
-    else if (diffDays < 15) urgence = 2;
-
-    setFormData((prev) => ({
-      ...prev,
-      dateLivraison: value,
-      urgence,
-    }));
-  };
-
-  const toggleTag = (type, tag) => {
-    setFormData((prev) => {
-      const current = [...prev[type]];
-      const index = current.indexOf(tag);
-      if (index > -1) current.splice(index, 1);
-      else current.push(tag);
-      return { ...prev, [type]: current };
-    });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -107,7 +70,7 @@ function Commandes() {
     }
 
     const compatibles = machines.filter((m) =>
-      formData.types.every((tag) => m.etiquettes.includes(tag))
+      formData.types.every((tag) => (m.etiquettes || []).includes(tag))
     );
 
     if (compatibles.length === 0) {
@@ -123,12 +86,7 @@ function Commandes() {
         .sort((a, b) => new Date(a.debut) - new Date(b.debut));
 
       let dispo = new Date();
-      const now = new Date();
-      if (now.getHours() >= 8) {
-        dispo = new Date();
-      } else {
-        dispo.setHours(8, 0, 0, 0);
-      }
+      dispo.setHours(8, 0, 0, 0);
 
       if (planifies.length > 0) {
         const lastFin = new Date(planifies[planifies.length - 1].fin);
@@ -171,12 +129,7 @@ function Commandes() {
       .sort((a, b) => new Date(a.debut) - new Date(b.debut));
 
     let dispo = new Date();
-    const now = new Date();
-    if (now.getHours() >= 8) {
-      dispo = new Date();
-    } else {
-      dispo.setHours(8, 0, 0, 0);
-    }
+    dispo.setHours(8, 0, 0, 0);
 
     if (planifies.length > 0) {
       const lastFin = new Date(planifies[planifies.length - 1].fin);
@@ -190,12 +143,13 @@ function Commandes() {
     const debut = dispo;
     const fin = new Date(debut.getTime() + dureeHeures * 60 * 60 * 1000);
 
+    // IMPORTANT : retirer l'id avant POST
     const { id, ...formSansId } = formData;
+
     const nouvelleCommande = {
       ...formSansId,
       machineAssignee: machine.nom,
       dureeEstimee: dureeHeures,
-      statut: "A commencer",
     };
 
     const resCmd = await fetch("http://localhost:3001/commandes", {
@@ -226,38 +180,6 @@ function Commandes() {
     resetForm();
   };
 
-  const handleChangeStatut = async (id, newStatut) => {
-    const commande = commandes.find((c) => c.id === id);
-    if (!commande) return;
-
-    const maintenant = new Date();
-    const formatHeure = `${maintenant.getHours().toString().padStart(2, "0")}:${maintenant
-      .getMinutes()
-      .toString()
-      .padStart(2, "0")}`;
-
-    const updatedCommande = {
-      ...commande,
-      statut: newStatut,
-      dateDebut:
-        newStatut === "En cours" && !commande.dateDebut
-          ? formatHeure
-          : commande.dateDebut || "",
-      dateFin:
-        newStatut === "Terminé" && !commande.dateFin
-          ? formatHeure
-          : commande.dateFin || "",
-    };
-
-    await fetch(`http://localhost:3001/commandes/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedCommande),
-    });
-
-    reloadData();
-  };
-
   const resetForm = () => {
     setFormData(emptyForm);
     setSaved(true);
@@ -265,17 +187,25 @@ function Commandes() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Supprimer cette commande ?")) return;
+    if (!window.confirm("Supprimer cette commande ?")) {
+      return;
+    }
 
     try {
       const planningsToDelete = planning.filter((p) => p.commandeId === id);
+
       for (const p of planningsToDelete) {
-        await fetch(`http://localhost:3001/planning/${p.id}`, { method: "DELETE" });
+        await fetch(`http://localhost:3001/planning/${p.id}`, {
+          method: "DELETE",
+        });
       }
 
-      const resCmd = await fetch(`http://localhost:3001/commandes/${id}`, { method: "DELETE" });
+      const resCmd = await fetch(`http://localhost:3001/commandes/${id}`, {
+        method: "DELETE",
+      });
+
       if (!resCmd.ok) {
-        alert("Erreur lors de la suppression.");
+        alert(`Erreur lors de la suppression de la commande.`);
         return;
       }
 
@@ -295,67 +225,79 @@ function Commandes() {
     <div className="commandes-page">
       <NewButton onClick={handleNewCommande}>Nouvelle commande</NewButton>
 
-      {/* Modale création */}
       {showModal && !selectedScenario && (
         <div className="modal-overlay">
           <div className="modal">
             <h2>{formData.id ? "Modifier la commande" : "Nouvelle commande"}</h2>
             <form className="formulaire-commande" onSubmit={handleSubmit}>
               <label>Numéro de commande :
-                <input type="text" name="numero" value={formData.numero} onChange={handleChange} required />
+                <input
+                  type="text"
+                  name="numero"
+                  value={formData.numero}
+                  onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                  required
+                />
               </label>
               <label>Client :
-                <input type="text" name="client" value={formData.client} onChange={handleChange} required />
+                <input
+                  type="text"
+                  name="client"
+                  value={formData.client}
+                  onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                  required
+                />
               </label>
               <label>Quantité :
-                <input type="number" name="quantite" value={formData.quantite} onChange={handleChange} min="1" required />
+                <input
+                  type="number"
+                  name="quantite"
+                  value={formData.quantite}
+                  onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
+                  min="1"
+                  required
+                />
               </label>
               <label>Points :
-                <input type="number" name="points" value={formData.points} onChange={handleChange} min="1" required />
+                <input
+                  type="number"
+                  name="points"
+                  value={formData.points}
+                  onChange={(e) => setFormData({ ...formData, points: e.target.value })}
+                  min="1"
+                  required
+                />
               </label>
               <label>Date livraison :
-                <input type="date" name="dateLivraison" value={formData.dateLivraison} onChange={handleDateChange} />
+                <input
+                  type="date"
+                  name="dateLivraison"
+                  value={formData.dateLivraison}
+                  onChange={(e) => setFormData({ ...formData, dateLivraison: e.target.value })}
+                />
               </label>
               <label>Urgence :
-                <select name="urgence" value={formData.urgence} onChange={handleChange}>
-                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                <select
+                  name="urgence"
+                  value={formData.urgence}
+                  onChange={(e) => setFormData({ ...formData, urgence: e.target.value })}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
                 </select>
               </label>
-              <label>Types :</label>
-              <div className="tags-container">
-                {articleTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className={`tag ${formData.types.includes(tag) ? "active" : ""}`}
-                    onClick={() => toggleTag("types", tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-              <label>Options :</label>
-              <div className="tags-container">
-                {broderieTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className={`tag ${formData.options.includes(tag) ? "active" : ""}`}
-                    onClick={() => toggleTag("options", tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
+
               <button type="submit" className="btn-enregistrer">Enregistrer</button>
             </form>
             {saved && <div className="message-saved">✅ Enregistré</div>}
-            <button className="btn-fermer" onClick={() => setShowModal(false)}>Fermer</button>
+            <button className="btn-fermer" onClick={() => setShowModal(false)}>
+              Fermer
+            </button>
           </div>
         </div>
       )}
 
-      {/* Modale choix machine */}
       {selectedScenario && (
         <div className="modal-overlay">
           <div className="modal">
@@ -368,7 +310,9 @@ function Commandes() {
               onChange={(e) => setSelectedMachineId(e.target.value)}
             >
               {machines
-                .filter((m) => formData.types.every((t) => m.etiquettes.includes(t)))
+                .filter((m) =>
+                  formData.types.every((t) => (m.etiquettes || []).includes(t))
+                )
                 .map((m) => (
                   <option key={m.id} value={m.id}>{m.nom}</option>
                 ))}
@@ -380,7 +324,6 @@ function Commandes() {
         </div>
       )}
 
-      {/* Liste des commandes */}
       <div className="liste-commandes">
         {commandes.map((cmd) => (
           <div key={cmd.id} className="carte-commande">
@@ -390,18 +333,6 @@ function Commandes() {
             <p><strong>Points :</strong> {cmd.points}</p>
             <p><strong>Urgence :</strong> {cmd.urgence}</p>
             <p><strong>Livraison :</strong> {cmd.dateLivraison}</p>
-            <p><strong>Statut :</strong>{" "}
-              <select
-                value={cmd.statut || "A commencer"}
-                onChange={(e) => handleChangeStatut(cmd.id, e.target.value)}
-              >
-                {["A commencer", "En cours", "Terminé"].map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </p>
-            {cmd.dateDebut && <p><strong>Début :</strong> {cmd.dateDebut}</p>}
-            {cmd.dateFin && <p><strong>Fin :</strong> {cmd.dateFin}</p>}
             {cmd.machineAssignee && <p><strong>Machine :</strong> {cmd.machineAssignee}</p>}
             {cmd.dureeEstimee && <p><strong>Durée estimée :</strong> {cmd.dureeEstimee} h</p>}
             <button
@@ -416,14 +347,12 @@ function Commandes() {
                 setSaved(false);
                 setShowModal(true);
               }}
-              className="btn-enregistrer"
-            >
+              className="btn-enregistrer">
               Modifier
             </button>
             <button
               onClick={() => handleDelete(cmd.id)}
-              className="btn-fermer"
-            >
+              className="btn-fermer">
               Supprimer
             </button>
           </div>
