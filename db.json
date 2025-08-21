@@ -1,22 +1,70 @@
 {
   "etiquettes": {
     "articleTags": [
-      "T-shirt",
-      "Polo",
-      "Sweet-Shirt",
-      "Chemise",
-      "Bonnet",
-      "Casquette",
-      "SoftShells",
-      "Pantalon",
-      "Tote bags",
-      "Doudoune",
-      "Blouse",
-      "Tablier",
-      "BodyWarmer",
-      "Polaire",
-      "Parka",
-      "Serviette"
+      {
+        "label": "T-shirt",
+        "nettoyage": 45
+      },
+      {
+        "label": "Polo",
+        "nettoyage": 45
+      },
+      {
+        "label": "Sweet-Shirt",
+        "nettoyage": 45
+      },
+      {
+        "label": "Chemise",
+        "nettoyage": 45
+      },
+      {
+        "label": "Bonnet",
+        "nettoyage": 45
+      },
+      {
+        "label": "Casquette",
+        "nettoyage": 45
+      },
+      {
+        "label": "SoftShells",
+        "nettoyage": 45
+      },
+      {
+        "label": "Pantalon",
+        "nettoyage": 45
+      },
+      {
+        "label": "Tote bags",
+        "nettoyage": 45
+      },
+      {
+        "label": "Doudoune",
+        "nettoyage": 45
+      },
+      {
+        "label": "Blouse",
+        "nettoyage": 45
+      },
+      {
+        "label": "Tablier",
+        "nettoyage": 45
+      },
+      {
+        "label": "BodyWarmer",
+        "nettoyage": 45
+      },
+      {
+        "label": "Polaire",
+        "nettoyage": 45
+      },
+      {
+        "label": "Parka",
+        "nettoyage": 45
+      },
+      {
+        "label": "Serviette",
+        "nettoyage": 45
+      }
     ],
     "broderieTags": [
       "Coeur",
@@ -31,165 +79,7 @@
       "Emplacement Simple"
     ]
   },
-  "commandes": [
-    {
-      "id": "14e5",
-      "numero": "1",
-      "client": "Commande",
-      "quantite": "10",
-      "points": "400",
-      "urgence": 4,
-      "dateLivraison": "2025-07-13",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [],
-      "machineAssignee": "Multi têtes 1",
-      "dureeEstimee": 1,
-      "statut": "En cours"
-    },
-    {
-      "id": "cce9",
-      "numero": "2",
-      "client": "Commande",
-      "quantite": "500",
-      "points": "1200",
-      "urgence": 4,
-      "dateLivraison": "2025-07-12",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [],
-      "machineAssignee": "Multi têtes 2",
-      "dureeEstimee": 84,
-      "statut": "Terminé",
-      "dateStatut": "10/07/2025 14:09"
-    },
-    {
-      "id": "c7bc",
-      "numero": "3",
-      "client": "Commande",
-      "quantite": "20",
-      "points": "1200",
-      "urgence": 4,
-      "dateLivraison": "2025-07-13",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [
-        "Coeur"
-      ],
-      "machineAssignee": "Multi têtes 3",
-      "dureeEstimee": 4,
-      "statut": "En cours"
-    },
-    {
-      "id": "6267",
-      "numero": "4",
-      "client": "Commande",
-      "quantite": "25",
-      "points": "1000",
-      "urgence": 4,
-      "dateLivraison": "2025-07-13",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [],
-      "machineAssignee": "Multi têtes 4",
-      "dureeEstimee": 4,
-      "statut": "Terminé",
-      "dateDebut": "10/07/2025 14:12",
-      "dateFin": "10/07/2025 14:13"
-    },
-    {
-      "id": "8047",
-      "numero": "5",
-      "client": "Commande",
-      "quantite": "100",
-      "points": "12000",
-      "urgence": 2,
-      "dateLivraison": "2025-07-20",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [
-        "Coeur"
-      ],
-      "machineAssignee": "Multi têtes 5",
-      "dureeEstimee": 167,
-      "statut": "Terminé",
-      "dateDebut": "14:22",
-      "dateFin": "14:22"
-    },
-    {
-      "id": "c36f",
-      "numero": "5",
-      "client": "Commande",
-      "quantite": "10",
-      "points": "1200",
-      "urgence": 4,
-      "dateLivraison": "2025-07-12",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [
-        "Coeur"
-      ],
-      "machineAssignee": "Multi têtes 7",
-      "dureeEstimee": 4,
-      "statut": "En cours"
-    },
-    {
-      "id": "a122",
-      "numero": "6",
-      "client": "Commande",
-      "quantite": "100",
-      "points": "150",
-      "urgence": 3,
-      "dateLivraison": "2025-07-16",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [
-        "Coeur"
-      ],
-      "machineAssignee": "Multi têtes 6",
-      "dureeEstimee": 3
-    },
-    {
-      "id": "0e42",
-      "numero": "8",
-      "client": "Commande",
-      "quantite": "100",
-      "points": "1200",
-      "urgence": 3,
-      "dateLivraison": "2025-07-17",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [
-        "Coeur"
-      ],
-      "machineAssignee": "Multi têtes 1",
-      "dureeEstimee": 17
-    },
-    {
-      "id": "dc5a",
-      "numero": "7",
-      "client": "Commande",
-      "quantite": "100",
-      "points": "1500",
-      "urgence": 3,
-      "dateLivraison": "2025-07-15",
-      "types": [
-        "T-shirt"
-      ],
-      "options": [],
-      "machineAssignee": "Multi têtes 9",
-      "dureeEstimee": 21,
-      "statut": "A commencer"
-    }
-  ],
+  "commandes": [],
   "machines": [
     {
       "id": "b343",
@@ -385,67 +275,10 @@
   ],
   "planning": [
     {
-      "id": "160a",
+      "id": "6974",
       "machineId": "b343",
-      "commandeId": "14e5",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-10T14:00:00.000Z"
-    },
-    {
-      "id": "73d5",
-      "machineId": "af07",
-      "commandeId": "cce9",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-14T01:00:00.000Z"
-    },
-    {
-      "id": "b8f5",
-      "machineId": "c8d7",
-      "commandeId": "c7bc",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-10T17:00:00.000Z"
-    },
-    {
-      "id": "bbae",
-      "machineId": "2313",
-      "commandeId": "6267",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-10T17:00:00.000Z"
-    },
-    {
-      "id": "d51a",
-      "machineId": "2390",
-      "commandeId": "8047",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-17T12:00:00.000Z"
-    },
-    {
-      "id": "3dab",
-      "machineId": "a04f",
-      "commandeId": "c36f",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-10T17:00:00.000Z"
-    },
-    {
-      "id": "9eb4",
-      "machineId": "ded7",
-      "commandeId": "a122",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-10T16:00:00.000Z"
-    },
-    {
-      "id": "3f36",
-      "machineId": "b343",
-      "commandeId": "0e42",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-11T06:00:00.000Z"
-    },
-    {
-      "id": "4fcd",
-      "machineId": "e51a",
-      "commandeId": "dc5a",
-      "debut": "2025-07-10T13:00:00.000Z",
-      "fin": "2025-07-11T10:00:00.000Z"
+      "debut": "2025-07-15T07:02:34.886Z",
+      "fin": "2025-07-15T11:49:39.886Z"
     }
   ]
 }

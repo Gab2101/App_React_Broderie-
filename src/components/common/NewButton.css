@@ -1,14 +1,137 @@
-.new-button {
-  background-color: #004A93;
-  color: white;
-  padding: 12px 24px;
-  font-size: 1.1rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+/* Base tokens (faciles à theming) */
+:root {
+  --btn-font-family: inherit;
+  --btn-radius: 8px;
+  --btn-pad-y-sm: 8px;
+  --btn-pad-x-sm: 16px;
+  --btn-pad-y-md: 12px;
+  --btn-pad-x-md: 24px;
+  --btn-pad-y-lg: 14px;
+  --btn-pad-x-lg: 28px;
+
+  /* Couleurs par défaut (primary) */
+  --btn-primary-bg: #004a93;
+  --btn-primary-fg: #ffffff;
+  --btn-primary-bg-hover: #f59c00;
+  --btn-primary-bg-active: #d78200;
+
+  /* Secondary */
+  --btn-secondary-bg: #e6eef7;
+  --btn-secondary-fg: #0b2a4a;
+  --btn-secondary-bg-hover: #d8e6f4;
+  --btn-secondary-bg-active: #c8daee;
+
+  /* Danger */
+  --btn-danger-bg: #c62828;
+  --btn-danger-fg: #ffffff;
+  --btn-danger-bg-hover: #e53935;
+  --btn-danger-bg-active: #b71c1c;
+
+  /* Ghost */
+  --btn-ghost-bg: transparent;
+  --btn-ghost-fg: #004a93;
+  --btn-ghost-bg-hover: rgba(0,0,0,0.06);
+  --btn-ghost-bg-active: rgba(0,0,0,0.12);
+
+  /* Disabled */
+  --btn-disabled-bg: #cfd8dc;
+  --btn-disabled-fg: #6b7780;
+  --btn-focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.35);
 }
 
-.new-button:hover {
-  background-color: #F59C00;
+.new-button {
+  appearance: none;
+  border: none;
+  border-radius: var(--btn-radius);
+  font-family: var(--btn-font-family);
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  line-height: 1;
+  transition: background-color 0.2s ease, transform 0.02s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Tailles */
+.new-button[data-size="sm"] {
+  padding: var(--btn-pad-y-sm) var(--btn-pad-x-sm);
+  font-size: 0.95rem;
+}
+
+.new-button[data-size="md"] {
+  padding: var(--btn-pad-y-md) var(--btn-pad-x-md);
+  font-size: 1.05rem;
+}
+
+.new-button[data-size="lg"] {
+  padding: var(--btn-pad-y-lg) var(--btn-pad-x-lg);
+  font-size: 1.15rem;
+}
+
+/* Variants */
+.new-button[data-variant="primary"] {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+.new-button[data-variant="primary"]:hover { background-color: var(--btn-primary-bg-hover); }
+.new-button[data-variant="primary"]:active { background-color: var(--btn-primary-bg-active); transform: translateY(1px); }
+
+.new-button[data-variant="secondary"] {
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-fg);
+}
+.new-button[data-variant="secondary"]:hover { background-color: var(--btn-secondary-bg-hover); }
+.new-button[data-variant="secondary"]:active { background-color: var(--btn-secondary-bg-active); transform: translateY(1px); }
+
+.new-button[data-variant="danger"] {
+  background-color: var(--btn-danger-bg);
+  color: var(--btn-danger-fg);
+}
+.new-button[data-variant="danger"]:hover { background-color: var(--btn-danger-bg-hover); }
+.new-button[data-variant="danger"]:active { background-color: var(--btn-danger-bg-active); transform: translateY(1px); }
+
+.new-button[data-variant="ghost"] {
+  background-color: var(--btn-ghost-bg);
+  color: var(--btn-ghost-fg);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+.new-button[data-variant="ghost"]:hover { background-color: var(--btn-ghost-bg-hover); }
+.new-button[data-variant="ghost"]:active { background-color: var(--btn-ghost-bg-active); transform: translateY(1px); }
+
+/* Full width */
+.new-button--full { width: 100%; }
+
+/* Focus visible (accessibilité clavier) */
+.new-button:focus-visible {
+  outline: none;
+  box-shadow: var(--btn-focus-ring);
+}
+
+/* Disabled & Loading */
+.new-button:disabled {
+  background-color: var(--btn-disabled-bg) !important;
+  color: var(--btn-disabled-fg) !important;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Icônes */
+.new-button__icon {
+  display: inline-flex;
+  align-items: center;
+}
+.new-button__icon--left { margin-right: 2px; }
+.new-button__icon--right { margin-left: 2px; }
+
+/* Réduction mouvements si l’utilisateur le demande */
+@media (prefers-reduced-motion: reduce) {
+  .new-button {
+    transition: none;
+  }
 }

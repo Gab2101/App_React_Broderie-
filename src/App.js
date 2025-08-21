@@ -2,7 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import Banner from "./components/layout/Banner";
 import AdminNavbar from "./components/layout/AdminNavbar/AdminNavbar";
-import CommandesAdmin from "./Pages/Admin/CommandesAdmin/Commandes";
+import CommandesAdmin from "./Pages/Admin/Commandes/Commandes";
 import Machines from "./Pages/Admin/Machines/Machines";
 import Planning from "./Pages/Admin/Planning/Planning";
 import Parametres from "./Pages/Admin/Parametres/Parametres";

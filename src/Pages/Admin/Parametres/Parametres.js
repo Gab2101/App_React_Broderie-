@@ -1,174 +1,162 @@
-import React, { useContext, useState } from 'react';
-import './Parametres.css';
-import { EtiquettesContext } from '../../../context/EtiquettesContext';
+import React, { useEffect, useState } from "react";
+import ArticleTagsSection from "./ArticlesTagsSection";
+import BroderieTagsSection from "./BroderieTagsSection";
+import { supabase } from "../../../supabaseClient";
+import "./Parametres.css";
 
 function Parametres() {
-  // On récupère tout le contexte
-  const {
-    articleTags,
-    broderieTags,
-    saveTags
-  } = useContext(EtiquettesContext);
+  const [articleTags, setArticleTags] = useState([]);
+  const [broderieTags, setBroderieTags] = useState([]);
 
-  // Pour la création
-  const [newTag, setNewTag] = useState('');
-  const [tagType, setTagType] = useState('article');
+  useEffect(() => {
+    fetchTags();
+  }, []);
 
-  // Pour l'édition
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [editingType, setEditingType] = useState('');
-  const [editingValue, setEditingValue] = useState('');
+  const fetchTags = async () => {
+    try {
+      const { data: articleData, error: articleError } = await supabase
+        .from("articleTags")
+        .select("*");
 
-  // Ajouter une étiquette
-  const handleAddTag = () => {
-    if (!newTag.trim()) return;
+      if (articleError) {
+        console.error("❌ Erreur chargement articleTags :", articleError.message);
+      } else {
+        console.log("✅ Tags articles chargés :", articleData);
+        setArticleTags(articleData || []);
+      }
 
-    const updatedArticles = [...articleTags];
-    const updatedBroderies = [...broderieTags];
+      const { data: broderieData, error: broderieError } = await supabase
+        .from("broderieTags")
+        .select("*");
 
-    if (tagType === 'article') {
-      updatedArticles.push(newTag.trim());
-    } else {
-      updatedBroderies.push(newTag.trim());
+      if (broderieError) {
+        console.error("❌ Erreur chargement broderieTags :", broderieError.message);
+      } else {
+        console.log("✅ Tags broderie chargés :", broderieData);
+        setBroderieTags(broderieData || []);
+      }
+    } catch (err) {
+      console.error("Erreur inattendue :", err);
     }
-
-    saveTags(updatedArticles, updatedBroderies);
-
-    setNewTag('');
   };
 
-  // Supprimer une étiquette
-  const handleDelete = (type, index) => {
-    let updatedArticles = [...articleTags];
-    let updatedBroderies = [...broderieTags];
-
-    if (type === 'article') {
-      updatedArticles = updatedArticles.filter((_, i) => i !== index);
-    } else {
-      updatedBroderies = updatedBroderies.filter((_, i) => i !== index);
+  const addArticleTag = async (label, nettoyage) => {
+    if (!label || label.trim() === "") {
+      console.warn("⛔ Label vide, ajout ignoré.");
+      return;
     }
 
-    saveTags(updatedArticles, updatedBroderies);
-  };
+    const { error } = await supabase
+      .from("articleTags")
+      .insert([{ label: label.trim(), nettoyage }]);
 
-  // Lancer la modification
-  const handleEdit = (type, index, value) => {
-    setEditingIndex(index);
-    setEditingType(type);
-    setEditingValue(value);
-  };
-
-  // Valider la modification
-  const handleSaveEdit = () => {
-    const updatedArticles = [...articleTags];
-    const updatedBroderies = [...broderieTags];
-
-    if (editingType === 'article') {
-      updatedArticles[editingIndex] = editingValue.trim();
+    if (error) {
+      console.error("❌ Erreur ajout Supabase :", error.message);
     } else {
-      updatedBroderies[editingIndex] = editingValue.trim();
+      console.log("✅ Tag ajouté, rafraîchissement en cours...");
+      await fetchTags();
+    }
+  };
+
+  const updateArticleTag = async (id, label, nettoyage) => {
+    const { error } = await supabase
+      .from("articleTags")
+      .update({ label: label.trim(), nettoyage })
+      .eq("id", id);
+
+    if (error) {
+      console.error("❌ Erreur mise à jour Supabase :", error.message);
+    } else {
+      console.log(`✅ Tag ${id} mis à jour.`);
+      setArticleTags((prev) =>
+        prev.map((tag) =>
+          tag.id === id ? { ...tag, label: label.trim(), nettoyage } : tag
+        )
+      );
+    }
+  };
+
+  const deleteArticleTag = async (id) => {
+    const { error } = await supabase
+      .from("articleTags")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("❌ Erreur suppression Supabase :", error.message);
+    } else {
+      console.log(`🗑️ Tag ${id} supprimé.`);
+      setArticleTags((prev) => prev.filter((tag) => tag.id !== id));
+    }
+  };
+
+  // 🔧 Fonctions broderie
+  const addBroderieTag = async (label) => {
+    if (!label || label.trim() === "") {
+      console.warn("⛔ Label vide, ajout ignoré.");
+      return;
     }
 
-    saveTags(updatedArticles, updatedBroderies);
+    const { error } = await supabase
+      .from("broderieTags")
+      .insert([{ label: label.trim() }]);
 
-    // Reset édition
-    setEditingIndex(null);
-    setEditingType('');
-    setEditingValue('');
+    if (error) {
+      console.error("❌ Erreur ajout broderie :", error.message);
+    } else {
+      console.log("✅ Broderie ajoutée.");
+      await fetchTags();
+    }
+  };
+
+  const updateBroderieTag = async (id, label) => {
+    const { error } = await supabase
+      .from("broderieTags")
+      .update({ label: label.trim() })
+      .eq("id", id);
+
+    if (error) {
+      console.error("❌ Erreur mise à jour broderie :", error.message);
+    } else {
+      console.log(`✅ Broderie ${id} mise à jour.`);
+      setBroderieTags((prev) =>
+        prev.map((tag) =>
+          tag.id === id ? { ...tag, label: label.trim() } : tag
+        )
+      );
+    }
+  };
+
+  const deleteBroderieTag = async (id) => {
+    const { error } = await supabase
+      .from("broderieTags")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("❌ Erreur suppression broderie :", error.message);
+    } else {
+      console.log(`🗑️ Broderie ${id} supprimée.`);
+      setBroderieTags((prev) => prev.filter((tag) => tag.id !== id));
+    }
   };
 
   return (
     <div className="parametres-page">
-      <h2>Paramètres Etiquettes</h2>
-
-      {/* Section ajout */}
-      <div className="ajout-section">
-        <input
-          type="text"
-          placeholder="Nouvelle étiquette"
-          value={newTag}
-          onChange={(e) => setNewTag(e.target.value)}
+      <h2>Réglage Etiquettes</h2>
+      <div className="tags-sections">
+        <ArticleTagsSection
+          articleTags={articleTags}
+          addArticleTag={addArticleTag}
+          updateArticleTag={updateArticleTag}
+          deleteArticleTag={deleteArticleTag}
         />
-        <select value={tagType} onChange={(e) => setTagType(e.target.value)}>
-          <option value="article">Type d'article</option>
-          <option value="broderie">Option de broderie</option>
-        </select>
-        <button onClick={handleAddTag} className="btn-enregistrer">
-          Ajouter
-        </button>
-      </div>
-
-      {/* Liste des étiquettes */}
-      <div className="tags-list">
-        <h3>Types d'article</h3>
-        <ul>
-          {articleTags.map((tag, index) => (
-            <li key={index}>
-              {editingType === 'article' && editingIndex === index ? (
-                <>
-                  <input
-                    type="text"
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                  />
-                  <button onClick={handleSaveEdit} className="btn-enregistrer">
-                    Enregistrer
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingIndex(null);
-                      setEditingType('');
-                    }}
-                    className="btn-fermer"
-                  >
-                    Annuler
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span>{tag}</span>
-                  <button onClick={() => handleEdit('article', index, tag)}>✏️</button>
-                  <button onClick={() => handleDelete('article', index)}>🗑️</button>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        <h3>Options de broderie</h3>
-        <ul>
-          {broderieTags.map((tag, index) => (
-            <li key={index}>
-              {editingType === 'broderie' && editingIndex === index ? (
-                <>
-                  <input
-                    type="text"
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                  />
-                  <button onClick={handleSaveEdit} className="btn-enregistrer">
-                    Enregistrer
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingIndex(null);
-                      setEditingType('');
-                    }}
-                    className="btn-fermer"
-                  >
-                    Annuler
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span>{tag}</span>
-                  <button onClick={() => handleEdit('broderie', index, tag)}>✏️</button>
-                  <button onClick={() => handleDelete('broderie', index)}>🗑️</button>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+        <BroderieTagsSection
+          broderieTags={broderieTags}
+          addBroderieTag={addBroderieTag}
+          updateBroderieTag={updateBroderieTag}
+          deleteBroderieTag={deleteBroderieTag}
+        />
       </div>
     </div>
   );

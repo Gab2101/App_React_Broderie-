@@ -87,3 +87,27 @@
   margin-bottom: 30px;
 }
 
+.error-message {
+  color: #b71c1c;
+  font-weight: bold;
+  margin-top: 5px;
+}
+
+.success-message {
+  color: #250899;
+  font-weight: bold;
+  margin-top: 5px;
+}
+.tags-sections {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+.broderieTags {
+  flex: 1;
+  background: #f4f8fb;
+  padding: 20px;
+  border-radius: 8px;
+}

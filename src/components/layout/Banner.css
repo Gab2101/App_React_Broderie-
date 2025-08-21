@@ -1,20 +1,110 @@
+/* Tokens (faciles à theming) */
+:root {
+  --banner-bg: #f5f5f5;
+  --banner-fg: #111827;
+  --banner-muted: #4b5563;
+  --banner-gap: 16px;
+
+  /* tailles */
+  --banner-pad-sm: 12px 16px;
+  --banner-pad-md: 20px 24px;
+  --banner-pad-lg: 28px 32px;
+
+  --banner-radius: 12px;
+  --banner-shadow: 0 6px 20px rgba(0,0,0,0.06);
+}
+
+/* Dark mode auto */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --banner-bg: #0f172a;
+    --banner-fg: #e2e8f0;
+    --banner-muted: #94a3b8;
+  }
+}
+
 .banner {
   display: flex;
-  flex-direction: column; /* Pour empiler logo + titre */
-  justify-content: center;
   align-items: center;
-  padding: 20px;
-  background-color: #f5f5f5;
+  justify-content: center;
+  gap: var(--banner-gap);
+  background-color: var(--banner-bg);
+  color: var(--banner-fg);
   text-align: center;
+  border-radius: var(--banner-radius);
+  box-shadow: var(--banner-shadow);
 }
 
-.banner h1 {
-  font-size: 3rem;
-  font-weight: bold;
-  margin: 10px 0 0 0;
+/* tailles */
+.banner--sm { padding: var(--banner-pad-sm); }
+.banner--md { padding: var(--banner-pad-md); }
+.banner--lg { padding: var(--banner-pad-lg); }
+
+/* alignements */
+.banner--center { flex-direction: column; }
+.banner--left {
+  flex-direction: column;
+  text-align: left;
+  justify-content: space-between;
 }
 
-.logo {
+/* layout >= tablette */
+@media (min-width: 768px) {
+  .banner--left {
+    flex-direction: row;
+  }
+}
+
+.banner__logo {
   height: 80px;
+  width: auto;
   max-width: 100%;
+}
+
+.banner__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.banner--left .banner__content {
+  align-items: flex-start;
+}
+
+/* Titre responsive et lisible */
+.banner__title {
+  margin: 8px 0 0 0;
+  font-weight: 800;
+  line-height: 1.1;
+  /*  clamp(min, preferred, max) */
+  font-size: clamp(1.6rem, 2.2vw + 1rem, 3rem);
+}
+
+/* Sous-titre optionnel */
+.banner__subtitle {
+  margin: 6px 0 0 0;
+  font-size: clamp(0.95rem, 1vw + 0.7rem, 1.25rem);
+  color: var(--banner-muted);
+}
+
+/* Zone d'actions (ex: boutons) */
+.banner__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Accessibilité : focus visible pour les éléments interactifs dans la bannière */
+.banner :is(a, button, [tabindex]) :focus-visible,
+.banner :is(a, button, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(208, 57, 65, 0.35);
+  border-radius: 8px;
+}
+
+/* Réduction des animations si l’utilisateur le demande */
+@media (prefers-reduced-motion: reduce) {
+  .banner {
+    transition: none;
+  }
 }

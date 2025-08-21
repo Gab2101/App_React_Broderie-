@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
-import './Machines.css';
-import '../../../styles/Common.css';
-import { EtiquettesContext } from '../../../context/EtiquettesContext';
-import NewButton from '../../../components/common/Newbutton';
+import React, { useState, useEffect, useContext } from "react";
+import "./Machines.css";
+import "../../../styles/Common.css";
+import { EtiquettesContext } from "../../../context/EtiquettesContext";
+import NewButton from "../../../components/common/NewButton";
+import { supabase } from "../../../supabaseClient";
+import MachinesCard from "./MachinesCard"; // Assurez-vous que le chemin est correct
+import MachinesForm from "./MachinesForm"; // Assurez-vous que le chemin est correct
 
 function Machines() {
   const { articleTags, broderieTags } = useContext(EtiquettesContext);
@@ -12,270 +15,237 @@ function Machines() {
   const [isEditing, setIsEditing] = useState(false);
   const [machines, setMachines] = useState([]);
   const [formData, setFormData] = useState({
-    nom: '',
-    nbTetes: '',
-    etiquettes: []
+    nom: "",
+    nbTetes: "",
+    etiquettes: [],
   });
 
+  // Charger les machines
   useEffect(() => {
-    fetch("http://localhost:3001/machines")
-      .then(res => res.json())
-      .then(data => setMachines(data))
-      .catch(err => console.error("Erreur chargement machines :", err));
-  }, []);
+  const loadMachines = async () => {
+    const { data, error } = await supabase
+      .from("machines")
+      .select("id, nom, nbTetes, etiquettes");
+
+    if (error) {
+      console.error("Erreur chargement machines :", error);
+      return;
+    }
+
+    // ✅ Corrige ici : transforme en tableau si c'est du texte
+    const normalized = data.map((m) => ({
+      ...m,
+      etiquettes:
+        typeof m.etiquettes === "string"
+          ? JSON.parse(m.etiquettes)
+          : Array.isArray(m.etiquettes)
+          ? m.etiquettes
+          : [],
+    }));
+
+    setMachines(normalized);
+  };
+
+  loadMachines();
+}, []);
+
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const toggleTag = (tag) => {
-    setFormData(prev => {
+  const toggleTag = (label) => {
+    setFormData((prev) => {
       const current = [...prev.etiquettes];
-      const index = current.indexOf(tag);
+      const index = current.indexOf(label);
       if (index > -1) {
         current.splice(index, 1);
       } else {
-        current.push(tag);
+        current.push(label);
       }
       return { ...prev, etiquettes: current };
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    fetch("http://localhost:3001/machines", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData)
-    })
-      .then(res => res.json())
-      .then((data) => {
-        setMachines(prev => [...prev, data]);
-        setFormData({ nom: '', nbTetes: '', etiquettes: [] });
-        setShowModalForm(false);
-      })
-      .catch(err => console.error("Erreur ajout machine :", err));
+
+    const { data, error } = await supabase
+      .from("machines")
+      .insert([
+        {
+          nom: formData.nom,
+          nbTetes: parseInt(formData.nbTetes),
+          etiquettes: formData.etiquettes,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Erreur ajout machine :", error);
+      return;
+    }
+
+    const parsedEtiquettes =
+      typeof data.etiquettes === "string"
+      ? JSON.parse(data.etiquettes)
+      : Array.isArray(data.etiquettes)
+      ? data.etiquettes
+      : [];
+
+    setMachines((prev) => [...prev, { ...data, etiquettes: parsedEtiquettes }]);
+
+    setFormData({ nom: "", nbTetes: "", etiquettes: [] });
+    setShowModalForm(false);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    fetch(`http://localhost:3001/machines/${machineDetails.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData)
-    })
-      .then(res => res.json())
-      .then((data) => {
-        const updated = machines.map((m) => (m.id === data.id ? data : m));
-        setMachines(updated);
-        setMachineDetails(null);
-        setIsEditing(false);
+
+    const { data, error } = await supabase
+      .from("machines")
+      .update({
+        nom: formData.nom,
+        nbTetes: parseInt(formData.nbTetes),
+        etiquettes: formData.etiquettes,
       })
-      .catch(err => console.error("Erreur modification machine :", err));
+      .eq("id", machineDetails.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Erreur modification machine :", error);
+      return;
+    }
+
+    const updated = machines.map((m) => (m.id === data.id ? { ...data, etiquettes: data.etiquettes || [] } : m));
+    setMachines(updated);
+    setMachineDetails(null);
+    setIsEditing(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm("Confirmer la suppression ?")) {
-      fetch(`http://localhost:3001/machines/${id}`, {
-        method: "DELETE"
-      })
-        .then(() => {
-          setMachines(prev => prev.filter((m) => m.id !== id));
-          setMachineDetails(null);
-        })
-        .catch(err => console.error("Erreur suppression machine :", err));
+      const { error } = await supabase.from("machines").delete().eq("id", id);
+      if (error) {
+        console.error("Erreur suppression machine :", error);
+        return;
+      }
+      setMachines((prev) => prev.filter((m) => m.id !== id));
+      setMachineDetails(null);
     }
   };
 
   return (
     <div className="machines-page">
-      <NewButton onClick={() => {
-        setFormData({ nom: '', nbTetes: '', etiquettes: [] });
-        setShowModalForm(true);
-        setMachineDetails(null);
-        setIsEditing(false);
-      }}>
+      <NewButton
+        onClick={() => {
+          setFormData({ nom: "", nbTetes: "", etiquettes: [] });
+          setShowModalForm(true);
+          setMachineDetails(null);
+          setIsEditing(false);
+        }}
+      >
         Nouvelle machine
       </NewButton>
 
       {/* Modale création */}
       {showModalForm && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>Nouvelle machine</h2>
-            <form onSubmit={handleSubmit} className="formulaire-machine">
-              <label>
-                Nom :
-                <input
-                  type="text"
-                  name="nom"
-                  value={formData.nom}
-                  onChange={handleChange}
-                  required
-                />
-              </label>
-              <label>
-                Nombre de têtes :
-                <select
-                  name="nbTetes"
-                  value={formData.nbTetes}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">-- Sélectionner --</option>
-                  {[1,2,4,6,8,12,15,18,20].map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-              </label>
-              <label>Étiquettes :</label>
-              <div className="tags-container">
-                {[...articleTags, ...broderieTags].map(tag => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className={`tag ${formData.etiquettes.includes(tag) ? 'active' : ''}`}
-                    onClick={() => toggleTag(tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-              <button type="submit" className="btn-enregistrer">Enregistrer</button>
-              <button
-                type="button"
-                className="btn-fermer"
-                onClick={() => setShowModalForm(false)}
-              >
-                Annuler
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+  <div className="modal-overlay">
+    <div className="modal">
+      <MachinesForm
+        formData={formData}
+        articleTags={articleTags}
+        broderieTags={broderieTags}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        onCancel={() => setShowModalForm(false)}
+        toggleTag={toggleTag}
+        isEditing={false}
+      />
+    </div>
+  </div>
+)}
+
 
       {/* Liste des machines */}
       <div className="liste-machines">
-        {machines.map(machine => (
-          <div
-            key={machine.id}
-            className="carte-machine"
-            onClick={() => {
-              setMachineDetails(machine);
-              setFormData(machine);
-              setIsEditing(false);
-            }}
-          >
-            <h3>{machine.nom}</h3>
-            <p><strong>Têtes :</strong> {machine.nbTetes}</p>
-            {machine.etiquettes?.length > 0 && (
-              <div className="tag-list">
-                {machine.etiquettes.map((t, i) => (
-                  <span key={i} className="tag readonly">{t}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+  {machines.map((machine) => (
+    <MachinesCard
+      key={machine.id}
+      machine={machine}
+      articleTags={articleTags}
+      broderieTags={broderieTags}
+      onClick={(m) => {
+        setMachineDetails(m);
+        setFormData({
+          nom: m.nom,
+          nbTetes: m.nbTetes,
+          etiquettes: Array.isArray(m.etiquettes) ? m.etiquettes : [],
+        });
+        setIsEditing(false);
+      }}
+    />
+  ))}
+</div>
+
 
       {/* Modale consultation / édition */}
       {machineDetails && (
-        <div className="modal-overlay">
-          <div className="modal">
-            {!isEditing ? (
-              <>
-                <h2>{machineDetails.nom}</h2>
-                <p><strong>Nombre de têtes :</strong> {machineDetails.nbTetes}</p>
-                {machineDetails.etiquettes?.length > 0 && (
-                  <>
-                    <p><strong>Étiquettes :</strong></p>
-                    <div className="tag-list">
-                      {machineDetails.etiquettes.map((t, i) => (
-                        <span key={i} className="tag readonly">{t}</span>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="btn-zone">
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="btn-enregistrer"
-                  >
-                    Modifier
-                  </button>
-                  <button
-                    onClick={() => handleDelete(machineDetails.id)}
-                    className="btn-fermer"
-                  >
-                    Supprimer
-                  </button>
-                  <button
-                    onClick={() => setMachineDetails(null)}
-                    className="btn-fermer"
-                  >
-                    Fermer
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2>Modifier {machineDetails.nom}</h2>
-                <form onSubmit={handleEditSubmit} className="formulaire-machine">
-                  <label>
-                    Nom :
-                    <input
-                      type="text"
-                      name="nom"
-                      value={formData.nom}
-                      onChange={handleChange}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Nombre de têtes :
-                    <select
-                      name="nbTetes"
-                      value={formData.nbTetes}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="">-- Sélectionner --</option>
-                      {[1,2,4,6,8,12,15,18,20].map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>Étiquettes :</label>
-                  <div className="tags-container">
-                    {[...articleTags, ...broderieTags].map(tag => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={`tag ${formData.etiquettes.includes(tag) ? 'active' : ''}`}
-                        onClick={() => toggleTag(tag)}
-                      >
-                        {tag}
-                      </button>
+  <div className="modal-overlay">
+    <div className="modal">
+      {!isEditing ? (
+        <>
+          <h2>{machineDetails.nom}</h2>
+          <p><strong>Nombre de têtes :</strong> {machineDetails.nbTetes}</p>
+          {(machineDetails.etiquettes || []).length > 0 && (
+            <>
+              <div className="etiquettes-section">
+                <p><strong>Articles :</strong></p>
+                <div className="tag-list">
+                  {machineDetails.etiquettes
+                    .filter((t) => articleTags.some((a) => a.label === t))
+                    .map((t, i) => (
+                      <span key={i} className="tag readonly">{t}</span>
                     ))}
                   </div>
-                  <div className="btn-zone">
-                    <button type="submit" className="btn-enregistrer">Enregistrer</button>
-                    <button
-                      type="button"
-                      className="btn-fermer"
-                      onClick={() => setIsEditing(false)}
-                    >
-                      Annuler
-                    </button>
+                </div>
+
+                <div className="etiquettes-section">
+                  <p><strong>Options de broderie :</strong></p>
+                  <div className="tag-list">
+                    {machineDetails.etiquettes
+                      .filter((t) => broderieTags.some((b) => b.label === t))
+                      .map((t, i) => (
+                        <span key={i} className="tag readonly">{t}</span>
+                      ))}
                   </div>
-                </form>
-              </>
-            )}
+                </div>
+            </>
+          )}
+          <div className="btn-zone">
+            <button onClick={() => setIsEditing(true)} className="btn-enregistrer">Modifier</button>
+            <button onClick={() => handleDelete(machineDetails.id)} className="btn-fermer">Supprimer</button>
+            <button onClick={() => setMachineDetails(null)} className="btn-fermer">Fermer</button>
           </div>
-        </div>
+        </>
+      ) : (
+        <MachinesForm
+          formData={formData}
+          articleTags={articleTags}
+          broderieTags={broderieTags}
+          onChange={handleChange}
+          onSubmit={handleEditSubmit}
+          onCancel={() => setIsEditing(false)}
+          toggleTag={toggleTag}
+          isEditing={true}
+        />
       )}
+    </div>
+  </div>
+)}
     </div>
   );
 }

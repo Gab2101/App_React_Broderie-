@@ -1,0 +1,15 @@
+.tag-item-button {
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.tag-item-button:hover {
+  background-color: #125a9c;
+}

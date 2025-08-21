@@ -1,26 +1,126 @@
+/* ============== Thème ============== */
+:root {
+  --nav-bg: transparent;
+  --nav-fg: #e5e7eb;        /* texte clair */
+  --nav-primary: #B71C21;   /* actif/hover */
+  --nav-border: rgba(255,255,255,0.08);
+  --nav-gap: 24px;
+  --nav-pad-y: 14px;
+  --nav-font-size: 1.3rem;  /* taille des libellés */
+}
+
+/* ============== Conteneur ============== */
 .navbar {
   display: flex;
-  justify-content: space-around;
   align-items: center;
-  background-color: #f0f0f0; /* Tu peux remplacer par #B71C21 si tu veux du rouge */
-  padding: 20px 0;
-  border-bottom: 2px solid #ccc;
+  justify-content: space-evenly; /* occupe toute la largeur */
+  width: 100%;
+  background: var(--nav-bg);
+  padding: var(--nav-pad-y) 16px;
+  border-bottom: 1px solid var(--nav-border);
 }
 
-.navbar a {
+/* =========================
+   CAS 1 : liens DIRECTS (nav > a)
+   ========================= */
+.navbar > a,
+.navbar > a:link,
+.navbar > a:visited {
+  flex: 1;                  /* chaque lien prend la même place */
+  text-align: center;
   text-decoration: none;
-  color: #333;
-  font-size: 1.5rem;
-  font-weight: bold;
-  transition: color 0.3s ease;
+  color: var(--nav-fg);
+  font-size: var(--nav-font-size);
+  font-weight: 800;
+  padding: 10px 0;
+  position: relative;
+  transition: color 0.2s ease;
+  white-space: nowrap;
 }
 
-.navbar a:hover {
-  color: #B71C21;
+/* Soulignement animé */
+.navbar > a::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -6px;
+  height: 3px;
+  background-color: transparent;
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
-.navbar a.active {
-  color: #B71C21;
-  border-bottom: 2px solid #B71C21;
-  padding-bottom: 4px;
+/* Hover + Actif */
+.navbar > a:hover { color: var(--nav-primary); }
+.navbar > a:hover::after { background-color: var(--nav-primary); transform: scaleX(1); }
+.navbar > a.active { color: var(--nav-primary); }
+.navbar > a.active::after { background-color: var(--nav-primary); transform: scaleX(1); }
+
+/* Focus clavier */
+.navbar > a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(183, 28, 33, 0.35);
+  border-radius: 6px;
+}
+
+/* =========================
+   CAS 2 : version UL/LI (.navbar__link)
+   ========================= */
+.navbar__list {
+  /* si tu utilises UL/LI, on ignore le layout "space-evenly" du conteneur */
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  gap: 0;
+  margin: 0;
+  padding: 0 12px;
+  list-style: none;
+}
+.navbar__item { flex: 1 1 0%; }
+
+.navbar__link,
+.navbar__link:link,
+.navbar__link:visited {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 54px;
+  text-decoration: none;
+  color: var(--nav-fg);
+  font-weight: 800;
+  font-size: var(--nav-font-size);
+  position: relative;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.navbar__link::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: 6px;
+  height: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.navbar__link:hover { color: var(--nav-primary); }
+.navbar__link:hover::after { background: var(--nav-primary); transform: scaleX(1); }
+.navbar__link.is-active { color: var(--nav-primary); }
+.navbar__link.is-active::after { background: var(--nav-primary); transform: scaleX(1); }
+
+.navbar__link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(183, 28, 33, 0.35);
+  border-radius: 6px;
+}
+
+.navbar__label { white-space: nowrap; line-height: 1.2; }
+
+/* ============== Responsive ============== */
+@media (max-width: 480px) {
+  :root { --nav-gap: 14px; --nav-pad-y: 10px; --nav-font-size: 1.05rem; }
 }
