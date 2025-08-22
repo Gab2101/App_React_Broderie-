@@ -2,11 +2,9 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { supabase } from "../../../supabaseClient";
 import "./Planning.css";
 import { configureSlots } from "../../../utils/time";
-// Si tu n'as PAS ré‑exporté depuis utils/time.js, remplace la ligne ci‑dessus par :
+// Si tu n'as PAS ré-exporté depuis utils/time.js :
 // import { configureSlots, expandToHourSlots } from "../../../utils/slots";
 
-
-// ⬇️ adapte le chemin si ton utils est ailleurs (ex: "../../utils/time")
 import {
   ONE_HOUR_MS,
   formatHourRangeFR,
@@ -16,11 +14,17 @@ import {
   isWorkHour,
 } from "../../../utils/time";
 
-// 🔧 Normalisation ISO → UTC
+import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
+
+/* =========================
+   Helpers génériques
+========================= */
+
+// 🔧 Normalisation ISO → UTC (tolère ISO sans suffixe Z)
 const parseISOAny = (v) => {
   if (v instanceof Date) return v;
-  if (typeof v === 'string') {
-    if (!/[Zz]|[+-]\d{2}:\d{2}$/.test(v)) return new Date(v + 'Z');
+  if (typeof v === "string") {
+    if (!/[Zz]|[+-]\d{2}:\d{2}$/.test(v)) return new Date(v + "Z");
     return new Date(v);
   }
   return new Date(v);
@@ -59,10 +63,8 @@ const computeUrgency = (dateLivraison) => {
   return 1;
 };
 
-// --- Priorités V1 ---
-// 1) urgent (bool) d'abord
-// 2) deadline la plus proche
-// 3) created_at le plus ancien
+// --- Priorisation V1 ---
+// 1) urgent (bool)  2) deadline  3) created_at
 const sortByPriority = (a, b) => {
   const au = !!a.urgent;
   const bu = !!b.urgent;
@@ -123,6 +125,82 @@ function workingHoursBetween(startISO, endISO, { skipNonBusiness = true, holiday
   return count;
 }
 
+/* =========================
+   Modal Commande (select statut + sync)
+========================= */
+function CommandeModal({ commande, onClose, onOptimisticReplace, onTermineeShortenPlanning }) {
+  const STATUTS = ["A commencer", "En cours", "En pause", "Terminée", "Annulée"];
+  const [statut, setStatut] = React.useState(commande?.statut ?? "A commencer");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  // 🔁 Re-synchronise l'état local quand la commande ou son statut changent
+  React.useEffect(() => {
+    setStatut(commande?.statut ?? "A commencer");
+  }, [commande?.id, commande?.statut]);
+
+  const handleSave = async () => {
+    if (!commande?.id) return;
+    setSaving(true);
+    setError("");
+
+    // Optimistic UI (remonté vers le parent)
+    const optimistic = { ...commande, statut };
+    onOptimisticReplace?.(optimistic);
+
+    try {
+      const saved = await updateCommandeStatut(commande.id, statut);
+      onOptimisticReplace?.(saved); // conforte (timestamps, etc.)
+
+      // ⬇️ Raccourcir tout de suite le créneau de planning si Terminée
+      if (statut === "Terminée") {
+        await onTermineeShortenPlanning?.(commande.id, new Date());
+      }
+
+      onClose();
+    } catch (e) {
+      setError(e.message ?? "Erreur inconnue");
+      onOptimisticReplace?.(commande); // rollback visuel
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h3>Commande #{commande.numero}</h3>
+        <p><strong>Client :</strong> {commande.client}</p>
+        <p>
+          <strong>Date de livraison :</strong>{" "}
+          {commande.dateLivraison
+            ? new Date(commande.dateLivraison).toLocaleDateString("fr-FR")
+            : "—"}
+        </p>
+
+        <label className="field" style={{ display: "block", marginTop: 12 }}>
+          <span style={{ display: "block", marginBottom: 6 }}>
+            <strong>Statut</strong>
+          </span>
+          <select value={statut} onChange={(e) => setStatut(e.target.value)} disabled={saving}>
+            {STATUTS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </label>
+
+        {error && <div className="error" style={{ marginTop: 8 }}>{error}</div>}
+
+        <div className="modal-actions" style={{ marginTop: 16, display: "flex", gap: 8 }}>
+          <button onClick={onClose} disabled={saving}>Fermer</button>
+          <button onClick={handleSave} disabled={saving}>
+            {saving ? "Enregistrement..." : "Enregistrer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* =========================
    Composant principal
@@ -139,12 +217,65 @@ export default function Planning() {
   const workOpts = useMemo(() => ({ skipNonBusiness: true, holidays: HOLIDAYS }), [HOLIDAYS]);
 
   useEffect(() => {
-    // Active la logique jours ouvrés/fériés pour expandToHourSlots
+    // Active la logique jours ouvrés/fériés
     configureSlots({ skipNonBusiness: true, holidays: HOLIDAYS });
   }, [HOLIDAYS]);
 
   // éviter 2 recalculs simultanés
   const isUpdatingRef = useRef(false);
+
+  // Remplacement local robuste (optimistic + Realtime)
+  const replaceCommandeLocal = useCallback((updated) => {
+    setCommandes((prev) => replaceCommandeInArray(prev, updated));
+    setModalCommande((cur) => (cur?.id === updated.id ? { ...cur, ...updated } : cur));
+  }, []);
+
+  // Abonnement Realtime: propage les UPDATE de 'commandes'
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-commandes")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "commandes" },
+        (payload) => replaceCommandeLocal(payload.new)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [replaceCommandeLocal]);
+
+  /* ---- Raccourcir planning quand une commande passe Terminée ---- */
+  const shortenPlanningForCommandeTerminee = useCallback(
+    async (commandeId, actualEnd = new Date()) => {
+      const endIso = new Date(actualEnd).toISOString();
+
+      // 1) rows concernés
+      const { data: rows, error } = await supabase
+        .from("planning")
+        .select("id, debut, fin, commandeId")
+        .eq("commandeId", commandeId);
+
+      if (error) {
+        console.error("Erreur fetch planning by commandeId:", error);
+        return;
+      }
+      if (!rows || rows.length === 0) return;
+
+      // 2) MAJ DB
+      await Promise.all(
+        rows.map((r) =>
+          supabase.from("planning").update({ fin: endIso }).eq("id", r.id)
+        )
+      );
+
+      // 3) MAJ locale immuable (évite disparition/flash)
+      setPlanning((prev) =>
+        prev.map((p) => (rows.some((r) => r.id === p.id) ? { ...p, fin: endIso } : p))
+      );
+    },
+    []
+  );
 
   /* ---- Récupération données & recalage horaire ---- */
   const fetchAndReflow = useCallback(async () => {
@@ -198,7 +329,7 @@ export default function Planning() {
           console.warn("Plusieurs 'En cours' détectées sur une machine. Une seule sera prolongée.");
         }
 
-        // 1) Figer l'En cours (si plusieurs → on garde la plus récente par début)
+        // 1) Figer/prolonger la commande En cours (+1h ouvrée)
         let cursor;
         if (enCours.length > 0) {
           const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
@@ -217,7 +348,7 @@ export default function Planning() {
           .map(({ p, c }) => ({
             p,
             c,
-            urgent: !!c.urgent, // si pas de colonne, false → tri retombe sur deadline
+            urgent: !!c.urgent,
             deadline: c.dateLivraison || null,
             created_at: c.created_at || p.created_at || null,
             expectedHours:
@@ -256,7 +387,7 @@ export default function Planning() {
           cursor = newFin;
         }
 
-        // 4) Les "autres" statuts (Terminée, etc.) : ne pas toucher, mais tenir le curseur si jamais après
+        // 4) Les "autres" statuts : ne pas toucher, mais tenir le curseur si jamais après
         for (const { p } of autres) {
           const finActuel = new Date(p.fin);
           if (finActuel > cursor) cursor = finActuel;
@@ -385,25 +516,15 @@ export default function Planning() {
     }
     return null;
   };
-  /* ---- Compte de cellules affichées pour un slot (demi‑ouvert) ---- */
-  /* ---- Compte fiable via expandToHourSlots (saut midi/nuit/WE/feriés) ---- */
+
+  /* ---- Compte fiable via heures ouvrées réelles (min 1 case) ---- */
   const countDisplayedCellsFor = useCallback(
     (slot) => {
-      // Comptage direct des heures ouvrées réelles entre début et fin du slot
-      const paintedLength = workingHoursBetween(slot.debut, slot.fin, workOpts);
-
-      console.log("DEBUG countDisplayedCellsFor", {
-        commandeId: slot.commandeId,
-        paintedLength,
-        start: slot.debut,
-        end: slot.fin
-      });
-
-      return paintedLength;
+      const cells = workingHoursBetween(slot.debut, slot.fin, workOpts);
+      return Math.max(1, cells); // <= crucial pour micro-commandes (08:49→08:55)
     },
     [workOpts]
   );
-
 
   return (
     <div className="planning-page">
@@ -544,20 +665,14 @@ export default function Planning() {
       </div>
 
       {modalCommande && (
-        <div className="modal-overlay" onClick={() => setModalCommande(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Commande #{modalCommande.numero}</h3>
-            <p><strong>Client :</strong> {modalCommande.client}</p>
-            <p>
-              <strong>Date de livraison :</strong>{" "}
-              {modalCommande.dateLivraison
-                ? new Date(modalCommande.dateLivraison).toLocaleDateString("fr-FR")
-                : "—"}
-            </p>
-            <p><strong>Statut :</strong> {modalCommande.statut || "—"}</p>
-            <button onClick={() => setModalCommande(null)}>Fermer</button>
-          </div>
-        </div>
+        <CommandeModal
+          // 🔑 Force un remount si id ou statut changent (évite un état interne obsolète)
+          key={`${modalCommande.id}:${modalCommande.statut ?? ""}`}
+          commande={modalCommande}
+          onClose={() => setModalCommande(null)}
+          onOptimisticReplace={replaceCommandeLocal}
+          onTermineeShortenPlanning={shortenPlanningForCommandeTerminee}
+        />
       )}
     </div>
   );

@@ -1,30 +1,35 @@
+/* MachinesCard.css */
 .machine-card {
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  background-color: #f9f9f9;
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: 16px;
   width: 300px;
   text-align: left;
-  box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-  margin: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.12));
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.machine-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.25));
+}
+
+.machine-card:focus,
+.machine-card:focus-visible,
+.machine-card[tabindex]:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(183,28,33,0.18), var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.12));
+}
+
+.tag-group {
+  margin-top: 10px;
 }
 
 .tag-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 5px;
-}
-.machine-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  cursor: pointer;
-}
-
-.machine-card:hover {
-  transform: scale(1.05); /* grossissement à 105% */
-  box-shadow: 0 6px 18px rgba(0,0,0,0.25); /* ombre plus marquée */
+  gap: 8px;
+  margin-top: 6px;
 }

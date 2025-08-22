@@ -17,8 +17,8 @@
 /* Dark mode auto */
 @media (prefers-color-scheme: dark) {
   :root {
-    --banner-bg: #0f172a;
-    --banner-fg: #e2e8f0;
+    --banner-bg: rgb(168, 190, 246);
+    --banner-fg: #0061df;
     --banner-muted: #94a3b8;
   }
 }
@@ -98,7 +98,7 @@
 .banner :is(a, button, [tabindex]) :focus-visible,
 .banner :is(a, button, [tabindex]):focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(208, 57, 65, 0.35);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.35);
   border-radius: 8px;
 }
 

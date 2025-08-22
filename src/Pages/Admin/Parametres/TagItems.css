@@ -1,15 +1,118 @@
+/* —— TagItems.css (final) — harmonisé avec Parametres.css —— */
+
+/* Conteneur de l'item (le <li> parent a déjà un style via .tags-list li) */
+.tag-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Libellé */
+.tag-item-label {
+  flex: 1;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Info nettoyage */
+.tag-item-nettoyage {
+  margin-left: 8px;
+  opacity: 0.8;
+}
+
+/* Champs d'édition */
+.tag-item-input {
+  padding: 8px;
+  font-size: 0.95rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  min-width: 160px;
+}
+
+.tag-item-input.nettoyage {
+  width: 140px;
+}
+
+.tag-item-input:focus-visible {
+  outline: 3px solid rgba(25, 118, 210, 0.25); /* bleu doux, cohérent avec .tag-item-button */
+  border-color: #1976d2;
+}
+
+/* Boutons génériques */
 .tag-item-button {
-  background-color: #1976d2;
-  color: white;
+  background-color: #1976d2; /* bleu (éditer) par défaut */
+  color: #fff;
   border: none;
-  border-radius: 4px;
-  padding: 6px 8px;
+  border-radius: 6px; /* 6px comme Parametres.css */
+  padding: 6px 10px;
   font-size: 14px;
   cursor: pointer;
   margin-left: 6px;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.08s ease;
 }
 
 .tag-item-button:hover {
   background-color: #125a9c;
+}
+
+.tag-item-button:active {
+  transform: translateY(1px);
+}
+
+.tag-item-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Variantes de boutons (cohérentes avec Parametres.css) */
+.tag-item-button.save {
+  background-color: #28a745; /* même vert que .btn-enregistrer */
+}
+
+.tag-item-button.save:hover {
+  background-color: #218838; /* hover de .btn-enregistrer */
+}
+
+.tag-item-button.cancel {
+  background-color: #6c757d; /* même gris que .btn-fermer */
+}
+
+.tag-item-button.cancel:hover {
+  background-color: #5a6268; /* hover de .btn-fermer */
+}
+
+.tag-item-button.delete {
+  background-color: #b71c1c; /* rouge (même teinte que .error-message) */
+}
+
+.tag-item-button.delete:hover {
+  background-color: #8f1414;
+}
+
+/* État d'item en édition */
+.tag-item.editing {
+  background: transparent; /* le li parent est déjà coloré */
+}
+
+/* Accessibilité : focus clair sur les boutons */
+.tag-item-button:focus-visible {
+  outline: 3px solid rgba(25, 118, 210, 0.3);
+  outline-offset: 2px;
+}
+
+/* Responsive : empile si la largeur se réduit */
+@media (max-width: 520px) {
+  .tag-item {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag-item-label {
+    flex-basis: 100%;
+  }
+  .tag-item-input {
+    flex: 1 1 160px;
+  }
 }

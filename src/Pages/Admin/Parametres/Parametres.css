@@ -1,6 +1,21 @@
+/* —— Parametres.css (improved) —— */
+
 .parametres-page {
-  padding: 40px;
+  padding: 40px 20px;
   text-align: center;
+}
+
+.parametres-header h2 {
+  color: #b71c1c; /* couleur de marque */
+  margin-bottom: 10px;
+}
+
+.parametres-counters {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  font-size: 0.95rem;
+  color: #555;
 }
 
 .ajout-section {
@@ -17,6 +32,14 @@
   font-size: 1rem;
   border: 1px solid #ccc;
   border-radius: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ajout-section input:focus-visible,
+.ajout-section select:focus-visible {
+  border-color: #1976d2;
+  box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
+  outline: none;
 }
 
 .tags-list {
@@ -27,11 +50,14 @@
 
 .tags-list h3 {
   margin-top: 30px;
+  margin-bottom: 12px;
+  color: #333;
 }
 
 .tags-list ul {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .tags-list li {
@@ -42,18 +68,15 @@
   padding: 8px 12px;
   border-radius: 6px;
   margin-bottom: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.tags-list li:hover {
+  background-color: #f1f1f1;
 }
 
 .tags-list li span {
   flex: 1;
-}
-
-.tags-list li button {
-  margin-left: 5px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
 }
 
 .btn-enregistrer {
@@ -63,6 +86,7 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .btn-enregistrer:hover {
@@ -76,14 +100,16 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .btn-fermer:hover {
   background-color: #5a6268;
 }
+
 .section-content {
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 6px;
   margin-bottom: 30px;
 }
 
@@ -94,10 +120,11 @@
 }
 
 .success-message {
-  color: #250899;
+  color: #28a745; /* vert cohérent avec bouton Ajouter */
   font-weight: bold;
   margin-top: 5px;
 }
+
 .tags-sections {
   display: flex;
   gap: 20px;
@@ -109,5 +136,30 @@
   flex: 1;
   background: #f4f8fb;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: 6px;
+}
+
+/* Feedback et chargement */
+.parametres-alert {
+  background: #fff3cd;
+  color: #856404;
+  padding: 10px 15px;
+  border: 1px solid #ffeeba;
+  border-radius: 6px;
+  margin: 15px auto;
+  max-width: 600px;
+  text-align: center;
+}
+
+.parametres-loading {
+  margin: 20px auto;
+  color: #1976d2;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tags-sections {
+    flex-direction: column;
+  }
 }

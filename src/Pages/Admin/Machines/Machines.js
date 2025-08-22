@@ -1,253 +1,371 @@
-import React, { useState, useEffect, useContext } from "react";
+// src/pages/Machines/Machines.js
+import React, { useState, useEffect, useContext, useCallback, useMemo } from "react";
 import "./Machines.css";
 import "../../../styles/Common.css";
 import { EtiquettesContext } from "../../../context/EtiquettesContext";
 import NewButton from "../../../components/common/NewButton";
 import { supabase } from "../../../supabaseClient";
-import MachinesCard from "./MachinesCard"; // Assurez-vous que le chemin est correct
-import MachinesForm from "./MachinesForm"; // Assurez-vous que le chemin est correct
+import MachinesCard from "./MachinesCard";
+import MachinesForm from "./MachinesForm";
 
-function Machines() {
+/* =========================
+   Helpers
+========================= */
+const safeParseEtiquettes = (raw) => {
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (raw == null) return [];
+  if (typeof raw === "string") {
+    try {
+      const j = JSON.parse(raw);
+      return Array.isArray(j) ? j.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const uniq = (arr) => Array.from(new Set((arr || []).filter(Boolean)));
+
+const sortByName = (arr) =>
+  [...arr].sort((a, b) => String(a?.nom ?? "").localeCompare(String(b?.nom ?? ""), "fr", { sensitivity: "base" }));
+
+export default function Machines() {
   const { articleTags, broderieTags } = useContext(EtiquettesContext);
+
+  const validTagSet = useMemo(() => {
+    const all = [...(articleTags || []), ...(broderieTags || [])].map((t) => t.label);
+    return new Set(all.filter(Boolean));
+  }, [articleTags, broderieTags]);
+
+  const [machines, setMachines] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [showModalForm, setShowModalForm] = useState(false);
   const [machineDetails, setMachineDetails] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [machines, setMachines] = useState([]);
-  const [formData, setFormData] = useState({
-    nom: "",
-    nbTetes: "",
-    etiquettes: [],
-  });
+  const [formData, setFormData] = useState({ nom: "", nbTetes: "", etiquettes: [] });
 
-  // Charger les machines
-  useEffect(() => {
-  const loadMachines = async () => {
+  /* =========================
+     Load machines + normalize
+  ========================= */
+  const loadMachines = useCallback(async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from("machines")
-      .select("id, nom, nbTetes, etiquettes");
+      .select("id, nom, nbTetes, etiquettes")
+      .order("nom", { ascending: true });
 
     if (error) {
       console.error("Erreur chargement machines :", error);
+      setLoading(false);
       return;
     }
 
-    // ✅ Corrige ici : transforme en tableau si c'est du texte
-    const normalized = data.map((m) => ({
-      ...m,
-      etiquettes:
-        typeof m.etiquettes === "string"
-          ? JSON.parse(m.etiquettes)
-          : Array.isArray(m.etiquettes)
-          ? m.etiquettes
-          : [],
-    }));
-
-    setMachines(normalized);
-  };
-
-  loadMachines();
-}, []);
-
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const toggleTag = (label) => {
-    setFormData((prev) => {
-      const current = [...prev.etiquettes];
-      const index = current.indexOf(label);
-      if (index > -1) {
-        current.splice(index, 1);
-      } else {
-        current.push(label);
-      }
-      return { ...prev, etiquettes: current };
+    const normalized = (data || []).map((m) => {
+      const etiq = uniq(safeParseEtiquettes(m.etiquettes)).filter((t) => validTagSet.has(t));
+      return { ...m, etiquettes: etiq };
     });
-  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    setMachines(sortByName(normalized));
+    setLoading(false);
+  }, [validTagSet]);
 
-    const { data, error } = await supabase
-      .from("machines")
-      .insert([
-        {
-          nom: formData.nom,
-          nbTetes: parseInt(formData.nbTetes),
-          etiquettes: formData.etiquettes,
-        },
-      ])
-      .select()
-      .single();
+  useEffect(() => {
+    loadMachines();
+  }, [loadMachines]);
 
-    if (error) {
-      console.error("Erreur ajout machine :", error);
-      return;
-    }
+  /* =========================
+     Realtime Supabase
+  ========================= */
+  useEffect(() => {
+    const ch = supabase
+      .channel("realtime-machines")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "machines" },
+        (payload) => {
+          const { eventType, new: newRow, old: oldRow } = payload;
+          setMachines((prev) => {
+            if (eventType === "INSERT" || eventType === "UPDATE") {
+              const etiq = uniq(safeParseEtiquettes(newRow?.etiquettes)).filter((t) => validTagSet.has(t));
+              const row = { ...newRow, etiquettes: etiq };
+              const idx = prev.findIndex((m) => m.id === row.id);
+              if (idx === -1) return sortByName([...prev, row]);
+              const copy = [...prev];
+              copy[idx] = row;
+              return sortByName(copy);
+            }
+            if (eventType === "DELETE") {
+              return prev.filter((m) => m.id !== oldRow?.id);
+            }
+            return prev;
+          });
+        }
+      )
+      .subscribe();
 
-    const parsedEtiquettes =
-      typeof data.etiquettes === "string"
-      ? JSON.parse(data.etiquettes)
-      : Array.isArray(data.etiquettes)
-      ? data.etiquettes
-      : [];
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [validTagSet]);
 
-    setMachines((prev) => [...prev, { ...data, etiquettes: parsedEtiquettes }]);
-
+  /* =========================
+     Form helpers
+  ========================= */
+  const openCreate = useCallback(() => {
     setFormData({ nom: "", nbTetes: "", etiquettes: [] });
-    setShowModalForm(false);
-  };
-
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-
-    const { data, error } = await supabase
-      .from("machines")
-      .update({
-        nom: formData.nom,
-        nbTetes: parseInt(formData.nbTetes),
-        etiquettes: formData.etiquettes,
-      })
-      .eq("id", machineDetails.id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Erreur modification machine :", error);
-      return;
-    }
-
-    const updated = machines.map((m) => (m.id === data.id ? { ...data, etiquettes: data.etiquettes || [] } : m));
-    setMachines(updated);
+    setShowModalForm(true);
     setMachineDetails(null);
     setIsEditing(false);
-  };
+  }, []);
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Confirmer la suppression ?")) {
+  const openDetails = useCallback((m) => {
+    setMachineDetails(m);
+    setFormData({
+      nom: m.nom ?? "",
+      nbTetes: m.nbTetes ?? "",
+      etiquettes: Array.isArray(m.etiquettes) ? m.etiquettes : [],
+    });
+    setIsEditing(false);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setShowModalForm(false);
+    setMachineDetails(null);
+    setIsEditing(false);
+  }, []);
+
+  // Accessibilité : fermer la modale avec Esc
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && closeModal();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closeModal]);
+
+  const handleChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const toggleTag = useCallback(
+    (label) => {
+      setFormData((prev) => {
+        const next = new Set(prev.etiquettes || []);
+        if (next.has(label)) next.delete(label);
+        else next.add(label);
+        // on ne garde que les tags valides
+        const cleaned = uniq([...next]).filter((t) => validTagSet.has(t));
+        return { ...prev, etiquettes: cleaned };
+      });
+    },
+    [validTagSet]
+  );
+
+  /* =========================
+     Create / Update / Delete
+  ========================= */
+  const handleSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const payload = {
+        nom: String(formData.nom ?? "").trim(),
+        nbTetes: formData.nbTetes === "" ? null : parseInt(formData.nbTetes, 10),
+        etiquettes: uniq(formData.etiquettes).filter((t) => validTagSet.has(t)),
+      };
+
+      // Optimistic insert (temp id)
+      const tempId = `tmp_${Date.now()}`;
+      const optimisticRow = { id: tempId, ...payload };
+      setMachines((prev) => sortByName([...prev, optimisticRow]));
+
+      const { data, error } = await supabase.from("machines").insert([payload]).select().single();
+
+      if (error) {
+        console.error("Erreur ajout machine :", error);
+        // rollback
+        setMachines((prev) => prev.filter((m) => m.id !== tempId));
+        return;
+      }
+
+      const etiq = uniq(safeParseEtiquettes(data.etiquettes)).filter((t) => validTagSet.has(t));
+      setMachines((prev) => {
+        const withoutTemp = prev.filter((m) => m.id !== tempId);
+        return sortByName([...withoutTemp, { ...data, etiquettes: etiq }]);
+      });
+
+      setFormData({ nom: "", nbTetes: "", etiquettes: [] });
+      setShowModalForm(false);
+    },
+    [formData, validTagSet]
+  );
+
+  const handleEditSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (!machineDetails) return;
+
+      const payload = {
+        nom: String(formData.nom ?? "").trim(),
+        nbTetes: formData.nbTetes === "" ? null : parseInt(formData.nbTetes, 10),
+        etiquettes: uniq(formData.etiquettes).filter((t) => validTagSet.has(t)),
+      };
+
+      // Optimistic update
+      setMachines((prev) =>
+        sortByName(
+          prev.map((m) => (m.id === machineDetails.id ? { ...m, ...payload } : m))
+        )
+      );
+
+      const { data, error } = await supabase
+        .from("machines")
+        .update(payload)
+        .eq("id", machineDetails.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Erreur modification machine :", error);
+        // recharge prudente
+        await loadMachines();
+        return;
+      }
+
+      const etiq = uniq(safeParseEtiquettes(data.etiquettes)).filter((t) => validTagSet.has(t));
+      setMachines((prev) =>
+        sortByName(prev.map((m) => (m.id === data.id ? { ...data, etiquettes: etiq } : m)))
+      );
+
+      setMachineDetails(null);
+      setIsEditing(false);
+    },
+    [formData, machineDetails, loadMachines, validTagSet]
+  );
+
+  const handleDelete = useCallback(
+    async (id) => {
+      if (!id) return;
+      if (!window.confirm("Confirmer la suppression ?")) return;
+
+      // Optimistic delete
+      const snapshot = machines;
+      setMachines((prev) => prev.filter((m) => m.id !== id));
+
       const { error } = await supabase.from("machines").delete().eq("id", id);
       if (error) {
         console.error("Erreur suppression machine :", error);
+        setMachines(snapshot); // rollback
         return;
       }
-      setMachines((prev) => prev.filter((m) => m.id !== id));
       setMachineDetails(null);
-    }
-  };
+    },
+    [machines]
+  );
 
+  /* =========================
+     UI
+  ========================= */
   return (
     <div className="machines-page">
-      <NewButton
-        onClick={() => {
-          setFormData({ nom: "", nbTetes: "", etiquettes: [] });
-          setShowModalForm(true);
-          setMachineDetails(null);
-          setIsEditing(false);
-        }}
-      >
-        Nouvelle machine
-      </NewButton>
-
-      {/* Modale création */}
-      {showModalForm && (
-  <div className="modal-overlay">
-    <div className="modal">
-      <MachinesForm
-        formData={formData}
-        articleTags={articleTags}
-        broderieTags={broderieTags}
-        onChange={handleChange}
-        onSubmit={handleSubmit}
-        onCancel={() => setShowModalForm(false)}
-        toggleTag={toggleTag}
-        isEditing={false}
-      />
-    </div>
-  </div>
-)}
-
+      <div className="header-row">
+        <NewButton onClick={openCreate}>Nouvelle machine</NewButton>
+        {loading && <span className="muted">Chargement…</span>}
+      </div>
 
       {/* Liste des machines */}
       <div className="liste-machines">
-  {machines.map((machine) => (
-    <MachinesCard
-      key={machine.id}
-      machine={machine}
-      articleTags={articleTags}
-      broderieTags={broderieTags}
-      onClick={(m) => {
-        setMachineDetails(m);
-        setFormData({
-          nom: m.nom,
-          nbTetes: m.nbTetes,
-          etiquettes: Array.isArray(m.etiquettes) ? m.etiquettes : [],
-        });
-        setIsEditing(false);
-      }}
-    />
-  ))}
-</div>
+        {machines.map((machine) => (
+          <MachinesCard
+            key={machine.id}
+            machine={machine}
+            articleTags={articleTags}
+            broderieTags={broderieTags}
+            onClick={openDetails}
+          />
+        ))}
+        {!loading && machines.length === 0 && (
+          <div className="empty-state">Aucune machine enregistrée.</div>
+        )}
+      </div>
 
+      {/* Modale création */}
+      {showModalForm && (
+        <div className="modal-overlay" onClick={closeModal} role="dialog" aria-modal="true">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <MachinesForm
+              formData={formData}
+              articleTags={articleTags}
+              broderieTags={broderieTags}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              onCancel={closeModal}
+              toggleTag={toggleTag}
+              isEditing={false}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modale consultation / édition */}
       {machineDetails && (
-  <div className="modal-overlay">
-    <div className="modal">
-      {!isEditing ? (
-        <>
-          <h2>{machineDetails.nom}</h2>
-          <p><strong>Nombre de têtes :</strong> {machineDetails.nbTetes}</p>
-          {(machineDetails.etiquettes || []).length > 0 && (
-            <>
-              <div className="etiquettes-section">
-                <p><strong>Articles :</strong></p>
-                <div className="tag-list">
-                  {machineDetails.etiquettes
-                    .filter((t) => articleTags.some((a) => a.label === t))
-                    .map((t, i) => (
-                      <span key={i} className="tag readonly">{t}</span>
-                    ))}
-                  </div>
-                </div>
+        <div className="modal-overlay" onClick={closeModal} role="dialog" aria-modal="true">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            {!isEditing ? (
+              <>
+                <h2>{machineDetails.nom}</h2>
+                <p>
+                  <strong>Nombre de têtes :</strong>{" "}
+                  {machineDetails.nbTetes ?? <em>—</em>}
+                </p>
 
-                <div className="etiquettes-section">
-                  <p><strong>Options de broderie :</strong></p>
-                  <div className="tag-list">
-                    {machineDetails.etiquettes
-                      .filter((t) => broderieTags.some((b) => b.label === t))
-                      .map((t, i) => (
-                        <span key={i} className="tag readonly">{t}</span>
-                      ))}
-                  </div>
+                {(machineDetails.etiquettes || []).length > 0 && (
+                  <>
+                    <div className="etiquettes-section">
+                      <p><strong>Articles :</strong></p>
+                      <div className="tag-list">
+                        {(machineDetails.etiquettes || [])
+                          .filter((t) => (articleTags || []).some((a) => a.label === t))
+                          .map((t, i) => (
+                            <span key={`art-${i}`} className="tag readonly">{t}</span>
+                          ))}
+                      </div>
+                    </div>
+
+                    <div className="etiquettes-section">
+                      <p><strong>Options de broderie :</strong></p>
+                      <div className="tag-list">
+                        {(machineDetails.etiquettes || [])
+                          .filter((t) => (broderieTags || []).some((b) => b.label === t))
+                          .map((t, i) => (
+                            <span key={`brd-${i}`} className="tag readonly">{t}</span>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div className="btn-zone">
+                  <button onClick={() => setIsEditing(true)} className="btn-enregistrer">Modifier</button>
+                  <button onClick={() => handleDelete(machineDetails.id)} className="btn-fermer">Supprimer</button>
+                  <button onClick={closeModal} className="btn-fermer">Fermer</button>
                 </div>
-            </>
-          )}
-          <div className="btn-zone">
-            <button onClick={() => setIsEditing(true)} className="btn-enregistrer">Modifier</button>
-            <button onClick={() => handleDelete(machineDetails.id)} className="btn-fermer">Supprimer</button>
-            <button onClick={() => setMachineDetails(null)} className="btn-fermer">Fermer</button>
+              </>
+            ) : (
+              <MachinesForm
+                formData={formData}
+                articleTags={articleTags}
+                broderieTags={broderieTags}
+                onChange={handleChange}
+                onSubmit={handleEditSubmit}
+                onCancel={() => setIsEditing(false)}
+                toggleTag={toggleTag}
+                isEditing={true}
+              />
+            )}
           </div>
-        </>
-      ) : (
-        <MachinesForm
-          formData={formData}
-          articleTags={articleTags}
-          broderieTags={broderieTags}
-          onChange={handleChange}
-          onSubmit={handleEditSubmit}
-          onCancel={() => setIsEditing(false)}
-          toggleTag={toggleTag}
-          isEditing={true}
-        />
+        </div>
       )}
-    </div>
-  </div>
-)}
     </div>
   );
 }
-
-export default Machines;

@@ -1,0 +1,37 @@
+/* MachinesForm.css */
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.formulaire-machine .tag {
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 600;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease, color .15s ease;
+}
+
+.formulaire-machine .tag:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.12));
+}
+
+.formulaire-machine .tag.active {
+  background: rgba(183,28,33,0.10);
+  border-color: var(--brand, #B71C21);
+  color: #7a0f12;
+}
+.tags-section {
+  margin-top: 12px;
+  text-align: left;
+}
+
+.tags-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #374151; /* gris foncé */
+}
