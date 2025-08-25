@@ -120,20 +120,19 @@
 
 /* ===== Slots ===== */
 .cell {
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: default;
-  transition: transform .2s, box-shadow .2s;
-  background-clip: padding-box;
+  border: 1px solid #ddd;           /* shorthand OK ici (CSS), jamais en inline */
+  background-color: var(--cell-bg, white);
+  border-left-color: #ddd;          /* valeur par défaut */
+  border-left-width: 1px;
+  border-left-style: solid;
 }
 .cell--free { 
   background: #fff; 
   border: 1px solid #ddd; 
 }
-.cell--busy { 
-  color: #000; 
-  cursor: pointer; 
-  border: 1px solid rgba(0,0,0,.06);
+.cell--busy {
+  border-left-color: var(--urgency-color, #ddd);
+  border-left-width: var(--busy-left-w, 6px);
 }
 
 /* Hover + focus for accessibility */

@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { supabase } from "../../../supabaseClient";
 import "./Planning.css";
 import { configureSlots } from "../../../utils/time";
-// Si tu n'as PAS ré-exporté depuis utils/time.js :
 // import { configureSlots, expandToHourSlots } from "../../../utils/slots";
-
 import {
   ONE_HOUR_MS,
   formatHourRangeFR,
@@ -13,22 +11,26 @@ import {
   isBusinessDay,
   isWorkHour,
 } from "../../../utils/time";
-
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
+
+console.log("[Planning] module loaded");
 
 /* =========================
    Helpers génériques
 ========================= */
-
-// 🔧 Normalisation ISO → UTC (tolère ISO sans suffixe Z)
 const parseISOAny = (v) => {
   if (v instanceof Date) return v;
   if (typeof v === "string") {
-    if (!/[Zz]|[+-]\d{2}:\d{2}$/.test(v)) return new Date(v + "Z");
-    return new Date(v);
+    const noTZ = !/[Zz]|[+-]\d{2}:\d{2}$/.test(v);
+    if (parseISOAny.__dbgCount < 3) {
+      console.log("[parseISOAny]", { in: v, noTZ, out: noTZ ? v + "Z" : v });
+      parseISOAny.__dbgCount++;
+    }
+    return new Date(noTZ ? v + "Z" : v);
   }
   return new Date(v);
 };
+parseISOAny.__dbgCount = 0;
 
 /* =========================
    Affichage / couleurs
@@ -63,17 +65,14 @@ const computeUrgency = (dateLivraison) => {
   return 1;
 };
 
-// --- Priorisation V1 ---
-// 1) urgent (bool)  2) deadline  3) created_at
+// Priorisation V1
 const sortByPriority = (a, b) => {
   const au = !!a.urgent;
   const bu = !!b.urgent;
   if (au !== bu) return au ? -1 : 1;
-
   const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
   const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
   if (da !== db) return da - db;
-
   const ca = a.created_at ? new Date(a.created_at).getTime() : Infinity;
   const cb = b.created_at ? new Date(b.created_at).getTime() : Infinity;
   return ca - cb;
@@ -96,37 +95,51 @@ function ceilToHourMs(d) {
   }
   return x.getTime();
 }
-
-// Normalisation d’un créneau → demi-ouvert [startHour, endHour[
 function normalizeSlotForGrid(slot) {
   const gs = floorToHourMs(parseISOAny(slot.debut));
   const ge = ceilToHourMs(parseISOAny(slot.fin));
+  if (!normalizeSlotForGrid.__once) {
+    normalizeSlotForGrid.__once = true;
+    console.log("[normalizeSlotForGrid] sample", {
+      in_debut: slot.debut,
+      in_fin: slot.fin,
+      gsISO: new Date(gs).toISOString(),
+      geISO: new Date(ge).toISOString(),
+    });
+  }
   return { ...slot, gridStartMs: gs, gridEndMs: ge };
 }
+normalizeSlotForGrid.__once = false;
 
-// Heures ouvrées entières entre deux ISO (boucle demi-ouverte)
 function workingHoursBetween(startISO, endISO, { skipNonBusiness = true, holidays = new Set() } = {}) {
   const start = parseISOAny(startISO);
   const end   = parseISOAny(endISO);
-  if (!(start < end)) return 0;
 
+  if (!workingHoursBetween.__once) {
+    workingHoursBetween.__once = true;
+    console.groupCollapsed("[workingHoursBetween] sample");
+    console.log("startISO/endISO", startISO, endISO);
+    console.log("start/end local", start.toString(), end.toString());
+    console.log("opts", { skipNonBusiness, holidaysSize: holidays.size });
+    console.groupEnd();
+  }
+
+  if (!(start < end)) return 0;
   const cur = new Date(start);
   if (cur.getMinutes() || cur.getSeconds() || cur.getMilliseconds()) {
     cur.setHours(cur.getHours() + 1, 0, 0, 0);
   }
-
   let count = 0;
   while (cur < end) {
-    if ((!skipNonBusiness || isBusinessDay(cur, holidays)) && isWorkHour(cur)) {
-      count += 1;
-    }
+    if ((!skipNonBusiness || isBusinessDay(cur, holidays)) && isWorkHour(cur)) count += 1;
     cur.setHours(cur.getHours() + 1, 0, 0, 0);
   }
   return count;
 }
+workingHoursBetween.__once = false;
 
 /* =========================
-   Modal Commande (select statut + sync)
+   Modal Commande
 ========================= */
 function CommandeModal({ commande, onClose, onOptimisticReplace, onTermineeShortenPlanning }) {
   const STATUTS = ["A commencer", "En cours", "En pause", "Terminée", "Annulée"];
@@ -134,33 +147,34 @@ function CommandeModal({ commande, onClose, onOptimisticReplace, onTermineeShort
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  // 🔁 Re-synchronise l'état local quand la commande ou son statut changent
   React.useEffect(() => {
     setStatut(commande?.statut ?? "A commencer");
   }, [commande?.id, commande?.statut]);
 
   const handleSave = async () => {
     if (!commande?.id) return;
+    console.log("🟢 handleSave()", { id: commande.id, statutSelectionne: statut });
     setSaving(true);
     setError("");
 
-    // Optimistic UI (remonté vers le parent)
     const optimistic = { ...commande, statut };
     onOptimisticReplace?.(optimistic);
 
     try {
       const saved = await updateCommandeStatut(commande.id, statut);
-      onOptimisticReplace?.(saved); // conforte (timestamps, etc.)
+      console.log("💾 updateCommandeStatut OK", saved?.id, saved?.statut);
+      onOptimisticReplace?.(saved);
 
-      // ⬇️ Raccourcir tout de suite le créneau de planning si Terminée
       if (statut === "Terminée") {
+        console.log("✂️ statut === 'Terminée' → appel onTermineeShortenPlanning");
         await onTermineeShortenPlanning?.(commande.id, new Date());
+        console.log("✅ onTermineeShortenPlanning terminé");
       }
-
       onClose();
     } catch (e) {
+      console.error("❌ handleSave error", e);
+      onOptimisticReplace?.(commande);
       setError(e.message ?? "Erreur inconnue");
-      onOptimisticReplace?.(commande); // rollback visuel
     } finally {
       setSaving(false);
     }
@@ -173,9 +187,7 @@ function CommandeModal({ commande, onClose, onOptimisticReplace, onTermineeShort
         <p><strong>Client :</strong> {commande.client}</p>
         <p>
           <strong>Date de livraison :</strong>{" "}
-          {commande.dateLivraison
-            ? new Date(commande.dateLivraison).toLocaleDateString("fr-FR")
-            : "—"}
+          {commande.dateLivraison ? new Date(commande.dateLivraison).toLocaleDateString("fr-FR") : "—"}
         </p>
 
         <label className="field" style={{ display: "block", marginTop: 12 }}>
@@ -183,9 +195,7 @@ function CommandeModal({ commande, onClose, onOptimisticReplace, onTermineeShort
             <strong>Statut</strong>
           </span>
           <select value={statut} onChange={(e) => setStatut(e.target.value)} disabled={saving}>
-            {STATUTS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
+            {STATUTS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
 
@@ -206,81 +216,123 @@ function CommandeModal({ commande, onClose, onOptimisticReplace, onTermineeShort
    Composant principal
 ========================= */
 export default function Planning() {
+  console.log("[Planning] render", { time: new Date().toISOString() });
+
   const [startDate, setStartDate] = useState(new Date());
   const [machines, setMachines] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [planning, setPlanning] = useState([]);
   const [modalCommande, setModalCommande] = useState(null);
 
-  // ajoute tes fériés si besoin
   const HOLIDAYS = useMemo(() => new Set([]), []);
   const workOpts = useMemo(() => ({ skipNonBusiness: true, holidays: HOLIDAYS }), [HOLIDAYS]);
 
+  // 🔧 log "rows" une seule fois sans référencer 'rows' pendant sa création
+  const rowsLoggedRef = useRef(false);
+
   useEffect(() => {
-    // Active la logique jours ouvrés/fériés
+    console.log("[Planning] configureSlots");
     configureSlots({ skipNonBusiness: true, holidays: HOLIDAYS });
   }, [HOLIDAYS]);
 
-  // éviter 2 recalculs simultanés
   const isUpdatingRef = useRef(false);
 
-  // Remplacement local robuste (optimistic + Realtime)
   const replaceCommandeLocal = useCallback((updated) => {
+    console.log("[Planning] replaceCommandeLocal", updated?.id);
     setCommandes((prev) => replaceCommandeInArray(prev, updated));
     setModalCommande((cur) => (cur?.id === updated.id ? { ...cur, ...updated } : cur));
   }, []);
 
-  // Abonnement Realtime: propage les UPDATE de 'commandes'
   useEffect(() => {
+    console.log("[Planning] subscribe realtime-commandes");
     const channel = supabase
       .channel("realtime-commandes")
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "commandes" },
-        (payload) => replaceCommandeLocal(payload.new)
+        (payload) => {
+          console.log("[Realtime commandes] UPDATE", payload?.new?.id);
+          replaceCommandeLocal(payload.new);
+        }
       )
       .subscribe();
     return () => {
+      console.log("[Planning] unsubscribe realtime-commandes");
       supabase.removeChannel(channel);
     };
   }, [replaceCommandeLocal]);
 
-  /* ---- Raccourcir planning quand une commande passe Terminée ---- */
   const shortenPlanningForCommandeTerminee = useCallback(
     async (commandeId, actualEnd = new Date()) => {
       const endIso = new Date(actualEnd).toISOString();
+      const nowMs = new Date(endIso).getTime();
 
-      // 1) rows concernés
+      console.log("🟢 shortenPlanningForCommandeTerminee déclenchée", { commandeId, endIso });
+
       const { data: rows, error } = await supabase
         .from("planning")
         .select("id, debut, fin, commandeId")
         .eq("commandeId", commandeId);
 
       if (error) {
-        console.error("Erreur fetch planning by commandeId:", error);
+        console.error("❌ Erreur fetch planning by commandeId:", error);
         return;
       }
-      if (!rows || rows.length === 0) return;
+      if (!rows || rows.length === 0) {
+        console.log("⚠️ Aucun slot trouvé pour cette commande");
+        return;
+      }
 
-      // 2) MAJ DB
-      await Promise.all(
-        rows.map((r) =>
-          supabase.from("planning").update({ fin: endIso }).eq("id", r.id)
-        )
-      );
+      console.log("📋 Slots trouvés:", rows);
 
-      // 3) MAJ locale immuable (évite disparition/flash)
-      setPlanning((prev) =>
-        prev.map((p) => (rows.some((r) => r.id === p.id) ? { ...p, fin: endIso } : p))
-      );
+      let current = null;
+      for (const r of rows) {
+        const s = new Date(r.debut).getTime();
+        const e = new Date(r.fin).getTime();
+        if (s <= nowMs && nowMs < e) { current = r; break; }
+      }
+
+      if (current) console.log("✂️ Bloc courant à raccourcir:", current);
+      else console.log("ℹ️ Aucun bloc courant trouvé (peut-être déjà fini)");
+
+      const mutations = [];
+      if (current) {
+        mutations.push(supabase.from("planning").update({ fin: endIso }).eq("id", current.id));
+      }
+
+      const future = rows.filter(r => {
+        const s = new Date(r.debut).getTime();
+        return s >= nowMs && (!current || r.id !== current.id);
+      });
+
+      if (future.length) {
+        console.log("🗑️ Blocs futurs supprimés:", future);
+        mutations.push(supabase.from("planning").delete().in("id", future.map(f => f.id)));
+      }
+
+      if (mutations.length) {
+        console.log("🚀 Application des mutations en base:", mutations.length);
+        await Promise.all(mutations);
+      }
+
+      setPlanning(prev => {
+        const deletedIds = new Set(future.map(f => f.id));
+        const newPlanning = prev
+          .filter(p => !deletedIds.has(p.id))
+          .map(p => (current && p.id === current.id ? { ...p, fin: endIso } : p));
+
+        console.log("✅ MAJ locale planning:", newPlanning);
+        return newPlanning;
+      });
     },
     []
   );
 
-  /* ---- Récupération données & recalage horaire ---- */
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
+    console.log("[Planning] fetchAndReflow: start");
+
     try {
       const [mRes, cRes, pRes] = await Promise.all([
         supabase.from("machines").select("id, nom"),
@@ -291,19 +343,22 @@ export default function Planning() {
       const machinesData = mRes.data || [];
       const commandesData = cRes.data || [];
       const planningData = pRes.data || [];
+      console.log("[Planning] fetch sets", {
+        machines: machinesData.length,
+        commandes: commandesData.length,
+        planning: planningData.length,
+      });
 
       setMachines(machinesData);
       setCommandes(commandesData);
       setPlanning(planningData);
 
-      // Recalage (ancré à la prochaine heure ouvrée en sautant week-ends)
       const now = new Date();
       const nextHour = new Date(now);
       nextHour.setMinutes(0, 0, 0);
       nextHour.setHours(now.getHours() + 1);
       const startAnchor = nextWorkStart(nextHour, workOpts);
 
-      // groupage par machine
       const planningParMachine = planningData.reduce((acc, ligne) => {
         (acc[ligne.machineId] ||= []).push(ligne);
         return acc;
@@ -311,7 +366,6 @@ export default function Planning() {
 
       const updates = [];
       for (const lignes of Object.values(planningParMachine)) {
-        // Index commandes par ligne de planning
         const enrichies = lignes
           .map((p) => {
             const c = commandesData.find((x) => x.id === p.commandeId);
@@ -319,22 +373,17 @@ export default function Planning() {
           })
           .filter(Boolean);
 
-        // Séparer "En cours" / "A commencer" / autres
         const enCours = enrichies.filter(({ c }) => c.statut === "En cours");
         const aCommencer = enrichies.filter(({ c }) => c.statut === "A commencer");
         const autres = enrichies.filter(({ c }) => c.statut !== "En cours" && c.statut !== "A commencer");
 
-        // (optionnel) garde-fou : plusieurs "En cours"
-        if (enCours.length > 1) {
-          console.warn("Plusieurs 'En cours' détectées sur une machine. Une seule sera prolongée.");
-        }
+        if (enCours.length > 1) console.warn("Plusieurs 'En cours' détectées sur une machine.");
 
-        // 1) Figer/prolonger la commande En cours (+1h ouvrée)
         let cursor;
         if (enCours.length > 0) {
           const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
           const finActuel = new Date(current.p.fin);
-          const nouvelleFin = addWorkingHours(finActuel, 1, workOpts); // +1h ouvrée
+          const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
           if (nouvelleFin.getTime() !== finActuel.getTime()) {
             updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
           }
@@ -343,7 +392,6 @@ export default function Planning() {
           cursor = new Date(startAnchor);
         }
 
-        // 2) Ordonner la file "A commencer" par priorité
         const queue = aCommencer
           .map(({ p, c }) => ({
             p,
@@ -359,18 +407,23 @@ export default function Planning() {
           }))
           .sort(sortByPriority);
 
-        // 3) Replanifier chaque "A commencer" en série après le curseur
+        if (queue.length) {
+          const q0 = queue[0];
+          console.log("[Reflow queue] first item", {
+            commandeId: q0.c.id,
+            numero: q0.c.numero,
+            expectedHours: q0.expectedHours,
+            startCursorISO: cursor?.toISOString?.(),
+          });
+        }
+
         for (const item of queue) {
           const debutActuel = new Date(item.p.debut);
           const finActuel = new Date(item.p.fin);
 
-          // On repart toujours du cursor et on ancre sur la prochaine heure ouvrée
           const newDebut = nextWorkStart(cursor, workOpts);
-
-          // Fin en heures ouvrées (entier) — sécurité plannedCells
           let newFin = addWorkingHours(newDebut, item.expectedHours, workOpts);
 
-          // Sécurité: ajuster si le compteur d'heures affichées est inférieur
           let plannedCells = workingHoursBetween(newDebut.toISOString(), newFin.toISOString(), workOpts);
           if (plannedCells < item.expectedHours) {
             const delta = item.expectedHours - plannedCells;
@@ -378,16 +431,13 @@ export default function Planning() {
             plannedCells = workingHoursBetween(newDebut.toISOString(), newFin.toISOString(), workOpts);
           }
 
-          // Appliquer si changement
           if (newDebut.getTime() !== debutActuel.getTime() || newFin.getTime() !== finActuel.getTime()) {
             updates.push({ id: item.p.id, debut: newDebut.toISOString(), fin: newFin.toISOString() });
           }
 
-          // Avancer le curseur
           cursor = newFin;
         }
 
-        // 4) Les "autres" statuts : ne pas toucher, mais tenir le curseur si jamais après
         for (const { p } of autres) {
           const finActuel = new Date(p.fin);
           if (finActuel > cursor) cursor = finActuel;
@@ -395,24 +445,23 @@ export default function Planning() {
       }
 
       if (updates.length) {
-        await Promise.all(
-          updates.map((u) => supabase.from("planning").update(u).eq("id", u.id))
-        );
+        console.log("[Planning] applying updates:", updates.length);
+        await Promise.all(updates.map((u) => supabase.from("planning").update(u).eq("id", u.id)));
         const { data: planningAfter } = await supabase.from("planning").select("*");
         setPlanning(planningAfter || []);
+        console.log("[Planning] reloaded planning after updates:", planningAfter?.length ?? 0);
       }
     } catch (e) {
       console.error("Erreur updatePlanningHeureParHeure:", e);
     } finally {
       isUpdatingRef.current = false;
+      console.log("[Planning] fetchAndReflow: end");
     }
   }, [workOpts]);
 
   useEffect(() => {
-    // 1er run
     fetchAndReflow();
 
-    // synchro sur l’heure pleine
     const now = new Date();
     const msToNextHour =
       (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
@@ -444,11 +493,10 @@ export default function Planning() {
         startMs: parseISOAny(p.debut).getTime(),
         endMs: parseISOAny(p.fin).getTime(),
       };
-      const entry = normalizeSlotForGrid(entryBase); // ajoute gridStartMs / gridEndMs
+      const entry = normalizeSlotForGrid(entryBase);
       if (!acc.has(p.machineId)) acc.set(p.machineId, []);
       acc.get(p.machineId).push(entry);
     }
-    // ⬇️ Tri sur gridStartMs (bornes d’affichage)
     for (const arr of acc.values()) arr.sort((a, b) => a.gridStartMs - b.gridStartMs);
     return acc;
   }, [planning]);
@@ -461,68 +509,53 @@ export default function Planning() {
 
     while (addedBusinessDays < 14) {
       if (!isBusinessDay(day, HOLIDAYS)) {
-        // passe au jour suivant jusqu'à tomber sur un jour ouvré
         day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 0, 0, 0);
         continue;
       }
       addedBusinessDays++;
 
-      // matin 8-11
       for (let h = 8; h <= 11; h++) {
         const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, 0, 0, 0);
-        out.push({
-          type: "work",
-          label: formatHourRangeFR(start),
-          startTs: start.getTime(),
-          endTs: start.getTime() + ONE_HOUR_MS,
-          dayOfWeek: start.getDay(),
-        });
+        out.push({ type: "work", label: formatHourRangeFR(start), startTs: start.getTime(), endTs: start.getTime() + ONE_HOUR_MS, dayOfWeek: start.getDay() });
       }
 
-      // pause déjeuner
       const lunchStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0, 0);
-      out.push({
-        type: "lunch",
-        label: `${String(day.getDate()).padStart(2,"0")}/${String(day.getMonth()+1).padStart(2,"0")}/${day.getFullYear()} 12 h - 13 h · Pause déjeuner`,
-        dayOfWeek: lunchStart.getDay(),
-      });
+      out.push({ type: "lunch", label: `${String(day.getDate()).padStart(2,"0")}/${String(day.getMonth()+1).padStart(2,"0")}/${day.getFullYear()} 12 h - 13 h · Pause déjeuner`, dayOfWeek: lunchStart.getDay() });
 
-      // après-midi 13-16
       for (let h = 13; h <= 16; h++) {
         const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, 0, 0, 0);
-        out.push({
-          type: "work",
-          label: formatHourRangeFR(start),
-          startTs: start.getTime(),
-          endTs: start.getTime() + ONE_HOUR_MS,
-          dayOfWeek: start.getDay(),
-        });
+        out.push({ type: "work", label: formatHourRangeFR(start), startTs: start.getTime(), endTs: start.getTime() + ONE_HOUR_MS, dayOfWeek: start.getDay() });
       }
 
-      // jour suivant
       day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1, 0, 0, 0);
     }
+
+    if (!rowsLoggedRef.current) {
+      rowsLoggedRef.current = true;
+      console.log("[rows] first 6", out.slice(0, 6).map(r => ({
+        type: r.type,
+        label: r.label,
+        startISO: r.startTs ? new Date(r.startTs).toISOString() : null,
+        endISO: r.endTs ? new Date(r.endTs).toISOString() : null,
+      })));
+    }
+
     return out;
   }, [startDate, HOLIDAYS]);
 
-  /* ---- Utilitaire: intersection case/slot (scan linéaire, early break) ---- */
+  /* ---- Utilitaire: intersection case/slot ---- */
   const getIntersectingSlot = (machineId, startTs, endTs) => {
     const arr = planningByMachine.get(machineId);
     if (!arr || arr.length === 0) return null;
-    // arr trié par gridStartMs
     for (const p of arr) {
-      if (p.gridStartMs >= endTs) break; // plus d’intersection possible
+      if (p.gridStartMs >= endTs) break;
       if (startTs < p.gridEndMs && endTs > p.gridStartMs) return p;
     }
     return null;
   };
 
-  /* ---- Compte fiable via heures ouvrées réelles (min 1 case) ---- */
   const countDisplayedCellsFor = useCallback(
-    (slot) => {
-      const cells = workingHoursBetween(slot.debut, slot.fin, workOpts);
-      return Math.max(1, cells); // <= crucial pour micro-commandes (08:49→08:55)
-    },
+    (slot) => Math.max(1, workingHoursBetween(slot.debut, slot.fin, workOpts)),
     [workOpts]
   );
 
@@ -532,22 +565,10 @@ export default function Planning() {
 
       <div className="zoom-buttons">
         <button onClick={() => setStartDate(new Date())}>Aujourd’hui</button>
-        <button
-          onClick={() => {
-            const prev = new Date(startDate);
-            prev.setDate(prev.getDate() - 14);
-            setStartDate(prev);
-          }}
-        >
+        <button onClick={() => { const prev = new Date(startDate); prev.setDate(prev.getDate() - 14); setStartDate(prev); }}>
           ← Semaine précédente
         </button>
-        <button
-          onClick={() => {
-            const next = new Date(startDate);
-            next.setDate(next.getDate() + 14);
-            setStartDate(next);
-          }}
-        >
+        <button onClick={() => { const next = new Date(startDate); next.setDate(next.getDate() + 14); setStartDate(next); }}>
           Semaine suivante →
         </button>
       </div>
@@ -576,11 +597,7 @@ export default function Planning() {
               if (row.type === "lunch") {
                 return (
                   <tr key={`lunch_${rowIndex}`}>
-                    <td
-                      colSpan={1 + machines.length}
-                      className="lunch-separator"
-                      title="Pause déjeuner"
-                    >
+                    <td colSpan={1 + machines.length} className="lunch-separator" title="Pause déjeuner">
                       {row.label}
                     </td>
                   </tr>
@@ -589,13 +606,7 @@ export default function Planning() {
 
               return (
                 <tr key={rowIndex}>
-                  <td
-                    className={[
-                      "time-cell",
-                      row.dayOfWeek % 2 === 0 ? "time-cell--even" : "time-cell--odd",
-                      row.startTs < Date.now() ? "time-cell--past" : ""
-                    ].join(" ").trim()}
-                  >
+                  <td className={["time-cell", row.dayOfWeek % 2 === 0 ? "time-cell--even" : "time-cell--odd", row.startTs < Date.now() ? "time-cell--past" : ""].join(" ").trim()}>
                     {row.label}
                   </td>
 
@@ -603,32 +614,55 @@ export default function Planning() {
                     const slot = getIntersectingSlot(machine.id, row.startTs, row.endTs);
                     const commande = slot ? commandeById.get(slot.commandeId) : null;
 
-                    const estDepassee =
-                      slot && commande && new Date(slot.fin) > new Date(commande.dateLivraison);
-
-                    const urgence = estDepassee
-                      ? 5
-                      : commande
-                      ? computeUrgency(commande.dateLivraison)
-                      : 1;
-
+                    const estDepassee = slot && commande && new Date(slot.fin) > new Date(commande.dateLivraison);
+                    const urgence = estDepassee ? 5 : (commande ? computeUrgency(commande.dateLivraison) : 1);
                     const coloredCells = slot ? countDisplayedCellsFor(slot) : null;
-                    const expectedHours = commande ? commande.duree_totale_heures_arrondie : null;
 
-                    // 1ʳᵉ case du bloc ?
-                    let isFirstCell = false;
-                    if (slot) {
-                      isFirstCell = row.startTs <= slot.gridStartMs && row.endTs > slot.gridStartMs;
+                    const expectedHours = commande
+                      ? Math.max(1, Math.ceil(Number(commande.duree_totale_heures_arrondie ?? commande.duree_totale_heures ?? 0)))
+                      : null;
+
+                    const isFirstCell =
+                      !!slot && row.startTs <= slot.gridStartMs && row.endTs > slot.gridStartMs;
+
+                    if (slot && commande && isFirstCell) {
+                      console.log("[FirstCell] expectedHours calc inputs", {
+                        duree_totale_heures_arrondie: commande.duree_totale_heures_arrondie,
+                        duree_totale_heures: commande.duree_totale_heures,
+                        duree_totale_heures_minutes: commande.duree_totale_heures_minutes,
+                        duree_minutes: commande.duree_minutes,
+                      });
+
+                      console.groupCollapsed(
+                        `[Cell First] machine=${machine.nom} cmd=#${commande.numero} row=${new Date(row.startTs).toISOString()}`
+                      );
+                      console.log("expectedHours", expectedHours);
+                      console.log("coloredCells(from workingHoursBetween)", coloredCells);
+                      console.log("slot.debut/fin (raw)", slot.debut, slot.fin);
+                      console.log("slot.gridStartMs/gridEndMs", new Date(slot.gridStartMs).toISOString(), new Date(slot.gridEndMs).toISOString());
+                      console.log("row.startTs/endTs", new Date(row.startTs).toISOString(), new Date(row.endTs).toISOString());
+                      console.log("commande.dateLivraison", commande.dateLivraison);
+                      console.groupEnd();
                     }
 
                     return (
                       <td
-                        key={`${machine.id}_${rowIndex}`}
+                        key={`${machine.id}_${rowIndex}_${slot ? "busy" : "free"}`} // 🔧 remount si switch busy/free
                         className={`cell ${slot ? "cell--busy" : "cell--free"}`}
-                        onClick={() => commande && setModalCommande(commande)}
+                        onClick={() => {
+                          if (commande) {
+                            console.log("🖱️ click cellule", { id: commande.id, statut: commande.statut });
+                            setModalCommande(commande);
+                          }
+                        }}
+                        // 🔧 aucune propriété border* inline — seulement des variables CSS
                         style={{
-                          backgroundColor: slot && commande ? getColorFromId(commande.id) : "white",
-                          borderLeft: slot ? `6px solid ${urgencyColors[urgence]}` : "1px solid #ddd",
+                          "--urgency-color": slot ? urgencyColors[urgence] : "#ddd",
+                          "--busy-left-w": slot ? "6px" : "1px",
+                          "--cell-bg": slot && commande ? getColorFromId(commande.id) : "white",
+                          // garde-fou anti-HMR :
+                          border: undefined,
+                          borderLeft: undefined,
                         }}
                         title={
                           slot && commande
@@ -638,18 +672,15 @@ export default function Planning() {
                             : ""
                         }
                       >
+                        {/* 🔧 contenu UNIQUEMENT ICI */}
                         {slot && commande ? (
                           <>
                             <strong>#{commande.numero}</strong><br />
                             {commande.client}
                             {isFirstCell && expectedHours != null && (
-                              <div className="cell__progress">
-                                {coloredCells}/{expectedHours} h
-                              </div>
+                              <div className="cell__progress">{coloredCells}/{expectedHours} h</div>
                             )}
-                            {estDepassee && (
-                              <div className="cell__late">⚠️ Fin au-delà de la date</div>
-                            )}
+                            {estDepassee && <div className="cell__late">⚠️ Fin au-delà de la date</div>}
                           </>
                         ) : (
                           <span className="cell__dash">—</span>
@@ -664,16 +695,19 @@ export default function Planning() {
         </table>
       </div>
 
-      {modalCommande && (
+      {modalCommande && (console.log("🧩 Render CommandeModal avec props", {
+        id: modalCommande.id,
+        statut: modalCommande.statut,
+        hasShortenFn: typeof shortenPlanningForCommandeTerminee === "function",
+      }), (
         <CommandeModal
-          // 🔑 Force un remount si id ou statut changent (évite un état interne obsolète)
           key={`${modalCommande.id}:${modalCommande.statut ?? ""}`}
           commande={modalCommande}
           onClose={() => setModalCommande(null)}
           onOptimisticReplace={replaceCommandeLocal}
           onTermineeShortenPlanning={shortenPlanningForCommandeTerminee}
         />
-      )}
+      ))}
     </div>
   );
 }
