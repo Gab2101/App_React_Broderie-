@@ -4,10 +4,9 @@ import { EtiquettesContext } from "../../../context/EtiquettesContext";
 import {
   fetchNettoyageRules,
   upsertNettoyageRules,
-  // ❌ on n'importe plus normalizeOne ici
 } from "../../../utils/nettoyageRules";
 
-// Helper local, remplace normalizeOne importée
+// --------- Helpers
 function normalizeTag(v) {
   if (v == null) return "";
   if (typeof v === "string") return v.trim().toLowerCase();
@@ -17,11 +16,25 @@ function normalizeTag(v) {
   }
   return String(v).trim().toLowerCase();
 }
-
 function makeKey(a, b) {
   return `${normalizeTag(a)}|${normalizeTag(b)}`;
 }
+function matchesQuery(label, q) {
+  const L = (label ?? "").toString().toLowerCase();
+  const Q = (q ?? "").toString().toLowerCase().trim();
+  if (!Q) return true;
+  return L.includes(Q);
+}
 
+/**
+ * NettoyageRulesEditor — menu déroulant par article + double recherche
+ * -------------------------------------------------------------------
+ * - Recherche 1: filtre la liste des ARTICLES
+ * - Recherche 2: filtre les ZONES (tags broderie) dans chaque article
+ * - Éditions inline + sauvegarde en lot (dirty map)
+ * - Boutons "Tout autoriser / Tout interdire" par article
+ * - Conserve votre logique de contexte/props existante
+ */
 export default function NettoyageRulesEditor(props) {
   // Contexte + props (les props priment, sinon fallback contexte)
   const ctx = React.useContext(EtiquettesContext);
@@ -31,7 +44,7 @@ export default function NettoyageRulesEditor(props) {
   const ctxBroderieTags = ctx?.broderieTags;
   const onMutate = props?.onMutate;
 
-  // useMemo stabilisés (pas d'expressions logiques dans les deps)
+  // useMemo stabilisés
   const articleTags = React.useMemo(() => {
     if (Array.isArray(propArticleTags)) return propArticleTags;
     if (Array.isArray(ctxArticleTags)) return ctxArticleTags;
@@ -50,6 +63,11 @@ export default function NettoyageRulesEditor(props) {
   const [error, setError] = React.useState("");
   // Map<"article|broderie", row modifiée>
   const [dirty, setDirty] = React.useState(new Map());
+  const [openArticles, setOpenArticles] = React.useState(() => new Set());
+
+  // NEW — double recherche
+  const [articleQuery, setArticleQuery] = React.useState("");
+  const [zoneQuery, setZoneQuery] = React.useState("");
 
   const reload = React.useCallback(async () => {
     setLoading(true);
@@ -78,7 +96,7 @@ export default function NettoyageRulesEditor(props) {
     return m;
   }, [rules]);
 
-  // Renvoyer la ligne existante, sinon un "brouillon" par défaut
+  // Récupère la ligne existante ou brouillon
   const getRow = React.useCallback(
     (articleLabel, broderieLabel) => {
       return (
@@ -93,7 +111,7 @@ export default function NettoyageRulesEditor(props) {
     [index]
   );
 
-  // Met à jour une ligne (en mémoire) et marque comme "dirty"
+  // Met à jour une ligne (en mémoire) et marque comme dirty
   const setRow = React.useCallback((row) => {
     setRules((prev) => {
       const next = [...prev];
@@ -102,8 +120,8 @@ export default function NettoyageRulesEditor(props) {
           normalizeTag(x.article_label) === normalizeTag(row.article_label) &&
           normalizeTag(x.broderie_label) === normalizeTag(row.broderie_label)
       );
-      if (i >= 0) next[i] = row;
-      else next.push(row);
+
+    if (i >= 0) next[i] = row; else next.push(row);
       return next;
     });
     setDirty((prev) => {
@@ -113,12 +131,11 @@ export default function NettoyageRulesEditor(props) {
     });
   }, []);
 
-  // Bulk: tout autoriser/interdire pour un article donné
+  // Tout autoriser/interdire pour un article donné
   const bulkToggleForArticle = React.useCallback(
     (articleLabel, allowed) => {
       const updates = broderieTags.map((b) => {
         const row = getRow(articleLabel, b.label);
-        // si on interdit, on garde la valeur nettoyage_sec (elle pourra resservir)
         return { ...row, is_allowed: !!allowed };
       });
 
@@ -143,8 +160,8 @@ export default function NettoyageRulesEditor(props) {
     try {
       await upsertNettoyageRules(Array.from(dirty.values()));
       setDirty(new Map());
-      await reload();        // récupère ids/état canonique depuis la DB
-      onMutate && onMutate(); // ex: MAJ compteur côté parent
+      await reload(); // récupère ids/état canonique depuis la DB
+      onMutate && onMutate();
     } catch (e) {
       console.error(e);
       alert("Erreur lors de l'enregistrement des règles.");
@@ -153,111 +170,159 @@ export default function NettoyageRulesEditor(props) {
     }
   }, [dirty, reload, onMutate]);
 
+  // Gestion ouverture/fermeture natif <details>
+  const toggleOpen = React.useCallback((label, isOpen) => {
+    setOpenArticles((prev) => {
+      const next = new Set(prev);
+      if (isOpen) next.add(label); else next.delete(label);
+      return next;
+    });
+  }, []);
+
+  // Listes filtrées selon les requêtes
+  const filteredArticles = React.useMemo(() => {
+    return articleTags.filter((a) => matchesQuery(a.label, articleQuery));
+  }, [articleTags, articleQuery]);
+
+  const hasArticleFilter = articleQuery.trim().length > 0;
+  const hasZoneFilter = zoneQuery.trim().length > 0;
+
   return (
     <div>
-      <h3>Temps de nettoyage par article & zone</h3>
-
-      <p style={{ opacity: 0.8, marginTop: -6 }}>
-        Cochez les <strong>zones autorisées</strong> pour chaque article, puis renseignez le{" "}
-        <strong>temps (secondes) par pièce</strong>. Le temps total de nettoyage d’une commande est la{" "}
-        <strong>somme des zones sélectionnées</strong>.
+      <h3 style={{ marginBottom: 6 }}>Temps de nettoyage par article & zone</h3>
+      <p style={{ opacity: 0.8, marginTop: 0 }}>
+        Utilisez les champs ci-dessous pour filtrer les <strong>articles</strong> et les <strong>zones</strong> indépendamment.
       </p>
 
+      {/* Barre de recherche double */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center", marginBottom: 10 }}>
+        <input
+          type="search"
+          placeholder="Rechercher un article..."
+          value={articleQuery}
+          onChange={(e) => setArticleQuery(e.target.value)}
+          aria-label="Rechercher un article"
+        />
+        <input
+          type="search"
+          placeholder="Rechercher une zone (tag broderie)..."
+          value={zoneQuery}
+          onChange={(e) => setZoneQuery(e.target.value)}
+          aria-label="Rechercher une zone"
+        />
+        <button type="button" onClick={() => { setArticleQuery(""); setZoneQuery(""); }} title="Effacer les recherches">
+          Réinitialiser
+        </button>
+      </div>
+
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+        {hasArticleFilter && <span style={{ marginRight: 10 }}>Articles filtrés: {filteredArticles.length}/{articleTags.length}</span>}
+        {hasZoneFilter && <span>Filtre zones actif</span>}
+      </div>
+
       {error && (
-        <div style={{ color: "#b00020", margin: "8px 0" }}>
-          ⚠️ {error}
-        </div>
+        <div role="alert" style={{ color: "#b00020", margin: "8px 0" }}>⚠️ {error}</div>
       )}
 
       {loading ? (
         <div aria-busy="true">Chargement des règles…</div>
       ) : (
-        articleTags.map((art) => {
-          const articleLabel = art.label;
-
-          return (
-            <div
-              key={articleLabel}
-              style={{ marginTop: 16, border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }}
-            >
-              <div
+        <div style={{ display: "grid", gap: 10 }}>
+          {filteredArticles.map((art) => {
+            const articleLabel = art.label;
+            const isOpen = openArticles.has(articleLabel);
+            return (
+              <details
+                key={articleLabel}
+                open={isOpen}
+                onToggle={(e) => toggleOpen(articleLabel, e.currentTarget.open)}
                 style={{
-                  padding: "10px 12px",
-                  borderBottom: "1px solid #eee",
-                  background: "#fafafa",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  flexWrap: "wrap",
+                  border: "1px solid #eee",
+                  borderRadius: 10,
+                  background: "#fff",
+                  overflow: "hidden",
                 }}
               >
-                <strong>Article : {articleLabel}</strong>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => bulkToggleForArticle(articleLabel, true)}
-                    title="Autoriser toutes les zones pour cet article"
-                  >
-                    Tout autoriser
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => bulkToggleForArticle(articleLabel, false)}
-                    title="Interdire toutes les zones pour cet article"
-                  >
-                    Tout interdire
-                  </button>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    padding: "10px 12px",
+                    listStyle: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    background: "#fafafa",
+                    borderBottom: isOpen ? "1px solid #eee" : "none",
+                  }}
+                >
+                  <span><strong>Article :</strong> {articleLabel}</span>
+                  <span style={{ display: "inline-flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); bulkToggleForArticle(articleLabel, true); }}
+                      title="Autoriser toutes les zones pour cet article"
+                    >
+                      Tout autoriser
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); bulkToggleForArticle(articleLabel, false); }}
+                      title="Interdire toutes les zones pour cet article"
+                    >
+                      Tout interdire
+                    </button>
+                  </span>
+                </summary>
+
+                <div style={{ padding: 12, overflowX: "auto" }}>
+                  <table className="table-rules" style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left" }}>Zone (tag broderie)</th>
+                        <th style={{ textAlign: "center", width: 130 }}>Autorisé</th>
+                        <th style={{ textAlign: "left", width: 240 }}>Temps nettoyage (sec)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {broderieTags
+                        .filter((b) => matchesQuery(b.label, zoneQuery))
+                        .map((b) => {
+                          const row = getRow(articleLabel, b.label);
+                          const compositeKey = row.id ?? makeKey(articleLabel, b.label);
+                          return (
+                            <tr key={compositeKey}>
+                              <td style={{ padding: "6px 8px" }}>{b.label}</td>
+                              <td style={{ textAlign: "center" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={!!row.is_allowed}
+                                  onChange={(e) => setRow({ ...row, is_allowed: e.target.checked })}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={5}
+                                  value={row.nettoyage_sec ?? 0}
+                                  onChange={(e) => setRow({ ...row, nettoyage_sec: Math.max(0, Number(e.target.value || 0)) })}
+                                  style={{ width: 120 }}
+                                  disabled={!row.is_allowed}
+                                  aria-label={`Temps nettoyage pour ${b.label}`}
+                                />
+                                <span style={{ opacity: 0.7, marginLeft: 6 }}>sec</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-
-              <div style={{ padding: 12, overflowX: "auto" }}>
-                <table className="table-rules" style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left" }}>Zone (tag broderie)</th>
-                      <th style={{ textAlign: "center", width: 130 }}>Autorisé</th>
-                      <th style={{ textAlign: "left", width: 240 }}>Temps nettoyage (sec)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {broderieTags.map((b) => {
-                      const row = getRow(articleLabel, b.label);
-                      const compositeKey = row.id ?? makeKey(articleLabel, b.label);
-
-                      return (
-                        <tr key={compositeKey}>
-                          <td style={{ padding: "6px 8px" }}>{b.label}</td>
-                          <td style={{ textAlign: "center" }}>
-                            <input
-                              type="checkbox"
-                              checked={!!row.is_allowed}
-                              onChange={(e) => setRow({ ...row, is_allowed: e.target.checked })}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              min={0}
-                              step={5}
-                              value={row.nettoyage_sec ?? 0}
-                              onChange={(e) =>
-                                setRow({ ...row, nettoyage_sec: Math.max(0, Number(e.target.value || 0)) })
-                              }
-                              style={{ width: 120 }}
-                              disabled={!row.is_allowed}
-                            />{" "}
-                            <span style={{ opacity: 0.7 }}>sec</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })
+              </details>
+            );
+          })}
+        </div>
       )}
 
       <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

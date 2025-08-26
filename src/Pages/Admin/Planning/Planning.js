@@ -617,10 +617,14 @@ export default function Planning() {
                     const estDepassee = slot && commande && new Date(slot.fin) > new Date(commande.dateLivraison);
                     const urgence = estDepassee ? 5 : (commande ? computeUrgency(commande.dateLivraison) : 1);
                     const coloredCells = slot ? countDisplayedCellsFor(slot) : null;
+                    // 1) Récupère la valeur brute (arrondie en priorité)
+                    const rawHours =
+                      commande?.duree_totale_heures_arrondie ??
+                      commande?.duree_totale_heures ??
+                    null;
 
-                    const expectedHours = commande
-                      ? Math.max(1, Math.ceil(Number(commande.duree_totale_heures_arrondie ?? commande.duree_totale_heures ?? 0)))
-                      : null;
+                    const expectedHours = rawHours == null ? null : Math.max(1, Number(rawHours));
+
 
                     const isFirstCell =
                       !!slot && row.startTs <= slot.gridStartMs && row.endTs > slot.gridStartMs;
