@@ -1,0 +1,89 @@
+/* --- Container global --- */
+.planning-day {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.planning-day table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.planning-day th,
+.planning-day td {
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.planning-day th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.planning-day td {
+  vertical-align: middle;
+  min-height: 48px;
+}
+
+/* --- Colonne machines --- */
+.planning-day td.machine-col {
+  background: #fafafa;
+  font-weight: 600;
+  text-align: left;
+  width: 200px;
+}
+
+/* --- Pause déjeuner --- */
+.planning-day td.lunch {
+  background: #f1f1f1;
+  color: #999;
+  font-style: italic;
+}
+
+/* --- Cellules vides --- */
+.planning-day td.empty {
+  color: #ccc;
+}
+
+/* --- Badges commandes --- */
+.order-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  margin: 2px;
+}
+
+.order-badge.en-cours {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.order-badge.a-commencer {
+  background: #bee3f8;
+  color: #1a365d;
+}
+
+.order-badge.autre {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.order-badge.urgent-high {
+  border: 2px solid #e53e3e;
+}
+
+.order-badge.urgent-medium {
+  border: 2px solid #dd6b20;
+}

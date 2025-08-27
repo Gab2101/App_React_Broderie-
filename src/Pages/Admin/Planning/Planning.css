@@ -1,190 +1,29 @@
-/* ===== Layout / container ===== */
-.planning-page {
-  padding: 30px;
+.planning-grid-days {
+  display: grid;
+  gap: 6px;
 }
 
-.zoom-buttons {
-  display: flex;
-  gap: 12px;
-  margin: 10px 0 18px;
-}
-.zoom-buttons button {
-  background: #0056b3;
-  color: #fff;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: transform .15s ease, box-shadow .15s ease, background .2s ease;
-}
-.zoom-buttons button:hover {
-  background: #007BFF;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
-}
-.zoom-buttons button:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
+.pgd__corner { height: 40px; }
+.pgd__colheader { font-weight: 600; text-align: center; height: 40px; display:flex; align-items:center; justify-content:center; background:#f7f7f7; border:1px solid #eee; }
 
-/* ===== Legend ===== */
-.legende-planning {
-  margin-bottom: 12px;
-}
-.legende-planning ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 18px;
-  list-style: none;
-  padding: 0;
-  margin: 8px 0 0;
-}
-.urgency-box {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  margin-right: 8px;
-  vertical-align: -2px;
-  border: 1px solid rgba(0,0,0,.08);
-}
+.pgd__rowheader { display:flex; align-items:center; padding: 6px 8px; background:#fafafa; border:1px solid #eee; white-space:nowrap; }
 
-/* ===== Table wrapper (scroll) ===== */
-.planning-table {
-  overflow: auto;
-  border: 1px solid #e6e6e6;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,.04);
-}
-.planning-table table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 800px; /* avoid layout jumps if few machines */
-  table-layout: fixed; /* consistent cell widths */
-}
-.planning-table th,
-.planning-table td {
-  border-right: 1px solid #eee;
-  border-bottom: 1px solid #eee;
-}
-.planning-table th:last-child,
-.planning-table td:last-child {
-  border-right: 0;
-}
+.pgd__cell { position: relative; height: 42px; border:1px solid #eee; background:#fff; overflow:hidden; }
+.pgd__cell .cell__dash { color:#bbb; font-size:12px; display:flex; align-items:center; justify-content:center; height:100%; }
 
-/* ===== Sticky header + first column ===== */
-.planning-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f9fafb;
-  padding: 10px 8px;
-  font-weight: 700;
-  text-align: left;
+.pgd__bar {
+  position:absolute;
+  top:4px; bottom:4px;
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  padding: 0 6px;
+  font-size:12px;
+  cursor:pointer;
+  user-select:none;
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
-.planning-table tbody td:first-child,
-.planning-table thead th:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: inherit;
-  /* subtle divider between sticky col and rest */
-  box-shadow: 2px 0 0 rgba(0,0,0,.04);
-}
+.pgd__bar:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
 
-/* ===== Lunch separator row ===== */
-.lunch-separator {
-  background: repeating-linear-gradient(45deg, #f6f6f6, #f6f6f6 10px, #eee 10px, #eee 20px);
-  color: #666;
-  font-style: italic;
-  text-align: center;
-  border-top: 1px solid #ddd;
-  border-bottom: 1px solid #ddd;
-  padding: 8px 10px;
-  font-weight: 600;
-}
-
-/* ===== Time column ===== */
-.time-cell { 
-  font-weight: 600; 
-  padding: 8px; 
-  background-clip: padding-box;
-  border-left: 1px solid #ddd; /* default */
-}
-.time-cell--even { background-color: #eee; }
-.time-cell--odd  { background-color: #ccc; }
-/* moved from inline: red marker for past rows */
-.time-cell--past { border-left: 6px solid red; }
-
-/* ===== Slots ===== */
-.cell {
-  border: 1px solid #ddd;           /* shorthand OK ici (CSS), jamais en inline */
-  background-color: var(--cell-bg, white);
-  border-left-color: #ddd;          /* valeur par défaut */
-  border-left-width: 1px;
-  border-left-style: solid;
-}
-.cell--free { 
-  background: #fff; 
-  border: 1px solid #ddd; 
-}
-.cell--busy {
-  border-left-color: var(--urgency-color, #ddd);
-  border-left-width: var(--busy-left-w, 6px);
-}
-
-/* Hover + focus for accessibility */
-.cell--busy:hover {
-  transform: translateY(-1px) scale(1.01);
-  box-shadow: 0 6px 18px rgba(0,0,0,.12);
-}
-.cell--busy:focus-visible {
-  outline: 2px solid #007BFF;
-  outline-offset: 2px;
-}
-.cell__progress { font-size: .8em; margin-top: 4px; opacity: .8; }
-.cell__late { color: red; font-size: .8em; margin-top: 4px; }
-.cell__dash { color: #999; }
-
-/* ===== Modal ===== */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-.modal-content {
-  background: #fff;
-  width: min(520px, 92vw);
-  border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0,0,0,.2);
-  padding: 18px;
-}
-.modal-content h3 {
-  margin-top: 0;
-}
-.modal-content button {
-  margin-top: 12px;
-  background: #0056b3;
-  color: #fff;
-  border: 0;
-  border-radius: 6px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
-.modal-content button:hover {
-  background: #007BFF;
-}
-
-/* ===== Reduced motion ===== */
-@media (prefers-reduced-motion: reduce) {
-  .cell--busy,
-  .zoom-buttons button {
-    transition: none;
-  }
-}
+/* Modal minimal si besoin */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center; }
+.modal-content { background:#fff; padding:16px; border-radius:8px; width:420px; max-width:90vw; }

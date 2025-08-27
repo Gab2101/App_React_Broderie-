@@ -352,12 +352,6 @@ export default function Parametres() {
           </section>
         </>
       )}
-
-      <footer className="parametres-footer">
-        <button className="parametres-reload" onClick={fetchTags} type="button">
-          Recharger
-        </button>
-      </footer>
     </div>
   );
 }
