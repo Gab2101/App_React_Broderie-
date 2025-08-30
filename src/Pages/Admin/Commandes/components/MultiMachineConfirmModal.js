@@ -3,7 +3,7 @@ import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { roundMinutesTo5, computeProvisionalEnd } from "../utils/timeRealtime";
 // (optionnel pour affichage) import { convertHoursToHHMM } from "../../../../utils/time";
 
-export default function MultiMachineSplitModal({
+export default function MultiMachineConfirmModal({
   isOpen,
   onClose,
   machines = [],
@@ -125,13 +125,13 @@ export default function MultiMachineSplitModal({
   );
 
   // Arrondi helper (on garde roundTo5 comme dans modal2)
-  const applyRounding = (minutes) => {
-    const m = Math.max(0, Number(minutes) || 0);
-    if (roundingMode === "ceil15") return Math.ceil(m / 15) * 15;
-    if (roundingMode === "ceil5") return Math.ceil(m / 5) * 5;
-    // par défaut, on force l'arrondi 5 min pour coller au mono
-    return roundMinutesTo5(Math.round(m));
-  };
+  const applyRounding = useCallback((m) => {
+  const minutes = Math.max(0, Number(m) || 0);
+    if (roundingMode === "ceil15") return Math.ceil(minutes / 15) * 15;
+    if (roundingMode === "ceil5")  return Math.ceil(minutes / 5)  * 5;
+    return roundMinutesTo5(Math.round(minutes));
+}, [roundingMode]);
+
 
   // ----- Calcul principal : perMachine + total -----
   const { rows, totalHours, errorText } = useMemo(() => {

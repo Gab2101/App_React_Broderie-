@@ -143,24 +143,6 @@ export default function CommandesPage() {
 
       // --- MULTI (prioritaire & exclusif) ---
       if (config?.flow === "multi") {
-        const list = Array.isArray(config.perMachine) ? config.perMachine : [];
-        const validList = list.filter(r => r && r.machineId && Number(r.quantity) > 0);
-
-        if (validList.length < 2) {
-          alert("Sélectionnez au moins 2 machines avec des quantités > 0.");
-          return;
-        }
-
-        setCreationFlow("multi");
-        setPendingMultiPayload({
-          perMachine: validList,
-          meta: config.meta || null,
-          plannedStartISO:
-            config.plannedStartISO ||
-            form.formData?.date_debut_planning ||
-            new Date().toISOString(),
-        });
-
         setIsFormOpen(false);
         setIsConfirmOpen(false);      // jamais de modale mono dans ce flux
         setIsMultiConfirmOpen(true);
@@ -193,6 +175,23 @@ export default function CommandesPage() {
   if (isSubmitting) return;
   setIsSubmitting(true);
   try {
+
+    /*const list = Array.isArray(config.perMachine) ? config.perMachine : [];
+        const validList = list.filter(r => r && r.machineId && Number(r.quantity) > 0);
+
+        if (validList.length < 2) {
+          alert("Sélectionnez au moins 2 machines avec des quantités > 0.");
+          return;
+        }
+
+        setPendingMultiPayload({
+          perMachine: validList,
+          meta: config.meta || null,
+          plannedStartISO:
+            config.plannedStartISO ||
+            form.formData?.date_debut_planning ||
+            new Date().toISOString(),
+        });*/
     // 1) base locale choisie dans le modal
     let baseLocal = parseLocalDatetime(plannedStartLocal);
 
@@ -367,6 +366,7 @@ export default function CommandesPage() {
       <MultiMachineConfirmModal
         isOpen={isMultiConfirmOpen}
         onClose={() => !isSubmitting && setIsMultiConfirmOpen(false)}
+        onSubmit={handleSubmitForm}
         payload={pendingMultiPayload}
         machines={machines}
         onConfirm={handleConfirmMultiSave}

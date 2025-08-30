@@ -1,7 +1,6 @@
 // src/Pages/Admin/Commandes/components/CommandeFormModal.js
 import React, { useMemo, useState } from "react";
 import { getAllowedBroderieForArticle, normalizeOne } from "../../../../utils/nettoyageRules";
-import MultiMachineSplitModal from "./MultiMachineSplitModal";
 
 export default function CommandeFormModal({
   isOpen,
@@ -26,15 +25,12 @@ export default function CommandeFormModal({
   // tags
   articleTags = [],
   broderieTags = [],
-  // machines
+  // machines (kept for consistency if parent passes it)
   machines = [],
   // édition ?
   isEditing = false,
 }) {
   const [multiEnabled, setMultiEnabled] = useState(false);
-  const [multiModalOpen, setMultiModalOpen] = useState(false);
-  // multiPlan: { machines: string[], perMachine: [{machineId, quantity, durationTheoreticalMinutes, durationCalcMinutes, durationHours}], totalDurationHours, meta }
-  const [multiPlan, setMultiPlan] = useState(null);
 
   const selectedArticleLabel = formData?.types?.[0] ?? null;
 
@@ -58,19 +54,12 @@ export default function CommandeFormModal({
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Si multi est activé ET un plan valide existe → flux MULTI explicite
-    const perMachine = multiPlan?.perMachine || [];
-    if (multiEnabled && Array.isArray(perMachine) && perMachine.length >= 2) {
-      onSubmit({
-        flow: "multi",
-        perMachine,
-        meta: multiPlan?.meta || null,
-        // on NE met PAS plannedStart ici : il sera choisi dans le second modal
-      });
+    // Route simplement selon la case "multi"
+    if (multiEnabled) {
+      onSubmit({ flow: "multi" });
       return;
     }
 
-    // Sinon → flux MONO explicite
     onSubmit({ flow: "mono" });
   };
 
@@ -255,36 +244,16 @@ export default function CommandeFormModal({
               ))}
           </div>
 
-          {/* ✅ Multi-machines + bouton config */}
+          {/* ✅ Multi-machines (pas de bouton "Configurer…") */}
           <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
                 type="checkbox"
                 checked={multiEnabled}
-                onChange={(e) => {
-                  const v = e.target.checked;
-                  setMultiEnabled(v);
-                  if (!v) setMultiPlan(null);
-                }}
+                onChange={(e) => setMultiEnabled(e.target.checked)}
               />
               Faire avec plusieurs machines
             </label>
-
-            {multiEnabled && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <button type="button" onClick={() => setMultiModalOpen(true)}>
-                  Configurer…
-                </button>
-                {multiPlan ? (
-                  <span style={{ fontSize: 13, opacity: 0.8 }}>
-                    {multiPlan.machines.length} machine(s), durée totale ≈{" "}
-                    <b>{multiPlan.totalDurationHours.toFixed(2)} h</b>
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 13, opacity: 0.6 }}>Aucune sélection</span>
-                )}
-              </div>
-            )}
           </div>
 
           <button type="submit" className="btn-enregistrer">
@@ -297,21 +266,6 @@ export default function CommandeFormModal({
           Fermer
         </button>
       </div>
-
-      {/* Modal de répartition multi */}
-      <MultiMachineSplitModal
-        isOpen={multiModalOpen}
-        onClose={() => setMultiModalOpen(false)}
-        machines={machines}
-        quantity={Number(formData.quantite || 0)}
-        points={Number(formData.points || 0)}
-        vitesseMoyenne={Number(formData.vitesseMoyenne || 0)}
-        defaultSelected={multiPlan?.machines || []}
-        onConfirm={(plan) => {
-          setMultiPlan(plan);     // plan contient { machines, perMachine, totalDurationHours, meta, flow:"multi" }
-          setMultiModalOpen(false);
-        }}
-      />
     </div>
   );
 }
