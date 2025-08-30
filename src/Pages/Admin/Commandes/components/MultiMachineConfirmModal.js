@@ -1,7 +1,6 @@
-// src/Pages/Admin/Commandes/components/MultiMachineSplitModal.jsx
+// src/Pages/Admin/Commandes/components/MultiMachineConfirmModal.js
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { roundMinutesTo5, computeProvisionalEnd } from "../utils/timeRealtime";
-// (optionnel pour affichage) import { convertHoursToHHMM } from "../../../../utils/time";
 
 export default function MultiMachineConfirmModal({
   isOpen,
@@ -36,7 +35,12 @@ export default function MultiMachineConfirmModal({
   );
   const [respectWorkHours, setRespectWorkHours] = useState(true);
 
-  // Réinit à l’ouverture
+  // État pour la gestion manuelle des quantités
+  const [currentRows, setCurrentRows] = useState([]);
+  const [currentTotalHours, setCurrentTotalHours] = useState(0);
+  const [currentErrorText, setCurrentErrorText] = useState(null);
+
+  // Réinit à l'ouverture
   useEffect(() => {
     if (!isOpen) return;
     setSelected(defaultSelected.map(String));
@@ -102,7 +106,7 @@ export default function MultiMachineConfirmModal({
     return arr;
   };
 
-  // Calcule théorie d’une sous-qté (sans batch global)
+  // Calcule théorie d'une sous-qté (sans batch global)
   const computeTheoMinutes = useCallback(
     (qty) => {
       const q = Math.max(0, Number(qty) || 0);
@@ -126,74 +130,108 @@ export default function MultiMachineConfirmModal({
 
   // Arrondi helper (on garde roundTo5 comme dans modal2)
   const applyRounding = useCallback((m) => {
-  const minutes = Math.max(0, Number(m) || 0);
+    const minutes = Math.max(0, Number(m) || 0);
     if (roundingMode === "ceil15") return Math.ceil(minutes / 15) * 15;
     if (roundingMode === "ceil5")  return Math.ceil(minutes / 5)  * 5;
     return roundMinutesTo5(Math.round(minutes));
-}, [roundingMode]);
+  }, [roundingMode]);
 
-
-  // ----- Calcul principal : perMachine + total -----
-  const { rows, totalHours, errorText } = useMemo(() => {
+  // Initialisation des lignes quand les machines sélectionnées changent
+  useEffect(() => {
     if (!selected.length) {
-      return { rows: [], totalHours: 0, errorText: "Sélectionnez au moins une machine." };
-    }
-    if (totalQty < selected.length) {
-      return {
-        rows: [],
-        totalHours: 0,
-        errorText: `La quantité (${totalQty}) doit être ≥ au nombre de machines sélectionnées (${selected.length}).`,
-      };
+      setCurrentRows([]);
+      setCurrentTotalHours(0);
+      setCurrentErrorText("Sélectionnez au moins une machine.");
+      return;
     }
 
+    if (totalQty < selected.length) {
+      setCurrentRows([]);
+      setCurrentTotalHours(0);
+      setCurrentErrorText(`La quantité (${totalQty}) doit être ≥ au nombre de machines sélectionnées (${selected.length}).`);
+      return;
+    }
+
+    // Répartition équitable initiale
     const shares = splitEven(totalQty, selected.length);
-    // 1) théorie + per_item + coef + arrondi PAR MACHINE (sans batch global ici)
-    const baseRows = selected.map((mid, i) => {
+    const initialRows = selected.map((mid, i) => {
       const q = shares[i];
-      const theoMinutes = computeTheoMinutes(q); // déjà eff/extra + per_item
-      const withCoef = Math.round((theoMinutes * coefUsed) / 100); // applique % réel
+      const theoMinutes = computeTheoMinutes(q);
+      const withCoef = Math.round((theoMinutes * coefUsed) / 100);
       const durationCalcMinutes = applyRounding(withCoef);
 
       return {
         machineId: mid,
         quantity: q,
-        durationTheoreticalMinutes: theoMinutes,      // minutes "avant coef & arrondi"
-        durationCalcMinutes,                          // minutes "après coef & arrondi"
-        cleaningMinutes: cleaningMode === "per_item" ? cleanPerItemUsed * q : 0, // seulement pour info
+        durationTheoreticalMinutes: theoMinutes,
+        durationCalcMinutes,
+        cleaningMinutes: cleaningMode === "per_item" ? cleanPerItemUsed * q : 0,
         durationHours: durationCalcMinutes / 60,
       };
     });
 
-    // 2) Batch cleaning (per_batch) — appliqué UNE SEULE FOIS au total
+    setCurrentRows(initialRows);
+    
+    // Calcul du total avec batch cleaning
     const batchMinutes = cleaningMode === "per_batch" ? cleanBatchUsed : 0;
+    const minutesSum = initialRows.reduce((s, r) => s + r.durationCalcMinutes, 0) + batchMinutes;
+    setCurrentTotalHours(minutesSum / 60);
+    setCurrentErrorText(null);
+  }, [selected, totalQty, computeTheoMinutes, coefUsed, applyRounding, cleaningMode, cleanPerItemUsed, cleanBatchUsed]);
 
-    // total somme + batch (on garde la même règle que modal2 : arrondi déjà par machine)
-    const minutesSum = baseRows.reduce((s, r) => s + r.durationCalcMinutes, 0) + batchMinutes;
-    const totalHours = (minutesSum / 60);
+  // Gestion du changement de quantité pour une machine
+  const handleQuantityChange = useCallback((machineId, newQuantity) => {
+    const qty = Math.max(0, parseInt(newQuantity || "0", 10));
+    
+    setCurrentRows(prev => {
+      const updated = prev.map(row => {
+        if (row.machineId !== machineId) return row;
+        
+        // Recalculer les durées pour cette machine avec la nouvelle quantité
+        const theoMinutes = computeTheoMinutes(qty);
+        const withCoef = Math.round((theoMinutes * coefUsed) / 100);
+        const durationCalcMinutes = applyRounding(withCoef);
+        
+        return {
+          ...row,
+          quantity: qty,
+          durationTheoreticalMinutes: theoMinutes,
+          durationCalcMinutes,
+          cleaningMinutes: cleaningMode === "per_item" ? cleanPerItemUsed * qty : 0,
+          durationHours: durationCalcMinutes / 60,
+        };
+      });
 
-    return { rows: baseRows, totalHours, errorText: null };
-  }, [
-    selected,
-    totalQty,
-    computeTheoMinutes,
-    coefUsed,
-    applyRounding,
-    cleaningMode,
-    cleanPerItemUsed,
-    cleanBatchUsed,
-  ]);
+      // Recalculer le total et vérifier les erreurs
+      const sumQuantities = updated.reduce((s, r) => s + r.quantity, 0);
+      const batchMinutes = cleaningMode === "per_batch" ? cleanBatchUsed : 0;
+      const minutesSum = updated.reduce((s, r) => s + r.durationCalcMinutes, 0) + batchMinutes;
+      
+      setCurrentTotalHours(minutesSum / 60);
+      
+      if (sumQuantities > totalQty) {
+        setCurrentErrorText(`La somme des quantités (${sumQuantities}) dépasse la quantité totale de la commande (${totalQty}).`);
+      } else if (sumQuantities === 0) {
+        setCurrentErrorText("Au moins une machine doit avoir une quantité > 0.");
+      } else {
+        setCurrentErrorText(null);
+      }
+
+      return updated;
+    });
+  }, [computeTheoMinutes, coefUsed, applyRounding, cleaningMode, cleanPerItemUsed, cleanBatchUsed, totalQty]);
 
   // ----- Construction des assignations prêtes DB -----
   const buildAssignations = useCallback(() => {
     if (!commandeId) return [];
-    if (!rows.length) return [];
+    if (!currentRows.length) return [];
 
-    // Répartition du batch cleaning : on l’attache à la première ligne (documenté)
+    // Répartition du batch cleaning : on l'attache à la première ligne (documenté)
     const batchMinutes = cleaningMode === "per_batch" ? cleanBatchUsed : 0;
 
     const startISO = plannedStartLocal ? new Date(plannedStartLocal).toISOString() : null;
 
-    return rows.map((r, idx) => {
+    return currentRows.map((r, idx) => {
       // cleaning par ligne = per_item déjà compté dans les théories ci-dessus,
       // + batch UNE SEULE FOIS sur la première ligne :
       const cleaning_minutes = (cleaningMode === "per_item" ? (cleanPerItemUsed * r.quantity) : 0)
@@ -219,7 +257,7 @@ export default function MultiMachineConfirmModal({
       };
     });
   }, [
-    rows,
+    currentRows,
     commandeId,
     plannedStartLocal,
     cleaningMode,
@@ -229,7 +267,7 @@ export default function MultiMachineConfirmModal({
   ]);
 
   const submit = () => {
-    if (errorText) return;
+    if (currentErrorText) return;
 
     const assignations = buildAssignations();
 
@@ -283,6 +321,14 @@ export default function MultiMachineConfirmModal({
     borderRadius: 8,
     border: "1px solid #e3e3e3",
     background: "#fff",
+  };
+
+  const quantityInputStyle = {
+    width: "80px",
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: "1px solid #e3e3e3",
+    textAlign: "center",
   };
 
   return (
@@ -361,14 +407,17 @@ export default function MultiMachineConfirmModal({
             {filtered.length === 0 && <div style={{ padding: 8, fontSize: 13, opacity: 0.7 }}>Aucune machine.</div>}
           </div>
 
-          {/* Récap résultats */}
-          {errorText ? (
-            <div style={{ color: "#c62828", fontSize: 13 }}>{errorText}</div>
+          {/* Récap résultats avec édition des quantités */}
+          {currentErrorText ? (
+            <div style={{ color: "#c62828", fontSize: 13 }}>{currentErrorText}</div>
           ) : (
-            selected.length > 0 && rows.length > 0 && (
+            selected.length > 0 && currentRows.length > 0 && (
               <div style={{ border: "1px dashed #e3e3e3", borderRadius: 10, padding: 10 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                  Durée totale (somme + batch) : {totalHours.toFixed(2)} h
+                  Durée totale (somme + batch) : {currentTotalHours.toFixed(2)} h
+                </div>
+                <div style={{ fontSize: 13, marginBottom: 8, opacity: 0.7 }}>
+                  Quantité totale assignée : {currentRows.reduce((s, r) => s + r.quantity, 0)} / {totalQty}
                 </div>
 
                 <table className="mini" style={{ width: "100%", fontSize: 14 }}>
@@ -382,10 +431,19 @@ export default function MultiMachineConfirmModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => (
+                    {currentRows.map((r) => (
                       <tr key={r.machineId}>
                         <td style={{ textAlign: "left" }}>{labelById.get(String(r.machineId)) || r.machineId}</td>
-                        <td style={{ textAlign: "center" }}>{r.quantity}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max={totalQty}
+                            value={r.quantity}
+                            onChange={(e) => handleQuantityChange(r.machineId, e.target.value)}
+                            style={quantityInputStyle}
+                          />
+                        </td>
                         <td style={{ textAlign: "center" }}>{r.durationHours.toFixed(2)}</td>
                         <td style={{ textAlign: "center" }}>{r.durationCalcMinutes}</td>
                         <td style={{ textAlign: "center" }}>{Math.round(r.durationTheoreticalMinutes)}</td>
@@ -419,7 +477,7 @@ export default function MultiMachineConfirmModal({
 
         <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button onClick={onClose}>Annuler</button>
-          <button onClick={submit} disabled={selected.length === 0 || !!errorText}>Valider</button>
+          <button onClick={submit} disabled={selected.length === 0 || !!currentErrorText}>Valider</button>
         </div>
       </div>
     </div>
