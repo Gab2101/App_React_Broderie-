@@ -1,4 +1,6 @@
 // utils/calculs.js
+import { ONE_HOUR_MS, floorToHourMs, ceilToHourMs } from "./time"; // 👈 centralisé
+
 function toNumber(v, def = 0) {
   if (v === null || v === undefined || v === "") return def;
   const n = Number(String(v).replace(",", "."));
@@ -48,28 +50,14 @@ export function calculerDurees({
   };
 }
 
-// utils/time
-export const ONE_HOUR_MS = 60 * 60 * 1000;
-
-const floorToHour = (dateMs) => {
-  const d = new Date(dateMs);
-  d.setMinutes(0, 0, 0);
-  return d.getTime();
-};
-
-const ceilToHour = (dateMs) => {
-  const floored = floorToHour(dateMs);
-  return (dateMs === floored) ? floored : (floored + ONE_HOUR_MS);
-};
-
-// Intervalle demi-ouvert [startHour, endHour[
+/** Intervalle demi-ouvert [startHour, endHour[ en millisecondes alignées à l'heure */
 export const hoursSpanAligned = (startMs, endMs) => {
-  const startHour = floorToHour(startMs);
-  const endHour = ceilToHour(endMs);
+  const startHour = floorToHourMs(startMs);   // 👈 import depuis utils/time
+  const endHour = ceilToHourMs(endMs);       // 👈 import depuis utils/time
   const span = Math.max(0, endHour - startHour);
   return {
     startHour,
     endHour,
-    slotsCount: span / ONE_HOUR_MS,             // pas de ceil/floor ici
+    slotsCount: span / ONE_HOUR_MS,          // pas de ceil/floor ici
   };
 };

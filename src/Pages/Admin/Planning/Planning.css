@@ -27,3 +27,73 @@
 /* Modal minimal si besoin */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.2); display:flex; align-items:center; justify-content:center; }
 .modal-content { background:#fff; padding:16px; border-radius:8px; width:420px; max-width:90vw; }
+.urgency-legend {
+  margin-top: 12px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+}
+
+.zoom-buttons {
+  display: flex;
+  justify-content: space-between; /* ← répartit les boutons sur toute la largeur */
+  margin: 16px 0;
+}
+
+.zoom-buttons button {
+  flex: 1;               /* chaque bouton prend la même largeur */
+  margin: 0 8px;         /* petit espace entre eux */
+  padding: 8px 12px;     /* un peu d'air dans le bouton */
+}
+/* Ligne contenant le badge de date (sous la légende) */
+.dayview-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* ou center si tu préfères */
+  margin: 8px 0 6px;
+}
+
+/* Badge de date : grosses lettres, pastille douce et lisible */
+.day-badge {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #eef5ff;            /* léger fond bleu/gris */
+  border: 1px solid #d7e6ff;      /* bord discret */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: capitalize;      /* “jeudi 28 août 2025” -> capitalise */
+  letter-spacing: .2px;
+}
+
+/* Barre d’actions : boutons étirés sur la largeur */
+.dayview-actions {
+  display: flex;
+  gap: 12px;                 /* espace constant entre boutons */
+  justify-content: space-between;
+  margin: 10px 0 16px;
+}
+
+/* Chaque bouton prend la même place, sans se coller aux bords */
+.dayview-actions button {
+  flex: 1;
+  padding: 10px 14px;
+  min-width: 0;              /* évite l’overflow du texte long */
+}
+
+/* Optionnel : sur petits écrans, basculer en pile */
+@media (max-width: 700px) {
+  .dayview-actions {
+    flex-direction: column;
+  }
+  .dayview-actions button {
+    width: 100%;
+  }
+}

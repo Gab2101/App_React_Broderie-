@@ -4,10 +4,10 @@ import TagItem from "./TagItem";
 import "./TagItems.css";
 
 /**
- * ArticlesTagsSection
- * — Gestion des tags d'articles (label + nettoyage en secondes)
+ * ArticlesTagsSection (simplifié)
+ * — Gestion des tags d'articles (label uniquement)
  * — Ajout, édition inline, suppression, recherche, feedback
- * — Défensif contre les "submit" implicites (e.preventDefault sur actions)
+ * — Défensif contre les "submit" implicites
  */
 export default function ArticlesTagsSection({
   articleTags = [],
@@ -16,10 +16,8 @@ export default function ArticlesTagsSection({
   deleteArticleTag,
 }) {
   const [newLabel, setNewLabel] = useState("");
-  const [newCleaning, setNewCleaning] = useState(0);
   const [editingId, setEditingId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
-  const [editingCleaning, setEditingCleaning] = useState(0);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -43,21 +41,14 @@ export default function ArticlesTagsSection({
     e?.stopPropagation?.();
 
     const label = newLabel.trim();
-    const cleaning = Number(newCleaning) || 0;
-
     if (!label) {
       setError("Le nom ne peut pas être vide");
       setSuccess("");
       return;
     }
-    if (cleaning < 0) {
-      setError("Le nettoyage doit être ≥ 0");
-      setSuccess("");
-      return;
-    }
 
     setSaving(true);
-    const res = await addArticleTag(label, cleaning);
+    const res = await addArticleTag(label); // ⬅️ plus de "cleaning"
     setSaving(false);
 
     if (!res?.ok) {
@@ -66,17 +57,15 @@ export default function ArticlesTagsSection({
     }
 
     setNewLabel("");
-    setNewCleaning(0);
     flashOk("Ajout réussi !");
-  }, [newLabel, newCleaning, addArticleTag, flashOk]);
+  }, [newLabel, addArticleTag, flashOk]);
 
-  // Wrappers "défensifs" : empêchent un submit implicite si TagItem est dans un <form>
+  // Wrappers "défensifs"
   const onEditWrap = useCallback((tag) => (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     setEditingId(tag.id);
     setEditingLabel(tag.label);
-    setEditingCleaning(Number(tag.nettoyage) || 0);
     setError("");
   }, []);
 
@@ -91,19 +80,16 @@ export default function ArticlesTagsSection({
     e?.stopPropagation?.();
 
     const label = editingLabel.trim();
-    const cleaning = Number(editingCleaning) || 0;
-
     if (!label) return setError("Le nom ne peut pas être vide");
-    if (cleaning < 0) return setError("Le nettoyage doit être ≥ 0");
 
     setSaving(true);
-    const res = await updateArticleTag(tag.id, label, cleaning);
+    const res = await updateArticleTag(tag.id, label); // ⬅️ plus de "cleaning"
     setSaving(false);
 
     if (!res?.ok) return setError(res?.reason || "Erreur de mise à jour");
     setEditingId(null);
     flashOk("Modifié ✓");
-  }, [editingLabel, editingCleaning, updateArticleTag, flashOk]);
+  }, [editingLabel, updateArticleTag, flashOk]);
 
   const onCancelWrap = useCallback((e) => {
     e?.preventDefault?.();
@@ -125,20 +111,9 @@ export default function ArticlesTagsSection({
           aria-label="Nom de l'étiquette d'article"
           disabled={saving}
         />
-        <input
-          type="number"
-          placeholder="Nettoyage (s)"
-          value={newCleaning}
-          onChange={(e) => setNewCleaning(e.target.value)}
-          className="nettoyage"
-          aria-label="Temps de nettoyage (secondes)"
-          min={0}
-          step={1}
-          disabled={saving}
-        />
         <button
           className="btn-enregistrer"
-          type="button"            // ✅ empêche submit implicite
+          type="button"              // ✅ empêche submit implicite
           onClick={handleAdd}
           disabled={saving}
         >
@@ -168,17 +143,13 @@ export default function ArticlesTagsSection({
             tag={tag}
             isEditing={editingId === tag.id}
             editingLabel={editingLabel}
-            editingCleaning={editingCleaning}
             onChangeLabel={setEditingLabel}
-            onChangeCleaning={setEditingCleaning}
             onEdit={onEditWrap(tag)}
             onDelete={onDeleteWrap(tag)}
             onSave={onSaveWrap(tag)}
             onCancel={onCancelWrap}
-            showCleaning
             saving={saving}
-            // 💡 si TagItem accepte des props pour typer ses boutons, passe-les :
-            // actionButtonType="button"
+            // ⛔️ plus de props liés au nettoyage
           />
         ))}
       </ul>
@@ -191,10 +162,10 @@ ArticlesTagsSection.propTypes = {
     PropTypes.shape({
       id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
       label: PropTypes.string,
-      nettoyage: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      // ⛔️ plus de "nettoyage"
     })
   ),
-  addArticleTag: PropTypes.func.isRequired,
-  updateArticleTag: PropTypes.func.isRequired,
-  deleteArticleTag: PropTypes.func.isRequired,
+  addArticleTag: PropTypes.func.isRequired,     // (label) => { ok, reason? }
+  updateArticleTag: PropTypes.func.isRequired,  // (id, label) => { ok, reason? }
+  deleteArticleTag: PropTypes.func.isRequired,  // (id) => { ok, reason? }
 };

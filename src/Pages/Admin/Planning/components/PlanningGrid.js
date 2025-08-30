@@ -1,7 +1,7 @@
 // src/Pages/Admin/Planning/components/PlanningGrid.js
 import React, { useMemo } from "react";
 import { WORKDAY } from "../../../../utils/time"; // 4 niveaux pour remonter à src/utils/time
-import { getColorFromId, computeUrgency, urgencyColors } from "../lib/priority";
+import { getColorFromId } from "../lib/priority"; // plus de computeUrgency/urgencyColors ici
 
 function formatDayFR(d) {
   return d.toLocaleDateString("fr-FR", {
@@ -61,6 +61,10 @@ function clampToDay(ms, day) {
   return Math.max(start.getTime(), Math.min(end.getTime(), ms));
 }
 
+/**
+ * Découpe les slots sur la pause déjeuner et sur les bornes de la journée,
+ * puis trie les segments par heure de début.
+ */
 function cellSegmentsForDay(slots, day) {
   const { lunchStart, lunchEnd } = dayBounds(day);
   const out = [];
@@ -80,13 +84,67 @@ function cellSegmentsForDay(slots, day) {
   return out;
 }
 
+/**
+ * Regroupe les segments contigus d'une même commande (au sein d'une même machine/journée).
+ * Tolérance pour les micro-écarts dus aux arrondis : 1 minute.
+ */
+/**
+ * Regroupe les segments contigus d'une même commande (même machine/jour).
+ * On normalise à la minute et on accepte un petit gap (tolérance) car
+ * beaucoup de générateurs de créneaux créent des micro-trous.
+ */
+/**
+ * Fusionne les segments d'une même commande (même machine/jour) même s'il existe
+ * un petit trou OU un léger chevauchement entre eux.
+ * On garde la coupure à midi car elle est faite AVANT ici (cellSegmentsForDay).
+ */
+function mergeContinuousSegments(segs) {
+  if (!segs.length) return [];
+
+  // Tolérance large pour absorber les créneaux "à l'heure" avec micro-gaps
+  // (ex. slots d'1h qui laissent 1-2 min ou quelques secondes entre eux).
+  // Ajuste à 30-90 min selon ton générateur de créneaux.
+  const toleranceMs = 65 * 60 * 1000; // 65 minutes
+
+  // Tri par début (sécurité)
+  const sorted = [...segs].sort((a, b) => a.segStart - b.segStart);
+
+  const merged = [];
+  let cur = { ...sorted[0] };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const s = sorted[i];
+
+    // Même commande ?
+    const sameCmd = s.commandeId === cur.commandeId;
+
+    // Si même commande, on fusionne si le nouveau commence AVANT (ou très
+    // peu après) la fin du courant + tolérance. Ça couvre :
+    // - chevauchement (s.segStart < cur.segEnd)
+    // - contiguïté exacte (s.segStart === cur.segEnd)
+    // - petit trou (s.segStart - cur.segEnd <= toleranceMs)
+    if (sameCmd && s.segStart <= cur.segEnd + toleranceMs) {
+      cur.segEnd = Math.max(cur.segEnd, s.segEnd);
+    } else {
+      merged.push(cur);
+      cur = { ...s };
+    }
+  }
+
+  merged.push(cur);
+  return merged;
+}
+
+
+
 export default function PlanningGrid({
   machines,
   dayColumns,
   planningByMachine,
   commandeById,
+  commandeColorMap, // Map(commandeId -> couleur d'urgence uniforme)
   onOpenCommande,
-  onDayColumnClick, // ← NOUVEAU (optionnel)
+  onDayColumnClick, // optionnel
 }) {
   const workingWidthMs = (WORKDAY.end - WORKDAY.start) * 3600 * 1000;
   const colStyle = useMemo(
@@ -119,32 +177,25 @@ export default function PlanningGrid({
           {dayColumns.map((d, i) => {
             const slots = planningByMachine.get(m.id) || [];
             const segs = cellSegmentsForDay(slots, d);
+            const mergedSegs = mergeContinuousSegments(segs); // ← ★ un seul bloc par plage continue
             const { start } = dayBounds(d);
 
             return (
               <div
                 key={`${m.id}:${i}`}
                 className="pgd__cell"
-                // Clic sur zone vide de la cellule → ouvrir la vue jour
+                // Clic sur zone vide → ouvrir la vue jour
                 onClick={() => onDayColumnClick?.(d)}
                 title={onDayColumnClick ? "Cliquez pour voir la journée" : undefined}
                 style={{ cursor: onDayColumnClick ? "pointer" : undefined }}
               >
-                {segs.length === 0 ? (
+                {mergedSegs.length === 0 ? (
                   <span className="cell__dash">—</span>
                 ) : (
-                  segs.map((seg) => {
+                  mergedSegs.map((seg, idx) => {
                     const commande = commandeById.get(seg.commandeId);
-                    const estDepassee =
-                      commande &&
-                      new Date(seg.segEnd) > new Date(commande?.dateLivraison);
-                    const urgence = estDepassee
-                      ? 5
-                      : commande
-                      ? computeUrgency(commande.dateLivraison)
-                      : 1;
                     const title = commande
-                      ? `#${commande.numero} • ${commande.client}`
+                      ? `#${commande.numero} • ${commande.client ?? ""}`
                       : "";
 
                     const leftPct =
@@ -152,20 +203,26 @@ export default function PlanningGrid({
                     const widthPct =
                       ((seg.segEnd - seg.segStart) / workingWidthMs) * 100;
 
+                    // Couleur d'urgence UNIQUE pour toute la commande
+                    const urgencyColor =
+                      (commande && commandeColorMap?.get(commande.id)) || "#000000"; // fallback noir
+
+                    // Couleur de fond stable par commande pour différencier visuellement
+                    const fillColor = commande ? getColorFromId(commande.id) : "#eee";
+
                     return (
                       <div
-                        key={`${seg.id}:${seg.segStart}`}
+                        key={`${seg.commandeId}:${seg.segStart}:${seg.segEnd}:${idx}`}
                         className="pgd__bar"
                         style={{
                           left: `${leftPct}%`,
                           width: `${Math.max(2, widthPct)}%`,
-                          backgroundColor: commande
-                            ? getColorFromId(commande.id)
-                            : "#eee",
-                          boxShadow: `inset 0 0 0 4px ${urgencyColors[urgence]}`,
+                          backgroundColor: fillColor,
+                          // Bord = couleur d'urgence uniforme (noir si dépassée)
+                          boxShadow: `inset 0 0 0 4px ${urgencyColor}`,
                         }}
                         title={title}
-                        // Clic sur la barre = ouvrir la commande (et ne pas déclencher le clic de la cellule)
+                        // Clic sur la barre → ouvrir la commande (sans propager à la cellule)
                         onClick={(e) => {
                           e.stopPropagation();
                           if (commande) onOpenCommande(commande);

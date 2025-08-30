@@ -1,9 +1,12 @@
-export const urgencyColors = {
-  1: "#4caf50",
-  2: "#2196f3",
-  3: "#ff9800",
-  4: "#f44336",
-  5: "#000000",
+export const getUrgencyColor = (level) => {
+  const urgencyColors = {
+    1: "#4caf50",
+    2: "#2196f3",
+    3: "#ff9800",
+    4: "#f44336",
+    5: "#000000",
+  };
+  return urgencyColors[level] || "#000000";
 };
 
 export const getColorFromId = (id) => {

@@ -1,3 +1,4 @@
+// src/Pages/Admin/Planning/PlanningPage.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../../../supabaseClient";
 import "./Planning.css";
@@ -7,19 +8,62 @@ import {
   nextWorkStart,
   addWorkingHours,
   isBusinessDay,
+  ceilToHour,
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
-import PlanningDayView from "./PlanningDayView"; // ← vue jour
+import PlanningDayView from "./PlanningDayView";
 
 import { parseISOAny } from "./lib/parse";
 import { normalizeSlotForGrid } from "./lib/grid";
 import { workingHoursBetween } from "./lib/workingHours";
-import { sortByPriority } from "./lib/priority";
+import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority";
 
 console.log("[Planning] module loaded (refactor + inversion jours/machines + vue jour)");
+
+/** ---------- Légende d’urgence (s’appuie sur tes couleurs 1→5) ---------- **/
+export function UrgencyLegend() {
+  const labels = {
+    1: "Faible (≥ 15 jours)",
+    2: "Moyenne (10–14 jours)",
+    3: "Élevée (5–9 jours)",
+    4: "Critique (2–4 jours)",
+    5: "Urgence maximale (< 2 jours ou dépassée)",
+  };
+
+  return (
+    <div className="urgency-legend">
+      {Object.entries(labels).map(([level, label]) => (
+        <div key={level} className="legend-item">
+          <span
+            className="legend-color"
+            style={{
+              background: getUrgencyColor(Number(level)),
+              display: "inline-block",
+              width: 14,
+              height: 14,
+              marginRight: 6,
+              borderRadius: 3,
+            }}
+          />
+          {label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** -------- Helper: normaliser machineId en tableau de strings -------- */
+function normalizeMachineIds(raw) {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map(x => String(x).trim()).filter(Boolean);
+  const s = String(raw).trim();
+  if (!s) return [];
+  if (s.includes(",")) return s.split(",").map(x => x.trim()).filter(Boolean);
+  return [s];
+}
 
 export default function PlanningPage() {
   console.log("[Planning] render", { time: new Date().toISOString() });
@@ -106,10 +150,9 @@ export default function PlanningPage() {
 
       setPlanning(prev => {
         const deletedIds = new Set(future.map(f => f.id));
-        const newPlanning = prev
+        return prev
           .filter(p => !deletedIds.has(p.id))
           .map(p => (current && p.id === current.id ? { ...p, fin: endIso } : p));
-        return newPlanning;
       });
     },
     []
@@ -245,28 +288,82 @@ export default function PlanningPage() {
     };
   }, [fetchAndReflow]);
 
-  // Index
+  // Index commandes
   const commandeById = useMemo(() => {
     const m = new Map();
     for (const c of commandes) m.set(c.id, c);
     return m;
   }, [commandes]);
 
+  // 🔸 FILTRAGE UI anti-phantoms : libération à l’heure pleine pour commandes "Terminée"
+  const filteredPlanning = useMemo(() => {
+    if (!planning?.length) return [];
+    const out = [];
+
+    for (const row of planning) {
+      const cmd = commandeById.get(row.commandeId);
+      if (!cmd) { out.push(row); continue; }
+
+      if (String(cmd.statut || "").toLowerCase() !== "terminée") {
+        out.push(row);
+        continue;
+      }
+
+      const tRaw = cmd.realEnd || row.fin || new Date();
+      const tFree = ceilToHour(tRaw);
+
+      const dStart = new Date(row.debut);
+      const dEnd = new Date(row.fin);
+
+      if (dStart >= tFree) {
+        continue;
+      }
+
+      if (dStart < tFree && dEnd > tFree) {
+        out.push({ ...row, fin: tFree.toISOString() });
+        continue;
+      }
+
+      out.push(row);
+    }
+
+    return out;
+  }, [planning, commandeById]);
+
+  /** ✅ Couleur d’urgence UNIQUE par commande */
+  const commandeColorMap = useMemo(() => {
+    const m = new Map();
+    for (const c of commandes) {
+      const dateLivraison =
+        c.dateLivraison || c.deadline || c.date_livraison || c.date_limite || null;
+
+      const level = computeUrgency(dateLivraison);        // 1..5
+      const color = getUrgencyColor(level);               // hex (inclut noir si 5)
+      m.set(c.id, color);
+    }
+    return m;
+  }, [commandes]);
+
+  /** ✅ Planning regroupé par machine — DUPLICATION par machine (multi-machines) */
   const planningByMachine = useMemo(() => {
     const acc = new Map();
-    for (const p of planning) {
+    for (const p of filteredPlanning) {
       const entryBase = {
         ...p,
         startMs: parseISOAny(p.debut).getTime(),
         endMs: parseISOAny(p.fin).getTime(),
       };
       const entry = normalizeSlotForGrid(entryBase);
-      if (!acc.has(p.machineId)) acc.set(p.machineId, []);
-      acc.get(p.machineId).push(entry);
+
+      const mids = normalizeMachineIds(p.machineId);
+      for (const mid of mids) {
+        if (!acc.has(mid)) acc.set(mid, []);
+        acc.get(mid).push({ ...entry, machineId: mid });
+      }
     }
     for (const arr of acc.values()) arr.sort((a, b) => a.gridStartMs - b.gridStartMs);
     return acc;
-  }, [planning]);
+  }, [filteredPlanning]);
 
   // Colonnes = 14 jours ouvrés
   const dayColumns = useMemo(() => {
@@ -305,27 +402,34 @@ export default function PlanningPage() {
 
   const backToTable = useCallback(() => setViewMode("table"), []);
 
-  // Mapping des données pour la vue jour
+  // Mapping des données pour la vue jour — DUPLICATION par machine
   const dayViewMachines = useMemo(
-    () => machines.map(m => ({ id: m.id, name: m.nom ?? m.name ?? `Machine ${m.id}` })),
+    () => machines.map(m => ({ id: String(m.id), name: m.nom ?? m.name ?? `Machine ${m.id}` })),
     [machines]
   );
 
-  const dayViewOrders = useMemo(() => planning.map(p => ({
-    id: p.id,
-    machineId: p.machineId,
-    start: new Date(p.debut),
-    end: new Date(p.fin),
-    title: (() => {
+  const dayViewOrders = useMemo(() => {
+    const out = [];
+    for (const p of filteredPlanning) {
       const c = commandeById.get(p.commandeId);
-      if (!c) return `Commande ${p.commandeId}`;
-      const ref = c.reference || c.ref || c.titre || c.title || c.id;
-      const client = c.client || c.client_nom || c.client_name || "";
-      return client ? `${client} — ${ref}` : `${ref}`;
-    })(),
-    status: (commandeById.get(p.commandeId)?.statut) || "",
-    urgentLevel: (commandeById.get(p.commandeId)?.urgent ? "high" : "low"),
-  })), [planning, commandeById]);
+      const client = c?.client || c?.client_nom || c?.client_name || "";
+      const color = c ? commandeColorMap.get(c.id) : undefined;
+
+      const mids = normalizeMachineIds(p.machineId);
+      for (const mid of mids) {
+        out.push({
+          id: p.id,                 // id du slot planning
+          machineId: String(mid),   // IMPORTANT: clé identique à machines[].id (string)
+          start: new Date(p.debut),
+          end: new Date(p.fin),
+          title: client || `Commande ${p.commandeId}`, // client seul
+          status: c?.statut || "",
+          color,                    // même couleur que le planning général
+        });
+      }
+    }
+    return out;
+  }, [filteredPlanning, commandeById, commandeColorMap]);
 
   // ----- Rendu -----
   return (
@@ -334,15 +438,35 @@ export default function PlanningPage() {
         <>
           <h2>Planning — Vue jour</h2>
 
+          {/* Légende en haut */}
+          <UrgencyLegend />
+
+          {/* Badge de date */}
+          <div className="dayview-header-row">
+            <div className="day-badge">
+              {new Date(selectedDate).toLocaleDateString("fr-FR", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </div>
+          </div>
+
+          {/* Actions étirées */}
+          <div className="dayview-actions">
+            <button onClick={backToTable}>Retour au tableau</button>
+            <button onClick={prevDay}>Jour précédent</button>
+            <button onClick={nextDay}>Jour suivant</button>
+          </div>
+
           <PlanningDayView
             date={selectedDate}
             machines={dayViewMachines}
             commandes={dayViewOrders}
-            onBack={backToTable}
-            onPrevDay={prevDay}
-            onNextDay={nextDay}
+            // ⬇️ pas de onBack/onPrevDay/onNextDay pour éviter les doublons
             onOpenCommande={(planningRowId) => {
-              const row = planning.find(p => p.id === planningRowId);
+              const row = filteredPlanning.find(p => p.id === planningRowId);
               if (!row) return;
               const c = commandeById.get(row.commandeId);
               if (c) openCommande(c);
@@ -362,14 +486,25 @@ export default function PlanningPage() {
         </>
       ) : (
         <>
-          <h2>Planning des machines (jours en colonnes)</h2>
+          <h2>Planning — Vue tableau</h2>
+
+          {/* Légende toujours visible */}
+          <UrgencyLegend />
 
           <div className="zoom-buttons">
             <button onClick={() => setStartDate(new Date())}>Aujourd’hui</button>
-            <button onClick={() => { const prev = new Date(startDate); prev.setDate(prev.getDate() - 14); setStartDate(prev); }}>
+            <button onClick={() => {
+              const prev = new Date(startDate);
+              prev.setDate(prev.getDate() - 14);
+              setStartDate(prev);
+            }}>
               ← 14 jours précédents
             </button>
-            <button onClick={() => { const next = new Date(startDate); next.setDate(next.getDate() + 14); setStartDate(next); }}>
+            <button onClick={() => {
+              const next = new Date(startDate);
+              next.setDate(next.getDate() + 14);
+              setStartDate(next);
+            }}>
               14 jours suivants →
             </button>
             <button onClick={() => goToDay(new Date())}>Voir aujourd’hui (vue jour)</button>
@@ -381,7 +516,8 @@ export default function PlanningPage() {
             planningByMachine={planningByMachine}
             commandeById={commandeById}
             onOpenCommande={openCommande}
-            onDayColumnClick={goToDay}   // ← clic sur en-tête/cellule de jour
+            onDayColumnClick={goToDay}
+            commandeColorMap={commandeColorMap}  // ✅ couleurs corrigées
           />
 
           {modalCommande && (

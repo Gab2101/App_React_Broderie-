@@ -34,15 +34,54 @@ export const WORKDAY = {
   end: 17,        // fin journée (exclu)
 };
 
-/** Sauter les week-ends/jours fériés ?
- *  holidays: Set(['2025-08-15', '2025-12-25']) au format YYYY-MM-DD (local)
+/** =========================
+ *  Arrondis à l’heure pleine
+ *  ========================= */
+/** Renvoie une **Date** alignée sur l’heure pleine inférieure. */
+export function floorToHour(dateLike) {
+  const d = toDate(dateLike);
+  d.setMinutes(0, 0, 0);
+  return d;
+}
+/** Renvoie un **timestamp ms** aligné sur l’heure pleine inférieure. */
+export function floorToHourMs(dateLike) {
+  return floorToHour(dateLike).getTime();
+}
+
+/** Renvoie une **Date** alignée sur l’heure pleine supérieure.
+ *  Si déjà sur l’heure pile, renvoie la même heure.
  */
+export function ceilToHour(dateLike) {
+  const d = toDate(dateLike);
+  if (d.getMinutes() || d.getSeconds() || d.getMilliseconds()) {
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 1);
+  } else {
+    d.setSeconds(0, 0);
+  }
+  return d;
+}
+/** Renvoie un **timestamp ms** aligné sur l’heure pleine supérieure. */
+export function ceilToHourMs(dateLike) {
+  return ceilToHour(dateLike).getTime();
+}
+
+/** Alias explicite pour les usages métier : prochaine heure pleine */
+export const ceilToNextHour = ceilToHour;
+
+/** =========================
+ *  Jours ouvrés / fériés
+ *  ========================= */
 function ymdLocal(d) {
   const yy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
 }
+
+/** Sauter les week-ends/jours fériés ?
+ *  holidays: Set(['2025-08-15', '2025-12-25']) au format YYYY-MM-DD (local)
+ */
 export function isBusinessDay(input, holidays = new Set()) {
   const d = toDate(input);
   const day = d.getDay(); // 0=dim,6=sam
@@ -96,6 +135,9 @@ export function isWorkHour(input) {
   );
 }
 
+/** =========================
+ *  Logique horaire ouvrée
+ *  ========================= */
 /** Arrondit/avance à la prochaine heure ouvrée valide.
  *  - si minutes/secondes/ms != 0 → passe à l’heure suivante
  *  - si < 08:00 → 08:00
@@ -113,8 +155,7 @@ export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = ne
 
   // Si pas pile sur une heure → arrondir à l’heure suivante
   if (cur.getMinutes() || cur.getSeconds() || cur.getMilliseconds()) {
-    cur.setMinutes(0, 0, 0);
-    cur.setHours(cur.getHours() + 1);
+    cur = ceilToHour(cur);
   }
 
   // Appliquer les bornes de la journée (midi/nuit)
@@ -213,10 +254,8 @@ export function formatHourRangeFR(dateStart) {
 export function getNextFullHour(minHour = WORKDAY.start, opts = {}) {
   // On part de l’instant T, arrondi à l’heure suivante, puis on applique nextWorkStart
   const base = toDate(new Date());
-  base.setMinutes(0, 0, 0);
-  base.setHours(base.getHours() + 1);
-
-  let res = nextWorkStart(base, opts);
+  const nextHour = ceilToHour(base);
+  let res = nextWorkStart(nextHour, opts);
 
   // Optionnel : si on veut imposer une heure mini sur le même jour ouvré
   if (res.getHours() < minHour && isBusinessDay(res)) {
@@ -250,4 +289,5 @@ export function ajusterHeureFin(debut, dureeHeures, opts = {}) {
   return addWorkingHours(debut, dureeHeures, opts);
 }
 
-export { configureSlots, expandToHourSlots } from './slots';
+/** Exports complémentaires provenant de ./slots si tu les utilises déjà */
+export { configureSlots, expandToHourSlots } from "./slots";

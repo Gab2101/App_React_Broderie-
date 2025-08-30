@@ -6,6 +6,7 @@ import { EtiquettesContext } from "../../../context/EtiquettesContext";
 
 import CommandeFormModal from "./components/CommandeFormModal";
 import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal";
+import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal";
 import CommandeCard from "./components/CommandeCard";
 
 import useCommandesData from "./hooks/useCommandesData";
@@ -14,16 +15,18 @@ import useLinkedCommande from "./hooks/useLinkedCommande";
 import useSimulation from "./hooks/useSimulation";
 import useStatut from "./hooks/useStatut";
 
+import { parseLocalDatetime, toUTCISOString, snapToNextWorkStart, addMinutesWithinWorkHours, DEFAULT_WORKDAY } from "./utils/workhours";
+
 import {
   createCommandeAndPlanning,
   updateCommande as apiUpdateCommande,
   deleteCommandeWithPlanning,
 } from "./services/commandesApi";
+import { createCommandeWithAssignations } from "./services/assignationsApi";
 
 export default function CommandesPage() {
   const { articleTags, broderieTags } = useContext(EtiquettesContext);
 
-  // Chargement & realtime
   const {
     commandes,
     setCommandes,
@@ -34,13 +37,9 @@ export default function CommandesPage() {
     reloadData,
   } = useCommandesData();
 
-  // Formulaire
   const form = useForm();
-
-  // Liaison
   const linked = useLinkedCommande({ planning, commandes, machines });
 
-  // Simulation (scénarios, % temps réel, machine, monoUnitsUsed, etc.)
   const sim = useSimulation({
     formData: form.formData,
     machines,
@@ -55,14 +54,20 @@ export default function CommandesPage() {
     },
   });
 
-  // Statut
   const { STATUTS, handleChangeStatut } = useStatut({ commandes, setCommandes });
 
-  // Ouverture/fermeture des modales
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);     // mono
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const openFormForNew = () => {
+  // Verrou de flux : "idle" | "mono" | "multi"
+  const [creationFlow, setCreationFlow] = useState("idle");
+
+  // Modal de confirmation MULTI
+  const [isMultiConfirmOpen, setIsMultiConfirmOpen] = useState(false);
+  const [pendingMultiPayload, setPendingMultiPayload] = useState(null);
+
+  const resetCreationState = () => {
     form.resetForm();
     linked.setIsLinked(false);
     linked.setLinkedCommandeId(null);
@@ -72,6 +77,15 @@ export default function CommandesPage() {
     sim.setMachineAssignee(null);
     sim.setConfirmCoef(350);
     sim.setMonoUnitsUsed(1);
+
+    setIsConfirmOpen(false);
+    setIsMultiConfirmOpen(false);
+    setPendingMultiPayload(null);
+    setCreationFlow("idle");
+  };
+
+  const openFormForNew = () => {
+    resetCreationState();
     setIsFormOpen(true);
   };
 
@@ -91,37 +105,156 @@ export default function CommandesPage() {
     sim.setSelectedScenario(null);
     sim.setMachineAssignee(null);
     sim.setConfirmCoef(350);
-    sim.setMonoUnitsUsed(Number(cmd.mono_units_used || 1)); // si déjà enregistré
+    sim.setMonoUnitsUsed(Number(cmd.mono_units_used || 1));
     setIsFormOpen(true);
   };
 
-  // Soumission du formulaire (création → simulation ; édition → update)
-  const handleSubmitForm = async () => {
-    if (parseInt(form.formData.quantite, 10) <= 0 || parseInt(form.formData.points, 10) <= 0) {
-      alert("La quantité et le nombre de points doivent être supérieurs à zéro.");
-      return;
-    }
-    if (form.formData.id) {
-      const { error } = await apiUpdateCommande(form.formData);
-      if (error) {
-        alert("Erreur lors de la mise à jour.");
-        console.error(error);
+  /**
+   * handleSubmitForm
+   * On n'accepte que deux valeurs explicites :
+   *  - { flow: "multi", ... }
+   *  - { flow: "mono" }
+   * Tout autre appel est ignoré (empêche les ouvertures fantômes).
+   */
+  const handleSubmitForm = async (config) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const qty = parseInt(form.formData.quantite, 10);
+      const pts = parseInt(form.formData.points, 10);
+      if (qty <= 0 || pts <= 0) {
+        alert("La quantité et le nombre de points doivent être supérieurs à zéro.");
         return;
       }
-      await reloadData();
-      form.resetForm();
-      setIsFormOpen(false);
-      return;
-    }
-    // Création → simuler
-    await sim.handleSimulation();
-    if (sim.selectedScenario) {
-      setIsFormOpen(false);
-      setIsConfirmOpen(true);
+
+      // ÉDITION
+      if (form.formData.id) {
+        const { error } = await apiUpdateCommande(form.formData);
+        if (error) {
+          console.error(error);
+          alert("Erreur lors de la mise à jour.");
+          return;
+        }
+        await reloadData();
+        form.resetForm();
+        setIsFormOpen(false);
+        return;
+      }
+
+      // --- MULTI (prioritaire & exclusif) ---
+      if (config?.flow === "multi") {
+        const list = Array.isArray(config.perMachine) ? config.perMachine : [];
+        const validList = list.filter(r => r && r.machineId && Number(r.quantity) > 0);
+
+        if (validList.length < 2) {
+          alert("Sélectionnez au moins 2 machines avec des quantités > 0.");
+          return;
+        }
+
+        setCreationFlow("multi");
+        setPendingMultiPayload({
+          perMachine: validList,
+          meta: config.meta || null,
+          plannedStartISO:
+            config.plannedStartISO ||
+            form.formData?.date_debut_planning ||
+            new Date().toISOString(),
+        });
+
+        setIsFormOpen(false);
+        setIsConfirmOpen(false);      // jamais de modale mono dans ce flux
+        setIsMultiConfirmOpen(true);
+        return;                       // pas d'insert ici
+      }
+
+      // --- MONO (explicit only) ---
+      if (config?.flow === "mono") {
+        // si on venait d'un multi, on bloque
+        if (creationFlow === "multi") return;
+
+        await sim.handleSimulation();
+        if (sim.selectedScenario) {
+          setCreationFlow("mono");
+          setIsFormOpen(false);
+          setIsConfirmOpen(true);
+        }
+        return;
+      }
+
+      // Tout autre appel est ignoré (sécurité)
+      console.warn("[handleSubmitForm] Appel ignoré : payload inattendu", config);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Confirmation de création : appelle le service
+  // Enregistrement final MULTI (depuis la modale de confirmation MULTI)
+  const handleConfirmMultiSave = async ({ perMachine, meta, plannedStartLocal, respectWorkHours }) => {
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+  try {
+    // 1) base locale choisie dans le modal
+    let baseLocal = parseLocalDatetime(plannedStartLocal);
+
+    // 2) si on respecte les heures ouvrées, on "snap" à la prochaine fenêtre ouvrée (08:00)
+    if (respectWorkHours) {
+      baseLocal = snapToNextWorkStart(baseLocal, DEFAULT_WORKDAY);
+    }
+
+    // 3) pour CHAQUE assignation, on pose le même début (ou tu peux les enchaîner si tu préfères)
+    //    et on calcule la fin en restant dans les heures ouvrées.
+    const enriched = perMachine.map((r) => {
+      const dur = Number(r.durationCalcMinutes || r.durationTheoreticalMinutes || 0);
+      const { end } = respectWorkHours
+        ? addMinutesWithinWorkHours(baseLocal, dur, DEFAULT_WORKDAY)
+        : { end: new Date(baseLocal.getTime() + dur * 60000) };
+
+      return {
+        ...r,
+        planned_start_iso_utc: toUTCISOString(baseLocal),
+        planned_end_iso_utc: toUTCISOString(end),
+      };
+    });
+
+    // 4) Appel API : on envoie bien l’UTC (évite le décalage de 2h)
+    const { errorCmd, errorAssign } = await createCommandeWithAssignations({
+      formData: {
+        ...form.formData,
+        linked_commande_id: linked.linkedCommandeId,
+        same_machine_as_linked: linked.sameMachineAsLinked,
+        start_after_linked: linked.startAfterLinked,
+      },
+      // on passe la liste enrichie pour que le service prenne planned_start/planned_end
+      perMachine: enriched.map((r) => ({
+        machineId: r.machineId,
+        quantity: r.quantity,
+        durationTheoreticalMinutes: r.durationTheoreticalMinutes,
+        durationCalcMinutes: r.durationCalcMinutes,
+        // on donne explicitement les dates
+        planned_start: r.planned_start_iso_utc,
+        planned_end: r.planned_end_iso_utc,
+      })),
+      meta,
+      plannedStartISO: null, // on n’utilise plus ce champ “global”
+    });
+
+    if (errorCmd || errorAssign) {
+      console.error("Erreur création multi-machines:", errorCmd || errorAssign);
+      alert("Erreur lors de la création (multi-machines).");
+      return;
+    }
+
+    setIsMultiConfirmOpen(false);
+    setPendingMultiPayload(null);
+    setCreationFlow("idle");
+    await reloadData();
+    form.resetForm();
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
+  // Confirmation création (flux mono)
   const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed }) => {
     const machine = machines.find((m) => String(m.id) === String(machineId));
     if (!machine) {
@@ -132,7 +265,7 @@ export default function CommandesPage() {
       formData: form.formData,
       machine,
       coef,
-      monoUnitsUsed, // 👈 nouveau
+      monoUnitsUsed,
       planning,
       commandes,
       machines,
@@ -161,18 +294,18 @@ export default function CommandesPage() {
     sim.setConfirmCoef(350);
     sim.setMonoUnitsUsed(1);
     setIsConfirmOpen(false);
+    setCreationFlow("idle");
 
     await reloadData();
     form.resetForm();
   };
 
-  // Suppression
   const handleDelete = async (id) => {
     if (!window.confirm("Supprimer cette commande ?")) return;
     const { error } = await deleteCommandeWithPlanning(id);
     if (error) {
-      alert("Erreur lors de la suppression de la commande.");
       console.error(error);
+      alert("Erreur lors de la suppression de la commande.");
       return;
     }
     await reloadData();
@@ -180,20 +313,20 @@ export default function CommandesPage() {
 
   return (
     <div className="commandes-page">
-      <NewButton onClick={openFormForNew}>Nouvelle commande</NewButton>
+      <NewButton onClick={openFormForNew} disabled={isSubmitting}>
+        Nouvelle commande
+      </NewButton>
 
-      {/* Modale création / édition */}
+      {/* 1) Formulaire création/édition */}
       <CommandeFormModal
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSubmit={handleSubmitForm}
-        // form
+        onClose={() => !isSubmitting && setIsFormOpen(false)}
+        onSubmit={handleSubmitForm}  // doit recevoir { flow:"multi", ... } ou { flow:"mono" }
         formData={form.formData}
         handleChange={form.handleChange}
         handleDateChange={form.handleDateChange}
         toggleTag={form.toggleTag}
         saved={form.saved}
-        // liaison
         isLinked={linked.isLinked}
         setIsLinked={linked.setIsLinked}
         linkedCommandeId={linked.linkedCommandeId}
@@ -203,17 +336,16 @@ export default function CommandesPage() {
         startAfterLinked={linked.startAfterLinked}
         setStartAfterLinked={linked.setStartAfterLinked}
         linkableCommandes={linkableCommandes}
-        // tags
         articleTags={articleTags}
         broderieTags={broderieTags}
-        // édition ?
+        machines={machines}
         isEditing={Boolean(form.formData?.id)}
       />
 
-      {/* Modale confirmation machine + % temps réel + mono units */}
+      {/* 2) Confirmation mono — jamais si un flux multi est actif */}
       <MachineAndTimeConfirmModal
-        isOpen={isConfirmOpen}
-        onClose={() => setIsConfirmOpen(false)}
+        isOpen={isConfirmOpen && creationFlow !== "multi"}
+        onClose={() => !isSubmitting && setIsConfirmOpen(false)}
         machines={machines}
         formData={form.formData}
         selectedScenario={sim.selectedScenario}
@@ -226,7 +358,18 @@ export default function CommandesPage() {
         setMachineAssignee={sim.setMachineAssignee}
         monoUnitsUsed={sim.monoUnitsUsed}
         setMonoUnitsUsed={sim.setMonoUnitsUsed}
-        onConfirm={({ machineId, coef, monoUnitsUsed }) => handleConfirmCreation({ machineId, coef, monoUnitsUsed })}
+        onConfirm={({ machineId, coef, monoUnitsUsed }) =>
+          handleConfirmCreation({ machineId, coef, monoUnitsUsed })
+        }
+      />
+
+      {/* 3) Confirmation MULTI */}
+      <MultiMachineConfirmModal
+        isOpen={isMultiConfirmOpen}
+        onClose={() => !isSubmitting && setIsMultiConfirmOpen(false)}
+        payload={pendingMultiPayload}
+        machines={machines}
+        onConfirm={handleConfirmMultiSave}
       />
 
       {/* Liste commandes */}

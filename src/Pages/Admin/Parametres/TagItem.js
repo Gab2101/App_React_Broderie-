@@ -3,22 +3,19 @@ import PropTypes from "prop-types";
 import "./TagItems.css";
 
 /**
- * TagItem
- * — Élément de liste réutilisable pour un tag (article ou broderie)
- * — Gère l'édition inline, l'accessibilité, et les raccourcis clavier
+ * TagItem (simplifié)
+ * — Élément de liste réutilisable pour un tag (label uniquement)
+ * — Édition inline, accessibilité, raccourcis clavier
  */
 export default function TagItem({
   tag,
   isEditing,
   editingLabel,
-  editingCleaning,
   onChangeLabel,
-  onChangeCleaning,
   onEdit,
   onDelete,
   onSave,
   onCancel,
-  showCleaning = false,
   saving = false,
 }) {
   const labelRef = useRef(null);
@@ -32,12 +29,12 @@ export default function TagItem({
   }, [isEditing]);
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") onSave();
-    if (e.key === "Escape") onCancel();
+    if (e.key === "Enter") onSave(e);
+    if (e.key === "Escape") onCancel(e);
   };
 
   return (
-    <li className={`tag-item${isEditing ? " editing" : ""}`}>      
+    <li className={`tag-item${isEditing ? " editing" : ""}`}>
       {isEditing ? (
         <>
           <input
@@ -51,21 +48,6 @@ export default function TagItem({
             onKeyDown={handleKeyDown}
             disabled={saving}
           />
-
-          {showCleaning && (
-            <input
-              type="number"
-              className="tag-item-input nettoyage"
-              aria-label="Temps de nettoyage (secondes)"
-              placeholder="Nettoyage (s)"
-              min={0}
-              step={1}
-              value={editingCleaning}
-              onChange={(e) => onChangeCleaning(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={saving}
-            />
-          )}
 
           <button
             type="button"
@@ -91,12 +73,10 @@ export default function TagItem({
         </>
       ) : (
         <>
-          <span className="tag-item-label" title={tag.label}>{tag.label}</span>
-          {showCleaning && (
-            <small className="tag-item-nettoyage" title="Temps de nettoyage">
-              Nettoyage: {Number(tag.nettoyage) || 0}s
-            </small>
-          )}
+          <span className="tag-item-label" title={tag.label}>
+            {tag.label}
+          </span>
+
           <button
             type="button"
             className="tag-item-button edit"
@@ -106,6 +86,7 @@ export default function TagItem({
           >
             ✏️
           </button>
+
           <button
             type="button"
             className="tag-item-button delete"
@@ -125,17 +106,13 @@ TagItem.propTypes = {
   tag: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     label: PropTypes.string.isRequired,
-    nettoyage: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   }).isRequired,
   isEditing: PropTypes.bool,
   editingLabel: PropTypes.string,
-  editingCleaning: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   onChangeLabel: PropTypes.func.isRequired,
-  onChangeCleaning: PropTypes.func,
   onEdit: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
-  showCleaning: PropTypes.bool,
   saving: PropTypes.bool,
 };

@@ -1,6 +1,7 @@
 // src/Pages/Admin/Commandes/components/CommandeFormModal.js
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { getAllowedBroderieForArticle, normalizeOne } from "../../../../utils/nettoyageRules";
+import MultiMachineSplitModal from "./MultiMachineSplitModal";
 
 export default function CommandeFormModal({
   isOpen,
@@ -23,18 +24,23 @@ export default function CommandeFormModal({
   setStartAfterLinked,
   linkableCommandes,
   // tags
-  articleTags,
-  broderieTags,
+  articleTags = [],
+  broderieTags = [],
+  // machines
+  machines = [],
+  // édition ?
   isEditing = false,
 }) {
-  // 🟢 Hooks toujours AVANT tout early return
+  const [multiEnabled, setMultiEnabled] = useState(false);
+  const [multiModalOpen, setMultiModalOpen] = useState(false);
+  // multiPlan: { machines: string[], perMachine: [{machineId, quantity, durationTheoreticalMinutes, durationCalcMinutes, durationHours}], totalDurationHours, meta }
+  const [multiPlan, setMultiPlan] = useState(null);
+
   const selectedArticleLabel = formData?.types?.[0] ?? null;
 
-  // Note: on n’a pas nettoyageRules ici en props, donc on utilise un fallback (tout afficher si pas de config).
   const allowedSet = useMemo(() => {
     try {
       if (!selectedArticleLabel) return null;
-      // si tu veux filtrer précisément avec des règles, passe nettoyageRules en props et remplace [] par nettoyageRules
       return getAllowedBroderieForArticle([], selectedArticleLabel);
     } catch {
       return null;
@@ -43,26 +49,38 @@ export default function CommandeFormModal({
 
   const filteredBroderieTags = useMemo(() => {
     const list = Array.isArray(broderieTags) ? broderieTags : [];
-    if (!allowedSet || allowedSet.size === 0) return list; // avant config, tout afficher
+    if (!allowedSet || allowedSet.size === 0) return list;
     return list.filter((tag) => allowedSet.has(normalizeOne(tag.label)));
   }, [broderieTags, allowedSet]);
 
-  // 🟢 Early return APRÈS les hooks
   if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    // Si multi est activé ET un plan valide existe → flux MULTI explicite
+    const perMachine = multiPlan?.perMachine || [];
+    if (multiEnabled && Array.isArray(perMachine) && perMachine.length >= 2) {
+      onSubmit({
+        flow: "multi",
+        perMachine,
+        meta: multiPlan?.meta || null,
+        // on NE met PAS plannedStart ici : il sera choisi dans le second modal
+      });
+      return;
+    }
+
+    // Sinon → flux MONO explicite
+    onSubmit({ flow: "mono" });
+  };
 
   return (
     <div className="modal-overlay">
       <div className="modal">
         <h2>{isEditing ? "Modifier la commande" : "Nouvelle commande"}</h2>
 
-        <form
-          className="formulaire-commande"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSubmit();
-          }}
-        >
-          {/* ----- LIAISON A UNE COMMANDE EXISTANTE ----- */}
+        <form className="formulaire-commande" onSubmit={handleSubmit}>
+          {/* ----- LIAISON ----- */}
           <div className="bloc-liaison">
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
@@ -137,6 +155,7 @@ export default function CommandeFormModal({
               required
             />
           </label>
+
           <label>
             Client :
             <input
@@ -147,6 +166,7 @@ export default function CommandeFormModal({
               required
             />
           </label>
+
           <label>
             Quantité :
             <input
@@ -158,6 +178,7 @@ export default function CommandeFormModal({
               required
             />
           </label>
+
           <label>
             Points :
             <input
@@ -169,6 +190,7 @@ export default function CommandeFormModal({
               required
             />
           </label>
+
           <label>
             Vitesse moyenne (points/minute) :
             <input
@@ -180,6 +202,7 @@ export default function CommandeFormModal({
               min="1"
             />
           </label>
+
           <label>
             Date livraison :
             <input
@@ -189,6 +212,7 @@ export default function CommandeFormModal({
               onChange={handleDateChange}
             />
           </label>
+
           <label>
             Urgence :
             <select name="urgence" value={formData.urgence} onChange={handleChange}>
@@ -200,6 +224,7 @@ export default function CommandeFormModal({
             </select>
           </label>
 
+          {/* ----- TAGS ----- */}
           <label>Types :</label>
           <div className="tags-container">
             {Array.isArray(articleTags) &&
@@ -230,6 +255,38 @@ export default function CommandeFormModal({
               ))}
           </div>
 
+          {/* ✅ Multi-machines + bouton config */}
+          <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={multiEnabled}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setMultiEnabled(v);
+                  if (!v) setMultiPlan(null);
+                }}
+              />
+              Faire avec plusieurs machines
+            </label>
+
+            {multiEnabled && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <button type="button" onClick={() => setMultiModalOpen(true)}>
+                  Configurer…
+                </button>
+                {multiPlan ? (
+                  <span style={{ fontSize: 13, opacity: 0.8 }}>
+                    {multiPlan.machines.length} machine(s), durée totale ≈{" "}
+                    <b>{multiPlan.totalDurationHours.toFixed(2)} h</b>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 13, opacity: 0.6 }}>Aucune sélection</span>
+                )}
+              </div>
+            )}
+          </div>
+
           <button type="submit" className="btn-enregistrer">
             Enregistrer
           </button>
@@ -240,6 +297,21 @@ export default function CommandeFormModal({
           Fermer
         </button>
       </div>
+
+      {/* Modal de répartition multi */}
+      <MultiMachineSplitModal
+        isOpen={multiModalOpen}
+        onClose={() => setMultiModalOpen(false)}
+        machines={machines}
+        quantity={Number(formData.quantite || 0)}
+        points={Number(formData.points || 0)}
+        vitesseMoyenne={Number(formData.vitesseMoyenne || 0)}
+        defaultSelected={multiPlan?.machines || []}
+        onConfirm={(plan) => {
+          setMultiPlan(plan);     // plan contient { machines, perMachine, totalDurationHours, meta, flow:"multi" }
+          setMultiModalOpen(false);
+        }}
+      />
     </div>
   );
 }
