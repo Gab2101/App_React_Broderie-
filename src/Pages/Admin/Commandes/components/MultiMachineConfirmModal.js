@@ -405,6 +405,7 @@ export default function MultiMachineConfirmModal({
               );
             })}
             {filtered.length === 0 && <div style={{ padding: 8, fontSize: 13, opacity: 0.7 }}>Aucune machine.</div>}
+            }
           </div>
 
           {/* Récap résultats avec édition des quantités */}
