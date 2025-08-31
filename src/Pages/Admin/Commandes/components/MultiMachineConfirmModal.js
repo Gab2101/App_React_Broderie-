@@ -203,8 +203,10 @@ export default function MultiMachineConfirmModal({
       quantity: r.quantity,
       durationTheoreticalMinutes: r.durationTheoreticalMinutes,
       durationCalcMinutes: r.durationCalcMinutes,
-      planned_start_iso_utc: toUTCISOString(r.startTime),
-      planned_end_iso_utc: toUTCISOString(r.endTime),
+      planned_start: toUTCISOString(r.startTime),
+      planned_end: toUTCISOString(r.endTime),
+      cleaningMinutes: r.cleaningMinutes || 0,
+      extraPercent: Math.max(0, timeCoefficient - 100),
     }));
 
     onConfirm?.({
