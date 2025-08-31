@@ -35,6 +35,12 @@ export default function MachineAndTimeConfirmModal({
   const handleConfirm = () => {
     const machineId = machineAssignee ?? selectedScenario.machine.id;
 
+    // Validation critique : s'assurer que machineId n'est pas null
+    if (!machineId) {
+      alert("Erreur : Aucune machine sélectionnée. Veuillez sélectionner une machine avant de confirmer.");
+      return;
+    }
+
     // Théorie (heures → minutes) depuis le scénario
     const baseTheoMinRaw = Math.round(Number(selectedScenario.dureeTotaleHeuresReelle || 0) * 60);
     const monoUnits = isMono ? Math.max(1, Number(monoUnitsUsed || 1)) : 1;
