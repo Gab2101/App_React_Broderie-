@@ -65,7 +65,6 @@ export default function CommandesPage() {
 
   // Modal de confirmation MULTI
   const [isMultiConfirmOpen, setIsMultiConfirmOpen] = useState(false);
-  const [pendingMultiPayload, setPendingMultiPayload] = useState(null);
 
   const resetCreationState = () => {
     form.resetForm();
@@ -80,7 +79,6 @@ export default function CommandesPage() {
 
     setIsConfirmOpen(false);
     setIsMultiConfirmOpen(false);
-    setPendingMultiPayload(null);
     setCreationFlow("idle");
   };
 
