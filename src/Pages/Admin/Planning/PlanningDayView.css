@@ -112,3 +112,21 @@
   font-size: 11px;
   opacity: 0.8;
 }
+.timeline-row { position: relative; height: 42px; }
+.order-block {
+  position: absolute; top: 0; bottom: 0;
+  background: #fff; border-radius: 6px; padding: 4px 6px;
+  font-size: 12px; box-sizing: border-box; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  z-index: 2;
+}
+/* Pause comme un marqueur fin, sans “manger” de largeur */
+.lunch-marker {
+  position: absolute; top: 0; bottom: 0;
+  border-left: 2px dashed #bbb; pointer-events: none; z-index: 1;
+}
+.lunch-marker > span {
+  position: absolute; top: 50%; left: -6px; transform: translate(-50%, -50%);
+  background: #f6f6f6; padding: 1px 6px; font-size: 11px; color: #666;
+  border-radius: 4px;
+}
+

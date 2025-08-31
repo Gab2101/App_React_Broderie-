@@ -1,81 +1,103 @@
 // src/Pages/Admin/Planning/PlanningDayView.jsx
 import React, { useMemo } from "react";
 import "./PlanningDayView.css";
-import { WORKDAY, floorToHour, ceilToHour } from "../../../utils/time";
 
 export default function PlanningDayView({
   date,
   machines = [],
   commandes = [],
   onOpenCommande,
-  // Par défaut, on se cale sur la journée de travail standard
-  workStart = WORKDAY.start,
-  workEnd = WORKDAY.end,
+  workStart = 8,
+  workEnd = 16,
+  lunchStart = 12,
+  lunchEnd = 13,
 }) {
-  // Date normalisée
+  // Jour local à minuit (évite le -2h)
   const day = useMemo(() => {
-    if (date instanceof Date && !isNaN(date)) return new Date(date.getTime());
     const d = date ? new Date(date) : new Date();
-    return isNaN(d) ? new Date() : d;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }, [date]);
 
-  // Créneaux (heures pleines)
+  // Bornes locales
+  const startOfDay = useMemo(() => {
+    const d0 = new Date(day); d0.setHours(workStart, 0, 0, 0); return d0;
+  }, [day, workStart]);
+  const endOfDay = useMemo(() => {
+    const d1 = new Date(day); d1.setHours(workEnd, 0, 0, 0); return d1;
+  }, [day, workEnd]);
+
+  // Bornes pause (locales)
+  const lunchStartDate = useMemo(() => {
+    const d2 = new Date(day); d2.setHours(lunchStart, 0, 0, 0); return d2;
+  }, [day, lunchStart]);
+  const lunchEndDate = useMemo(() => {
+    const d3 = new Date(day); d3.setHours(lunchEnd, 0, 0, 0); return d3;
+  }, [day, lunchEnd]);
+
+  // En-tête horaires: on SAUTE midi (12–13 n’apparaît pas)
   const slots = useMemo(() => {
     const arr = [];
-    for (let h = workStart; h < workEnd; h++) arr.push(h);
+    for (let h = workStart; h < workEnd; h++) {
+      if (h >= lunchStart && h < lunchEnd) continue; // skip pause
+      arr.push(h);
+    }
     return arr;
-  }, [workStart, workEnd]);
+  }, [workStart, workEnd, lunchStart, lunchEnd]);
 
-  // Bornes de la journée affichée
-  const { startOfDay, endOfDay } = useMemo(() => {
-    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), workStart, 0, 0, 0);
-    const end = new Date(day.getFullYear(), day.getMonth(), day.getDate(), workEnd, 0, 0, 0);
-    return { startOfDay: floorToHour(start), endOfDay: ceilToHour(end) };
-  }, [day, workStart, workEnd]);
+  // Minutes “ouvrées” (on retire la pause de la largeur)
+  const minutesBeforeLunch = Math.max(0, (lunchStartDate - startOfDay) / 60000);
+  const lunchMinutes = Math.max(0, (lunchEndDate - lunchStartDate) / 60000);
+  const totalWorkingMinutes = Math.max(
+    0,
+    (endOfDay - startOfDay) / 60000 - lunchMinutes
+  );
 
-  // Chevauchement [s, e) avec [slotStart, slotEnd)
-  const overlaps = (s, e, slotStart, slotEnd) => s < slotEnd && e > slotStart;
+  // Convertit un instant -> offset en minutes sur l’axe OUVRÉ (pause compressée)
+  const toWorkingOffsetMin = (t) => {
+    if (t <= lunchStartDate) return Math.max(0, (t - startOfDay) / 60000);
+    if (t >= lunchEndDate)
+      return minutesBeforeLunch + (t - lunchEndDate) / 60000;
+    // si t est dans la pause, on le “clampe” au début de la pause
+    return minutesBeforeLunch;
+  };
+  const pctFromOffset = (min) => (min / totalWorkingMinutes) * 100;
 
-  // Regrouper les commandes par machine, limitées à la journée
+  // Regroupe & tronque à la journée (local)
   const ordersByMachineForDay = useMemo(() => {
     const map = new Map();
     for (const c of commandes || []) {
-      if (!c?.start || !c?.end) continue; // start/end doivent être des Date (mappées côté parent)
-      if (c.start < endOfDay && c.end > startOfDay) {
-        const list = map.get(c.machineId) || [];
-        list.push(c);
-        map.set(c.machineId, list);
-      }
+      if (!c?.start || !c?.end) continue;
+      const s = new Date(Math.max(new Date(c.start).getTime(), startOfDay.getTime()));
+      const e = new Date(Math.min(new Date(c.end).getTime(),   endOfDay.getTime()));
+      if (s >= e) continue;
+      const list = map.get(c.machineId) || [];
+      list.push({ ...c, start: s, end: e });
+      map.set(c.machineId, list);
     }
-    // Tri pour stabilité d'affichage
-    for (const [k, list] of map) {
-      list.sort((a, b) => a.start - b.start || String(a.id).localeCompare(String(b.id)));
-      map.set(k, list);
-    }
+    for (const [k, L] of map) L.sort((a, b) => a.start - b.start);
     return map;
   }, [commandes, startOfDay, endOfDay]);
 
-  // Helper: extraire uniquement le nom du client depuis o.title (ex: "Client — REF" -> "Client")
-  const getClientLabel = (o) => {
-    if (o?.client) return o.client;
-    const t = o?.title ?? "";
-    const idx = typeof t === "string" ? t.indexOf("—") : -1;
-    return idx > -1 ? t.slice(0, idx).trim() : t;
+  // Coupe un intervalle par la pause → 1 ou 2 segments
+  const splitByLunch = (s, e) => {
+    if (e <= lunchStartDate || s >= lunchEndDate) return [[s, e]];
+    const segs = [];
+    if (s < lunchStartDate) segs.push([s, lunchStartDate]);
+    if (e > lunchEndDate) segs.push([lunchEndDate, e]);
+    return segs;
   };
+
+  const labelOf = (o) => o?.client || o?.title || "";
 
   return (
     <div className="planning-day">
-      {/* Tableau jour UNIQUEMENT (pas de boutons/legend ici) */}
       <div className="dayview-table-container">
         <table className="dayview-table">
           <thead>
             <tr>
               <th className="machine-header">Machines</th>
               {slots.map((h) => (
-                <th
-                  key={h}
-                  className={`hour-header ${h === WORKDAY.lunchStart ? "lunch-hour" : ""}`}
-                >
+                <th key={h} className="hour-header">
                   {String(h).padStart(2, "0")}–{String(h + 1).padStart(2, "0")}
                 </th>
               ))}
@@ -84,70 +106,46 @@ export default function PlanningDayView({
           <tbody>
             {machines.map((m) => {
               const machineName = m.name ?? m.nom ?? `Machine ${m.id}`;
-              const machineOrders = ordersByMachineForDay.get(m.id) || [];
-
+              const list = ordersByMachineForDay.get(m.id) || [];
               return (
                 <tr key={m.id}>
                   <td className="machine-col">{machineName}</td>
-
-                  {slots.map((h) => {
-                    const slotStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, 0, 0, 0);
-                    const slotEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h + 1, 0, 0, 0);
-                    const isLunch = h === WORKDAY.lunchStart;
-
-                    const orders = isLunch
-                      ? []
-                      : machineOrders.filter((o) => overlaps(o.start, o.end, slotStart, slotEnd));
-
-                    return (
-                      <td
-                        key={`${m.id}:${h}`}
-                        className={`slot-cell ${isLunch ? "lunch" : orders.length === 0 ? "empty" : ""}`}
+                  <td colSpan={slots.length} className="slot-cell">
+                    <div className="timeline-row">
+                      {/* Marqueur visuel de la pause (ligne pointillée + libellé) */}
+                      <div
+                        className="lunch-marker"
+                        style={{ left: `${pctFromOffset(minutesBeforeLunch)}%` }}
+                        aria-hidden
                       >
-                        {isLunch ? (
-                          <div className="pause">Pause</div>
-                        ) : orders.length === 0 ? (
-                          <div className="empty-dash">—</div>
-                        ) : (
-                          <div className="orders-list">
-                            {orders.slice(0, 3).map((o) => {
-                              const label = getClientLabel(o);
-                              const borderColor = o?.color || "#000"; // même couleur que le planning général si transmise
-                              return (
-                                <span
-                                  key={o.id}
-                                  onClick={() => onOpenCommande?.(o.id)}
-                                  className="order-badge"
-                                  style={{
-                                    border: "2px solid",
-                                    borderColor,
-                                    borderRadius: 10,
-                                    background: "#fff",
-                                    padding: "6px 8px",
-                                    fontSize: 12,
-                                    lineHeight: 1,
-                                    maxWidth: 180,
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    cursor: "pointer",
-                                  }}
-                                  title={`${label}\n${o.start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} – ${o.end.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
-                                  role="button"
-                                  tabIndex={0}
-                                >
-                                  {label}
-                                </span>
-                              );
-                            })}
-                            {orders.length > 3 && (
-                              <span className="more-orders">+{orders.length - 3}</span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
+                        <span>Pause</span>
+                      </div>
+
+                      {/* Commandes — blocs proportionnels, coupés à 12–13 */}
+                      {list.map((o) =>
+                        splitByLunch(o.start, o.end).map(([s, e], i) => {
+                          const leftPct = pctFromOffset(toWorkingOffsetMin(s));
+                          const widthPct =
+                            pctFromOffset(toWorkingOffsetMin(e)) - leftPct;
+                          return (
+                            <div
+                              key={`${o.id}-${i}`}
+                              className="order-block"
+                              onClick={() => onOpenCommande?.(o.id)}
+                              style={{
+                                left: `${leftPct}%`,
+                                width: `${widthPct}%`,
+                                border: `2px solid ${o?.color || "#000"}`,
+                              }}
+                              title={`${labelOf(o)}\n${o.start.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})} – ${o.end.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`}
+                            >
+                              {labelOf(o)}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
