@@ -3,6 +3,7 @@ import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { roundMinutesTo5, computeProvisionalEnd } from "../utils/timeRealtime";
 import { calculerDurees } from "../../../../utils/calculs";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
+import { parseLocalDatetime, toUTCISOString, snapToNextWorkStart, addMinutesWithinWorkHours, DEFAULT_WORKDAY } from "../utils/workhours";
 
 export default function MultiMachineConfirmModal({
   isOpen,
@@ -23,12 +24,16 @@ export default function MultiMachineConfirmModal({
   );
   const [respectWorkHours, setRespectWorkHours] = useState(true);
 
+  // Coefficient de temps supplémentaire (slider)
+  const [timeCoefficient, setTimeCoefficient] = useState(confirmCoef);
+
   // Reset when modal opens
   useEffect(() => {
     if (!isOpen) return;
     setAssignedMachines(new Map());
     setQuery("");
-  }, [isOpen]);
+    setTimeCoefficient(confirmCoef);
+  }, [isOpen, confirmCoef]);
 
   const totalQty = Math.max(0, Number(formData?.quantite || 0));
   const points = Math.max(0, Number(formData?.points || 0));
@@ -65,23 +70,46 @@ export default function MultiMachineConfirmModal({
     );
   }, [options, query]);
 
+  // Fonction de répartition automatique équitable
+  const distributeArticlesEqually = useCallback((selectedMachineIds) => {
+    if (selectedMachineIds.length === 0) return new Map();
+    
+    const baseQuantity = Math.floor(totalQty / selectedMachineIds.length);
+    const remainder = totalQty % selectedMachineIds.length;
+    
+    const newAssignments = new Map();
+    selectedMachineIds.forEach((machineId, index) => {
+      const machine = machines.find(m => String(m.id) === machineId);
+      if (machine) {
+        // Les premières machines reçoivent +1 article pour gérer le reste
+        const quantity = baseQuantity + (index < remainder ? 1 : 0);
+        newAssignments.set(machineId, { quantity, machine });
+      }
+    });
+    
+    return newAssignments;
+  }, [totalQty, machines]);
+
   const toggle = useCallback((machineId) => {
     setAssignedMachines((prev) => {
-      const next = new Map(prev);
-      if (next.has(machineId)) {
-        next.delete(machineId);
+      const currentIds = Array.from(prev.keys());
+      let newIds;
+      
+      if (prev.has(machineId)) {
+        // Désélectionner la machine
+        newIds = currentIds.filter(id => id !== machineId);
       } else {
-        const machine = machines.find(m => String(m.id) === machineId);
-        if (machine) {
-          next.set(machineId, { quantity: 1, machine });
-        }
+        // Sélectionner la machine
+        newIds = [...currentIds, machineId];
       }
-      return next;
+      
+      // Redistribuer automatiquement les articles
+      return distributeArticlesEqually(newIds);
     });
-  }, [machines]);
+  }, [distributeArticlesEqually]);
 
   const handleQuantityChange = useCallback((machineId, newQuantity) => {
-    const qty = Math.max(1, parseInt(newQuantity, 10) || 1);
+    const qty = Math.max(0, parseInt(newQuantity, 10) || 0);
     setAssignedMachines((prev) => {
       const next = new Map(prev);
       const existing = next.get(machineId);
@@ -92,7 +120,13 @@ export default function MultiMachineConfirmModal({
     });
   }, []);
 
-  // Calculate durations for each assigned machine
+  // Fonction pour redistribuer équitablement
+  const redistributeEqually = useCallback(() => {
+    const currentIds = Array.from(assignedMachines.keys());
+    setAssignedMachines(distributeArticlesEqually(currentIds));
+  }, [assignedMachines, distributeArticlesEqually]);
+
+  // Calculate durations for each assigned machine with end times
   const { rows, totalHours, errorText } = useMemo(() => {
     const assignedArray = Array.from(assignedMachines.values());
     
@@ -107,6 +141,12 @@ export default function MultiMachineConfirmModal({
         totalHours: 0,
         errorText: `La quantité totale assignée (${totalAssignedQty}) dépasse la quantité de la commande (${totalQty}).`,
       };
+    }
+
+    // Base de temps pour les calculs
+    let baseLocal = parseLocalDatetime(plannedStartLocal);
+    if (respectWorkHours) {
+      baseLocal = snapToNextWorkStart(baseLocal, DEFAULT_WORKDAY);
     }
 
     const calculatedRows = assignedArray.map((item) => {
@@ -126,8 +166,14 @@ export default function MultiMachineConfirmModal({
       const durationTheoreticalMinutes = Math.round(dureeTotaleHeures * 60);
       
       // Apply coefficient
-      const withCoef = Math.round((durationTheoreticalMinutes * confirmCoef) / 100);
+      const withCoef = Math.round((durationTheoreticalMinutes * timeCoefficient) / 100);
       const durationCalcMinutes = roundMinutesTo5(withCoef);
+
+      // Calculate start and end times
+      const startTime = baseLocal;
+      const { end: endTime } = respectWorkHours
+        ? addMinutesWithinWorkHours(startTime, durationCalcMinutes, DEFAULT_WORKDAY)
+        : { end: new Date(startTime.getTime() + durationCalcMinutes * 60000) };
 
       return {
         machineId: String(machine.id),
@@ -137,6 +183,9 @@ export default function MultiMachineConfirmModal({
         durationCalcMinutes,
         cleaningMinutes: cleanPerItemUsed * quantity,
         durationHours: durationCalcMinutes / 60,
+        startTime,
+        endTime,
+        percentage: totalQty > 0 ? Math.round((quantity / totalQty) * 100) : 0,
       };
     });
 
@@ -144,7 +193,7 @@ export default function MultiMachineConfirmModal({
     const totalHours = totalMinutes / 60;
 
     return { rows: calculatedRows, totalHours, errorText: null };
-  }, [assignedMachines, totalQty, points, vitesseInput, cleanPerItemUsed, confirmCoef]);
+  }, [assignedMachines, totalQty, points, vitesseInput, cleanPerItemUsed, timeCoefficient, plannedStartLocal, respectWorkHours]);
 
   const submit = () => {
     if (errorText || rows.length === 0) return;
@@ -154,8 +203,8 @@ export default function MultiMachineConfirmModal({
       quantity: r.quantity,
       durationTheoreticalMinutes: r.durationTheoreticalMinutes,
       durationCalcMinutes: r.durationCalcMinutes,
-      planned_start_iso_utc: plannedStartLocal ? new Date(plannedStartLocal).toISOString() : null,
-      planned_end_iso_utc: plannedStartLocal ? computeProvisionalEnd(plannedStartLocal, r.durationCalcMinutes) : null,
+      planned_start_iso_utc: toUTCISOString(r.startTime),
+      planned_end_iso_utc: toUTCISOString(r.endTime),
     }));
 
     onConfirm?.({
@@ -163,7 +212,7 @@ export default function MultiMachineConfirmModal({
       meta: {
         commandeId: formData?.id,
         selectedMachines: Array.from(assignedMachines.keys()),
-        coefPercent: confirmCoef,
+        coefPercent: timeCoefficient,
         cleaningPerItemMinutes: cleanPerItemUsed,
         points,
         vitesseMoyenne: vitesseInput,
@@ -196,7 +245,7 @@ export default function MultiMachineConfirmModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 980 }}>
+      <div className="modal" style={{ maxWidth: 1100 }}>
         <div className="modal__header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Répartition multi-machines</h3>
           <button className="close" onClick={onClose}>×</button>
@@ -220,16 +269,28 @@ export default function MultiMachineConfirmModal({
 
             <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
               <div style={{ display: "grid", gap: 4 }}>
-                <label style={{ fontSize: 12, opacity: 0.8 }}>Coef appliqué (%)</label>
-                <input 
-                  type="number" 
-                  min={50} 
-                  max={500} 
-                  step={5}
-                  value={confirmCoef} 
-                  disabled 
-                  style={inputStyle} 
-                />
+                <label style={{ fontSize: 12, opacity: 0.8 }}>Coefficient temps (%)</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input 
+                    type="range"
+                    min={50} 
+                    max={500} 
+                    step={5}
+                    value={timeCoefficient}
+                    onChange={(e) => setTimeCoefficient(parseInt(e.target.value, 10))}
+                    style={{ flex: 1 }}
+                  />
+                  <input 
+                    type="number" 
+                    min={50} 
+                    max={500} 
+                    step={5}
+                    value={timeCoefficient} 
+                    onChange={(e) => setTimeCoefficient(Math.max(50, Math.min(500, parseInt(e.target.value, 10) || 100)))}
+                    style={{ ...inputStyle, width: 80, textAlign: "center" }}
+                  />
+                  <span style={{ fontSize: 12 }}>%</span>
+                </div>
               </div>
 
               <div style={{ display: "grid", gap: 4 }}>
@@ -276,6 +337,9 @@ export default function MultiMachineConfirmModal({
                     onChange={() => toggle(opt.value)} 
                   />
                   <span>{opt.label}</span>
+                  <span style={{ fontSize: 11, opacity: 0.7, marginLeft: "auto" }}>
+                    {opt.machine.nbTetes} têtes
+                  </span>
                 </label>
               );
             })}
@@ -286,7 +350,7 @@ export default function MultiMachineConfirmModal({
             )}
           </div>
 
-          {/* Selected machines with quantity inputs */}
+          {/* Selected machines with quantity inputs and end times */}
           {assignedMachines.size > 0 && (
             <div style={{ 
               border: "1px solid #e3e3e3", 
@@ -294,42 +358,106 @@ export default function MultiMachineConfirmModal({
               padding: 12, 
               background: "#fff" 
             }}>
-              <h4 style={{ margin: "0 0 12px 0" }}>Machines sélectionnées</h4>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 style={{ margin: 0 }}>Machines sélectionnées</h4>
+                <button 
+                  type="button"
+                  onClick={redistributeEqually}
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    borderRadius: 6,
+                    border: "1px solid #007BFF",
+                    background: "#fff",
+                    color: "#007BFF",
+                    cursor: "pointer"
+                  }}
+                >
+                  Redistribuer équitablement
+                </button>
+              </div>
               
               <div style={{ display: "grid", gap: 8 }}>
-                {Array.from(assignedMachines.entries()).map(([machineId, item]) => (
-                  <div key={machineId} style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: 12, 
-                    padding: "8px 12px",
-                    border: "1px solid #f0f0f0",
-                    borderRadius: 8,
-                    background: "#fafafa"
-                  }}>
-                    <span style={{ flex: 1, fontWeight: 500 }}>
-                      {item.machine.nom}
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <label style={{ fontSize: 12, opacity: 0.8 }}>Quantité:</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={totalQty}
-                        value={item.quantity}
-                        onChange={(e) => handleQuantityChange(machineId, e.target.value)}
-                        style={{ ...inputStyle, width: 80, textAlign: "center" }}
-                      />
+                {Array.from(assignedMachines.entries()).map(([machineId, item]) => {
+                  const rowData = rows.find(r => r.machineId === machineId);
+                  return (
+                    <div key={machineId} style={{ 
+                      display: "grid",
+                      gridTemplateColumns: "2fr 1fr 1fr 2fr 2fr",
+                      gap: 12,
+                      alignItems: "center",
+                      padding: "12px",
+                      border: "1px solid #f0f0f0",
+                      borderRadius: 8,
+                      background: "#fafafa"
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{item.machine.nom}</div>
+                        <div style={{ fontSize: 11, opacity: 0.7 }}>
+                          {item.machine.nbTetes} têtes • {rowData?.percentage || 0}% du total
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <label style={{ fontSize: 12, opacity: 0.8 }}>Quantité:</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={totalQty}
+                          value={item.quantity}
+                          onChange={(e) => handleQuantityChange(machineId, e.target.value)}
+                          style={{ ...inputStyle, width: 60, textAlign: "center" }}
+                        />
+                      </div>
+
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>
+                          {rowData ? `${rowData.durationHours.toFixed(1)}h` : "—"}
+                        </div>
+                        <div style={{ fontSize: 11, opacity: 0.7 }}>
+                          ({rowData?.durationCalcMinutes || 0} min)
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: 12 }}>
+                        <div><strong>Début:</strong></div>
+                        <div style={{ opacity: 0.8 }}>
+                          {rowData?.startTime ? 
+                            rowData.startTime.toLocaleString("fr-FR", {
+                              day: "2-digit",
+                              month: "2-digit", 
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            }) : "—"
+                          }
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: 12 }}>
+                        <div><strong>Fin estimée:</strong></div>
+                        <div style={{ opacity: 0.8, color: "#007BFF", fontWeight: 500 }}>
+                          {rowData?.endTime ? 
+                            rowData.endTime.toLocaleString("fr-FR", {
+                              day: "2-digit",
+                              month: "2-digit", 
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            }) : "—"
+                          }
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
           {/* Results summary */}
           {errorText ? (
-            <div style={{ color: "#c62828", fontSize: 13, padding: 8 }}>{errorText}</div>
+            <div style={{ color: "#c62828", fontSize: 13, padding: 8, background: "#ffebee", borderRadius: 8 }}>
+              ⚠️ {errorText}
+            </div>
           ) : (
             rows.length > 0 && (
               <div style={{ 
@@ -338,8 +466,13 @@ export default function MultiMachineConfirmModal({
                 padding: 12,
                 background: "#f9f9f9"
               }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                  Durée totale estimée : {totalHours.toFixed(2)} h
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600 }}>
+                    Durée totale estimée : {totalHours.toFixed(2)} h
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.8 }}>
+                    Coefficient appliqué : {timeCoefficient}%
+                  </div>
                 </div>
 
                 <div style={{ overflowX: "auto" }}>
@@ -350,7 +483,7 @@ export default function MultiMachineConfirmModal({
                           Machine
                         </th>
                         <th style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid #eee" }}>
-                          Qté
+                          Qté (%)
                         </th>
                         <th style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid #eee" }}>
                           Durée (h)
@@ -359,7 +492,7 @@ export default function MultiMachineConfirmModal({
                           Calc. (min)
                         </th>
                         <th style={{ textAlign: "center", padding: "6px 8px", borderBottom: "1px solid #eee" }}>
-                          Théo. (min)
+                          Fin estimée
                         </th>
                       </tr>
                     </thead>
@@ -370,7 +503,7 @@ export default function MultiMachineConfirmModal({
                             {r.machine.nom || r.machineId}
                           </td>
                           <td style={{ textAlign: "center", padding: "6px 8px" }}>
-                            {r.quantity}
+                            {r.quantity} ({r.percentage}%)
                           </td>
                           <td style={{ textAlign: "center", padding: "6px 8px" }}>
                             {r.durationHours.toFixed(2)}
@@ -378,8 +511,13 @@ export default function MultiMachineConfirmModal({
                           <td style={{ textAlign: "center", padding: "6px 8px" }}>
                             {r.durationCalcMinutes}
                           </td>
-                          <td style={{ textAlign: "center", padding: "6px 8px" }}>
-                            {Math.round(r.durationTheoreticalMinutes)}
+                          <td style={{ textAlign: "center", padding: "6px 8px", fontSize: 12 }}>
+                            {r.endTime.toLocaleString("fr-FR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })}
                           </td>
                         </tr>
                       ))}
@@ -425,7 +563,7 @@ export default function MultiMachineConfirmModal({
               border: "none"
             }}
           >
-            Valider
+            Valider ({assignedMachines.size} machine{assignedMachines.size > 1 ? 's' : ''})
           </button>
         </div>
       </div>
