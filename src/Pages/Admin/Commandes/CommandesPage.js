@@ -252,7 +252,7 @@ export default function CommandesPage() {
 };
 
   // Confirmation création (flux mono)
-  const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed, assignation, commandeDurations }) => {
+  const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed, assignation }) => {
     const machine = machines.find((m) => String(m.id) === String(machineId));
     if (!machine) {
       alert("Machine invalide.");
@@ -264,7 +264,6 @@ export default function CommandesPage() {
       coef,
       monoUnitsUsed,
       assignation,
-      commandeDurations,
       planning,
       commandes,
       machines,
