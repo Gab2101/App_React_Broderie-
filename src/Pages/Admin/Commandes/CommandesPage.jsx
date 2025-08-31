@@ -18,7 +18,7 @@
 -        onConfirm={({ machineId, coef, monoUnitsUsed }) =>
 -          handleConfirmCreation({ machineId, coef, monoUnitsUsed })
 -        }
-+        onConfirm={({ machineId, coef, monoUnitsUsed, assignation, commandeDurations }) =>
-+          handleConfirmCreation({ machineId, coef, monoUnitsUsed, assignation, commandeDurations })
++        onConfirm={({ machineId, coef, monoUnitsUsed, assignation }) =>
++          handleConfirmCreation({ machineId, coef, monoUnitsUsed, assignation })
 +        }
       />
