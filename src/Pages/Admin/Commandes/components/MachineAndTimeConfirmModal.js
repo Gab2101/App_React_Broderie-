@@ -63,7 +63,7 @@ export default function MachineAndTimeConfirmModal({
 
     // Payload prêt pour commandes_assignations
     const assignation = {
-      machine_id: machineId,               // uuid
+      machineId: machineId,                // uuid
       qty: 1,                              // unité d'affectation (toujours 1)
       duration_minutes,                    // théorie
       duration_calc_minutes,               // après % + arrondi 5

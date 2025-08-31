@@ -67,7 +67,7 @@ export async function createCommandeWithAssignations({
   const rows = valid.map((r) => {
     return {
       commande_id: commandeId,
-      machine_id: r.machineId,
+      machineId: r.machineId,
       qty: 1, // unité d'affectation (toujours 1 selon les règles métier)
       status: "A commencer",
       planned_start: r.planned_start ?? plannedStartISO ?? null,
