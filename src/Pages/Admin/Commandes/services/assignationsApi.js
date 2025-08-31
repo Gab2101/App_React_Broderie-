@@ -39,28 +39,16 @@ export async function createCommandeWithAssignations({ formData, perMachine, met
   };
 
   const { data: cmdInserted, error: errorCmd } = await supabase
-    .from("commandes")
-    .insert(payloadCommande)
-    .select("id")
-    .single();
 
   if (errorCmd) return { errorCmd, errorAssign: null, commandeId: null };
+    const durCalc = Math.max(0, Math.round(Number(r.durationCalcMinutes || 0)));
+    const durTheo = Math.max(0, Math.round(Number(r.durationTheoreticalMinutes || 0)));
+    const cleaningMinutes = Math.max(0, Math.round(Number(r.cleaningMinutes || 0)));
+    const extraPercent = Math.max(0, Number(r.extraPercent || 0));
+    
+    const planned_start = r.planned_start_iso_utc || plannedStartISO || new Date().toISOString();
+    const planned_end = r.planned_end_iso_utc || null;
 
-  const commandeId = cmdInserted.id;
-
-  // ---- 2) Préparer les assignations (une ligne par machine) -----------------
-  const startISO = plannedStartISO || new Date().toISOString();
-  const extraPercent = meta?.extraPercent ?? 0;
-  const cleanPerItem = meta?.cleaningPerItemMinutes ?? 0;
-
-  if (!Array.isArray(perMachine) || perMachine.length < 1) {
-    return { errorCmd: null, errorAssign: new Error("Aucune machine fournie."), commandeId };
-  }
-
-  const rows = perMachine.map((r) => {
-    const qty = Number(r.quantity || 0);
-    const theo = Math.max(0, Math.round(Number(r.durationTheoreticalMinutes || 0)));
-    const calc = Math.max(0, Math.round(Number(r.durationCalcMinutes || 0)));
     return {
       commande_id: commandeId,
       machine_id: r.machineId,
@@ -68,11 +56,10 @@ export async function createCommandeWithAssignations({ formData, perMachine, met
       status: "A commencer",
       planned_start: startISO,                // la fin sera calculée par trigger en DB
       duration_minutes: theo,                 // on garde la durée "base"
-      duration_calc_minutes: calc,            // et la durée finale
+      duration_minutes: durCalc || durTheo,
+      cleaning_minutes: cleaningMinutes,
       extra_percent: extraPercent,
       cleaning_minutes: Math.round(cleanPerItem * qty),
-      // NE PAS envoyer "period" (colonne générée)
-    };
   });
 
   // validation simple

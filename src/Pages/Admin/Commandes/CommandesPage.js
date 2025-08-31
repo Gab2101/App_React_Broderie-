@@ -366,9 +366,11 @@ export default function CommandesPage() {
       <MultiMachineConfirmModal
         isOpen={isMultiConfirmOpen}
         onClose={() => !isSubmitting && setIsMultiConfirmOpen(false)}
-        onSubmit={handleSubmitForm}
-        payload={pendingMultiPayload}
         machines={machines}
+        formData={form.formData}
+        nettoyageRules={nettoyageRules}
+        articleTags={articleTags}
+        confirmCoef={sim.confirmCoef}
         onConfirm={handleConfirmMultiSave}
       />
 
