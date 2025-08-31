@@ -57,9 +57,8 @@ export default function MachineAndTimeConfirmModal({
 
     // Payload prêt pour commandes_assignations
     const assignation = {
-      commande_id: formData?.id,           // bigint (commande globale)
       machine_id: machineId,               // uuid
-      qty,                                 // integer > 0
+      qty: 1,                              // unité d'affectation (toujours 1)
       duration_minutes,                    // théorie
       duration_calc_minutes,               // après % + arrondi 5
       cleaning_minutes,                    // minutes de nettoyage
@@ -69,12 +68,21 @@ export default function MachineAndTimeConfirmModal({
       status: 'A commencer',
     };
 
+    // Durées pour la commande principale
+    const commandeDurations = {
+      duree_broderie_heures: selectedScenario.dureeBroderieHeures,
+      duree_nettoyage_heures: selectedScenario.dureeNettoyageHeures,
+      duree_totale_heures: selectedScenario.dureeTotaleHeuresReelle,
+      duree_totale_heures_arrondie: Math.ceil(selectedScenario.dureeTotaleHeuresReelle),
+    };
+
     onConfirm({
       machineId,
       coef,
       monoUnitsUsed: monoUnits,
       minutesReellesAppliquees: duration_calc_minutes, // pour cohérence d’affichage en amont
       assignation,                                     // ⬅️ à insérer dans commandes_assignations
+      commandeDurations,                               // ⬅️ durées pour la commande principale
       flow: 'mono',
     });
   };

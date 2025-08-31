@@ -252,17 +252,19 @@ export default function CommandesPage() {
 };
 
   // Confirmation création (flux mono)
-  const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed }) => {
+  const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed, assignation, commandeDurations }) => {
     const machine = machines.find((m) => String(m.id) === String(machineId));
     if (!machine) {
       alert("Machine invalide.");
       return;
     }
-    const { errorCmd, errorPlanning } = await createCommandeAndPlanning({
+    const { errorCmd, errorAssign } = await createCommandeAndPlanning({
       formData: form.formData,
       machine,
       coef,
       monoUnitsUsed,
+      assignation,
+      commandeDurations,
       planning,
       commandes,
       machines,
@@ -281,9 +283,10 @@ export default function CommandesPage() {
       alert("Erreur lors de la création de la commande.\n" + (errorCmd.message || "Regarde la console."));
       return;
     }
-    if (errorPlanning) {
-      console.error("Erreur création planning:", errorPlanning);
-      alert("La commande a été créée, mais l'insertion dans le planning a échoué.\n" + (errorPlanning.message || ""));
+    if (errorAssign) {
+      console.error("Erreur création assignation:", errorAssign);
+      alert("Erreur lors de la création de l'assignation.\n" + (errorAssign.message || ""));
+      return;
     }
 
     sim.setSelectedScenario(null);

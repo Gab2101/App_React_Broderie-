@@ -64,40 +64,19 @@ export async function createCommandeWithAssignations({
   const commandeId = cmdInserted.id;
 
   // -------- 2) Construire les assignations --------
-  // Helper pour enlever les clés undefined (évite les erreurs si la colonne n'existe pas)
-  const cleanRow = (obj) =>
-    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
-
   const rows = valid.map((r) => {
-    const qty = Number(r.quantity || 0);
-
-    // Choix de la durée : on privilégie la durée "calculée" si fournie, sinon théorique
-    const durCalc = Number.isFinite(r.durationCalcMinutes)
-      ? Math.max(0, Math.round(Number(r.durationCalcMinutes)))
-      : undefined;
-
-    const durTheo = Number.isFinite(r.durationTheoreticalMinutes)
-      ? Math.max(0, Math.round(Number(r.durationTheoreticalMinutes)))
-      : 0;
-
-    const duration_minutes = durCalc ?? durTheo; // pour la colonne "duration_minutes" existante
-
-    // Dates (on honore les dates par ligne si fournies, sinon fallback commun)
-    const planned_start = r.planned_start ?? plannedStartISO ?? null;
-    const planned_end = r.planned_end ?? null;
-
-    const base = {
+    return {
       commande_id: commandeId,
       machine_id: r.machineId,
-      qty,
+      qty: 1, // unité d'affectation (toujours 1 selon les règles métier)
       status: "A commencer",
-      planned_start,
-      planned_end,
-      duration_minutes,           // <-- colonne existante dans ta table
-      // duration_calc_minutes: durCalc, // <-- décommente si ta table possède cette colonne
+      planned_start: r.planned_start ?? plannedStartISO ?? null,
+      planned_end: r.planned_end ?? null,
+      duration_minutes: Math.max(0, Math.round(Number(r.durationTheoreticalMinutes || 0))),
+      duration_calc_minutes: Math.max(0, Math.round(Number(r.durationCalcMinutes || 0))),
+      cleaning_minutes: Math.max(0, Math.round(Number(r.cleaningMinutes || 0))),
+      extra_percent: Math.max(0, Math.round(Number(r.extraPercent || 0))),
     };
-
-    return cleanRow(base);
   });
 
   if (rows.length === 0) {
@@ -111,6 +90,8 @@ export async function createCommandeWithAssignations({
     .select("id");
 
   if (errorAssign) {
+    // Rollback : supprimer la commande créée
+    await supabase.from("commandes").delete().eq("id", commandeId);
     return { errorCmd: null, errorAssign };
   }
 

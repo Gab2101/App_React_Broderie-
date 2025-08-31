@@ -18,6 +18,8 @@ export async function createCommandeAndPlanning({
   machine,
   coef,
   monoUnitsUsed = 1, // 👈 nouveau
+  assignation,
+  commandeDurations,
   planning,
   commandes,
   machines,
@@ -25,118 +27,50 @@ export async function createCommandeAndPlanning({
   articleTags,
   linked: { isLinked, linkedCommandeId, sameMachineAsLinked, startAfterLinked },
 }) {
-  // Validation compatibilité
-  const machineLabels = toLabelArray(machine.etiquettes);
-  const neededTypes = toLabelArray(formData.types);
-  const ok = neededTypes.every((t) => machineLabels.includes(t));
-  if (!ok) {
-    return { errorCmd: { message: "Machine incompatible (types)." } };
-  }
-
-  let debutMinOverride = null;
-  if (isLinked && linkedCommandeId && startAfterLinked) {
-    const { lastFinish } = getLinkedLastFinishAndMachineId(planning, Number(linkedCommandeId));
-    if (lastFinish) debutMinOverride = nextWorkStart(lastFinish);
-  }
-
-  if (isLinked && sameMachineAsLinked && linkedCommandeId) {
-    const { machineId: linkedMachineId } = getLinkedLastFinishAndMachineId(
-      planning,
-      Number(linkedCommandeId)
-    );
-    const linkedCmd = commandes.find((c) => c.id === Number(linkedCommandeId));
-    const linkedMachineByName = linkedCmd?.machineAssignee
-      ? getMachineByName(machines, linkedCmd.machineAssignee)
-      : null;
-    const expectedId = linkedMachineId ?? linkedMachineByName?.id ?? null;
-
-    if (expectedId && String(machine.id) !== String(expectedId)) {
-      return { errorCmd: { message: "La machine sélectionnée doit être la même que celle de la commande liée." } };
-    }
-  }
-
-  // Recalcule théorique avec nb de têtes effectif (mono ou multi)
-  const etiquetteArticle = formData.types?.[0] || null;
-  const vitesseBase = parseInt(formData.vitesseMoyenne, 10) || 680;
-
-  const effectiveNbTetes = Number(machine.nbTetes || 1) * Math.max(1, Number(monoUnitsUsed || 1));
-
-  const nettoyageParArticleSec = computeNettoyageSecondsForOrder(
-    etiquetteArticle,
-    formData.options,
-    nettoyageRules,
-    articleTags
-  );
-
-  const {
-    dureeBroderieHeures,
-    dureeNettoyageHeures,
-    dureeTotaleHeures: dureeTotaleHeuresTheorique,
-  } = calculerDurees({
-    quantite: Number(formData.quantite || 0),
-    points: Number(formData.points || 0),
-    vitesse: Number(vitesseBase),
-    nbTetes: effectiveNbTetes, // 👈 applique monoUnitsUsed ici
-    nettoyageParArticleSec,
-  });
-
-  const minutesTheoriquesLocal = Math.round(dureeTotaleHeuresTheorique * 60);
-  const minutesReellesLocal = roundMinutesTo5(
-    Math.round((minutesTheoriquesLocal * coef) / 100)
-  );
-
-  // Début / fin
-  const now = Date.now();
-  const planifies = (planning || [])
-    .filter((p) => p.machineId === machine.id && new Date(p.fin).getTime() >= now)
-    .sort((a, b) => new Date(a.debut) - new Date(b.debut));
-
-  const nowDispo = getNextFullHour();
-  const lastFin = planifies.length ? new Date(planifies[planifies.length - 1].fin) : null;
-  const anchorBase = lastFin && lastFin > nowDispo ? lastFin : nowDispo;
-  const anchor = debutMinOverride && debutMinOverride > anchorBase ? debutMinOverride : anchorBase;
-  const debut = nextWorkStart(anchor);
-  const fin = addWorkingHours(debut, minutesReellesLocal / 60);
-
   const { id, ...formSansId } = formData;
 
-  const dureeTotaleHeuresReelleAppliquee = minutesReellesLocal / 60;
-  const dureeTotaleHeuresArrondie = Math.ceil(dureeTotaleHeuresReelleAppliquee);
-
+  // Payload pour la commande principale (table commandes)
   const payload = {
     ...formSansId,
     machineAssignee: machine.nom,
-    vitesseMoyenne: vitesseBase,
-    duree_broderie_heures: dureeBroderieHeures,
-    duree_nettoyage_heures: dureeNettoyageHeures,
-    duree_totale_heures: dureeTotaleHeuresReelleAppliquee,
-    duree_totale_heures_arrondie: dureeTotaleHeuresArrondie,
+    vitesseMoyenne: Number(formData.vitesseMoyenne || 680),
+    ...commandeDurations, // durées pré-calculées depuis la modale
     statut: "A commencer",
+    multi_machine: false, // mode mono-machine
     linked_commande_id: isLinked ? Number(linkedCommandeId) : null,
     same_machine_as_linked: Boolean(isLinked && sameMachineAsLinked),
     start_after_linked: Boolean(isLinked && startAfterLinked),
-    mono_units_used: Math.max(1, Number(monoUnitsUsed || 1)), // 👈 trace
+    mono_units_used: Math.max(1, Number(monoUnitsUsed || 1)),
   };
 
+  // Transaction atomique : commande + assignation
   const { data: createdCmd, error: errorCmd } = await supabase
     .from("commandes")
     .insert([payload])
     .select()
     .single();
 
-  if (errorCmd) return { errorCmd };
+  if (errorCmd) {
+    return { errorCmd, errorAssign: null };
+  }
 
-  const { error: errorPlanning } = await supabase.from("planning").insert([
-    {
-      machineId: machine.id,
-      commandeId: createdCmd.id,
-      debut: debut.toISOString(),
-      debutTheorique: debut.toISOString(),
-      fin: fin.toISOString(),
-    },
-  ]);
+  // Insertion dans commandes_assignations avec rollback si échec
+  const assignationPayload = {
+    ...assignation,
+    commande_id: createdCmd.id, // lier à la commande créée
+  };
 
-  return { createdCmd, errorPlanning };
+  const { error: errorAssign } = await supabase
+    .from("commandes_assignations")
+    .insert([assignationPayload]);
+
+  if (errorAssign) {
+    // Rollback : supprimer la commande créée
+    await supabase.from("commandes").delete().eq("id", createdCmd.id);
+    return { errorCmd: null, errorAssign };
+  }
+
+  return { errorCmd: null, errorAssign: null, createdCmd };
 }
 
 export async function updateCommande(formData) {
