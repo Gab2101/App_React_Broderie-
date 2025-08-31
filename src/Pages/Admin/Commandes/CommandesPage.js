@@ -242,7 +242,7 @@ export default function CommandesPage() {
     }
 
     setIsMultiConfirmOpen(false);
-    setPendingMultiPayload(null);
+    //setPendingMultiPayload(null);
     setCreationFlow("idle");
     await reloadData();
     form.resetForm();
