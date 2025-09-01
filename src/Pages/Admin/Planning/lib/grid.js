@@ -18,7 +18,7 @@ export function ceilToHourMs(d) {
 }
 
 export function normalizeSlotForGrid(slot) {
-  const gs = floorToHourMs(parseISOAny(slot.debut));
-  const ge = ceilToHourMs(parseISOAny(slot.fin));
+  const gs = floorToHourMs(parseISOAny(slot.planned_start || slot.debut));
+  const ge = ceilToHourMs(parseISOAny(slot.planned_end || slot.fin));
   return { ...slot, gridStartMs: gs, gridEndMs: ge };
 }

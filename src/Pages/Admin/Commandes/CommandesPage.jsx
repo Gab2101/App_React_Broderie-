@@ -152,11 +152,6 @@ export default function CommandesPage() {
         const list = Array.isArray(config.perMachine) ? config.perMachine : [];
         const validList = list.filter((r) => r && r.machineId && Number(r.quantity) > 0);
 
-        if (validList.length < 2) {
-          alert("Sélectionnez au moins 2 machines avec des quantités > 0.");
-          return;
-        }
-
         setCreationFlow("multi");
         setPendingMultiPayload({
           perMachine: validList,

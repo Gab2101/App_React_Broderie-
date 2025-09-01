@@ -297,11 +297,11 @@ export default function MultiMachineConfirmModal({
 
               <div style={{ display: "grid", gap: 4 }}>
                 <label style={{ fontSize: 12, opacity: 0.8 }}>Nettoyage par pièce (min)</label>
-                <input 
+                <input
                   type="number" 
                   value={cleanPerItemUsed} 
                   disabled 
-                  style={inputStyle} 
+                  style={{ ...inputStyle, display: 'none' }} 
                 />
               </div>
 
