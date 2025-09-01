@@ -54,12 +54,17 @@ export default function CommandeFormModal({
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    // Debug: Log the current state
+    console.log('Form submission:', { multiEnabled, formData });
+
     // Route simplement selon la case "multi"
     if (multiEnabled) {
+      console.log('Submitting with multi flow');
       onSubmit({ flow: "multi" });
       return;
     }
 
+    console.log('Submitting with mono flow');
     onSubmit({ flow: "mono" });
   };
 

@@ -117,6 +117,10 @@ export default function CommandesPage() {
   const handleSubmitForm = async (config) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
+    
+    // Debug: Log the received config
+    console.log('handleSubmitForm called with:', config);
+    
     try {
       const qty = parseInt(form.formData.quantite, 10);
       const pts = parseInt(form.formData.points, 10);
@@ -127,6 +131,7 @@ export default function CommandesPage() {
 
       // ÉDITION
       if (form.formData.id) {
+        console.log('Editing existing command');
         const { error } = await apiUpdateCommande(form.formData);
         if (error) {
           console.error(error);
@@ -141,6 +146,7 @@ export default function CommandesPage() {
 
       // --- MULTI (prioritaire & exclusif) ---
       if (config?.flow === "multi") {
+        console.log('Processing multi-machine flow');
         setIsFormOpen(false);
         setIsConfirmOpen(false);      // jamais de modale mono dans ce flux
         setIsMultiConfirmOpen(true);
@@ -149,14 +155,22 @@ export default function CommandesPage() {
 
       // --- MONO (explicit only) ---
       if (config?.flow === "mono") {
+        console.log('Processing mono-machine flow');
         // si on venait d'un multi, on bloque
-        if (creationFlow === "multi") return;
+        if (creationFlow === "multi") {
+          console.log('Blocked: already in multi flow');
+          return;
+        }
 
+        console.log('Starting simulation for mono flow');
         await sim.handleSimulation();
+        console.log('Simulation result:', { selectedScenario: sim.selectedScenario });
         if (sim.selectedScenario) {
           setCreationFlow("mono");
           setIsFormOpen(false);
           setIsConfirmOpen(true);
+        } else {
+          console.log('No scenario selected - simulation may have failed');
         }
         return;
       }
