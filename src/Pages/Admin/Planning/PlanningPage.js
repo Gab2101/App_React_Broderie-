@@ -172,7 +172,7 @@ export default function PlanningPage() {
 
       const machinesData = mRes.data || [];
       const commandesData = cRes.data || [];
-      const assignationsData = pRes.data || [];
+      const assignationsData = prevDayRes.data || [];
 
       setMachines(machinesData);
       setCommandes(commandesData);
