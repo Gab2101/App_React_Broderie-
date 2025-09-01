@@ -47,9 +47,12 @@ export async function createCommandeAndPlanning({
   }
 
   // Insertion dans commandes_assignations avec rollback si échec
-  const assignationPayload = {
-    ...assignation,
-    commande_id: createdCmd.id, // lier à la commande créée
+  if (!assignation) {
+    // rollback immédiat si on n'a pas reçu l'assignation du modal
+    await supabase.from("commandes").delete().eq("id", createdCmd.id);
+    return { errorCmd: null, errorAssign: new Error("Assignation absente (mono).") };
+  }
+  const assignationPayload = { ...assignation, commande_id: createdCmd.id }; 
   };
 
   const { error: errorAssign } = await supabase
