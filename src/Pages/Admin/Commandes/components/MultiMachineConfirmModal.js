@@ -1,6 +1,6 @@
 // src/Pages/Admin/Commandes/components/MultiMachineConfirmModal.js
 import React, { useMemo, useState, useCallback, useEffect } from "react";
-import { roundMinutesTo5, computeProvisionalEnd } from "../utils/timeRealtime";
+import { roundMinutesTo5 } from "../utils/timeRealtime";
 import { calculerDurees } from "../../../../utils/calculs";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
 import { parseLocalDatetime, toUTCISOString, snapToNextWorkStart, addMinutesWithinWorkHours, DEFAULT_WORKDAY } from "../utils/workhours";

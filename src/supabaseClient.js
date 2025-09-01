@@ -1,8 +1,8 @@
 // src/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.https:https://iejytndopjcloyqefbae.supabase.co;
-const supabaseKey = import.meta.env.iejytndopjcloyqefbae;
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   // Evite le crash silencieux : message clair en console et throw

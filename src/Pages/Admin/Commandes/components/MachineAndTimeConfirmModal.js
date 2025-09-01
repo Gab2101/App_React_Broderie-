@@ -58,9 +58,6 @@ export default function MachineAndTimeConfirmModal({
     const planned_start = currentScenario?.debut ?? null;
     const planned_end = planned_start ? computeProvisionalEnd(planned_start, duration_calc_minutes) : null;
 
-    // Quantité totale de la commande (mono = pas d’éclatement)
-    const qty = Math.max(1, Number(formData?.quantite || 1));
-
     // Payload prêt pour commandes_assignations
     const assignation = {
       machineId: machineId,                // uuid

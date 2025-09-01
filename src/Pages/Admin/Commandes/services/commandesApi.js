@@ -1,16 +1,8 @@
 // src/Pages/Admin/Commandes/services/commandesApi.js
 import { supabase } from "../../../../supabaseClient";
-import { toLabelArray } from "../utils/labels";
-import { getNextFullHour, nextWorkStart, addWorkingHours } from "../../../../utils/time";
-import { calculerDurees } from "../../../../utils/calculs";
 import {
   computeNettoyageSecondsForOrder,
 } from "../../../../utils/nettoyageRules";
-import {
-  getLinkedLastFinishAndMachineId,
-  getMachineByName,
-} from "../utils/linked";
-import { roundMinutesTo5 } from "../utils/timeRealtime";
 
 // CREATE commande + planning (logique de confirmCreation)
 export async function createCommandeAndPlanning({

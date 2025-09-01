@@ -58,8 +58,8 @@ Prérequis
     3.Créer un fichier .env.local à partir de l’exemple :
         cp .env.example .env.local
     4.Ajouter vos clés Supabase dans .env.local 
-        VITE_SUPABASE_URL=<url>
-        VITE_SUPABASE_ANON_KEY=<clé>
+        REACT_APP_SUPABASE_URL=<url>
+        REACT_APP_SUPABASE_ANON_KEY=<clé>
     5.Lancer en local 
         npm run dev
 
@@ -73,8 +73,8 @@ L’application est prévue pour être déployée sur Vercel.
 🔑 Variables d’environnement
 | Variable                                  | Description                                                          |
 | ----------------------------------------- | -------------------------------------------------------------------- |
-| `VITE_SUPABASE_URL`                       | URL du projet Supabase                                               |
-| `VITE_SUPABASE_ANON_KEY`                  | Clé anonyme publique Supabase                                        |
+| `REACT_APP_SUPABASE_URL`                  | URL du projet Supabase                                               |
+| `REACT_APP_SUPABASE_ANON_KEY`             | Clé anonyme publique Supabase                                        |
 | *(optionnel)* `SUPABASE_SERVICE_ROLE_KEY` | Clé service (uniquement côté serveur/IT, jamais exposée côté client) |
 
 🗄️ Base de données (Supabase)
