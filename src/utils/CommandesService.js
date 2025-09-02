@@ -1,6 +1,8 @@
 import { supabase } from "../supabaseClient";
 import { ceilToHour, nextWorkStart, addWorkingHours, getWorkingMinutesBetween } from "./time";
 import { DEFAULT_WORKDAY } from "../Pages/Admin/Commandes/utils/workhours";
+import { roundMinutesTo5 } from "../Pages/Admin/Commandes/utils/timeRealtime"; // ✅ import ajouté
+
 /**
  * Calcule la durée réelle (en minutes, arrondie au supérieur)
  * entre deux timestamptz.
@@ -77,9 +79,9 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
           holidays: new Set()
         });
 
-        // Arrondir aux 5 minutes pour cohérence avec le système
-        const roundedStart = roundToNearest5Minutes(adjustedStart);
-        const roundedEnd = roundToNearest5Minutes(adjustedEnd);
+        // ✅ Arrondir aux 5 minutes pour cohérence avec le système
+        const roundedStart = roundMinutesTo5(adjustedStart);
+        const roundedEnd = roundMinutesTo5(adjustedEnd);
 
         updates.push({
           id: entry.id,
@@ -114,15 +116,6 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
  *  - finished_at (pose si on passe en "Terminée")
  *  - broderie_minutes_reel (calculée au passage en "Terminée" si started_at existe)
  *  - Recalage du planning UNIQUEMENT lors du passage en "En cours"
- *
- * IMPORTANT:
- *  - On NE touche JAMAIS à started_at s'il existe déjà (pas d'effacement).
- *  - On écrit started_at / finished_at en UTC (timestamptz) via toISOString().
- *  - Si passage en "En cours", recaler le planning si le début est dans le passé.
- *
- * Usage côté UI (inchangé) :
- *   await updateCommandeStatut(commande.id, "En cours");
- *   await updateCommandeStatut(commande.id, "Terminée");
  */
 export async function updateCommandeStatut(id, nextStatut) {
   if (id == null) throw new Error("id manquant");
@@ -134,26 +127,17 @@ export async function updateCommandeStatut(id, nextStatut) {
   const patch = { statut: nextStatut };
 
   if (nextStatut === "En cours") {
-    // Démarrage: ne poser started_at que s'il est vide
     if (!current?.started_at) {
-      patch.started_at = now.toISOString(); // timestamptz → OK en UTC
+      patch.started_at = now.toISOString(); 
     }
-    
-    // RÈGLE FEATURE 2: Recaler le planning UNIQUEMENT lors du passage en "En cours"
     await adjustPlanningForEnCours(id, now);
-    
-    // On ne modifie pas finished_at ici (si tu veux "reprendre" on peut le remettre à NULL)
-    // patch.finished_at = null;
   } else if (nextStatut === "Terminée") {
-    // Clôture: poser finished_at (même si déjà présent, on le remet à now)
     patch.finished_at = now.toISOString();
 
-    // Calculer les minutes réelles si un démarrage existe
     if (current?.started_at) {
       patch.broderie_minutes_reel = minutesBetween(current.started_at, patch.finished_at);
     }
   }
-  // Autres statuts: on ne touche à rien d'autre.
 
   const { data, error } = await supabase
     .from("commandes")
@@ -166,16 +150,11 @@ export async function updateCommandeStatut(id, nextStatut) {
   return data;
 }
 
-/**
- * Version rétrocompatible si certains appels te passent l'objet commande complet.
- * Elle délègue à updateCommandeStatut(id, statut) pour garder une logique unique.
- */
 export async function updateCommandeStatutWithAutoTimes(commande, nextStatut) {
   if (!commande?.id) throw new Error("Commande invalide");
   return updateCommandeStatut(commande.id, nextStatut);
 }
 
-/** Remplace une commande dans un tableau (égalité d'id robuste) */
 export function replaceCommandeInArray(list, updated) {
   const uid = String(updated.id);
   return list.map((c) => (String(c.id) === uid ? { ...c, ...updated } : c));
