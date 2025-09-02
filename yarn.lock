@@ -1205,10 +1205,10 @@
   resolved "https://registry.npmjs.org/@csstools/selector-specificity/-/selector-specificity-2.2.0.tgz"
   integrity sha512-+OJ9konv95ClSTOJCmMZqpd5+YGsB2S+x6w3E1oaM8UuR5j8nTNHYSz8c9BEPGDOCMQYIEEGlVPj/VY64iTbGw==
 
-"@esbuild/win32-x64@0.25.9":
+"@esbuild/linux-x64@0.25.9":
   version "0.25.9"
-  resolved "https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.25.9.tgz"
-  integrity sha512-PPOl1mi6lpLNQxnGoyAfschAodRFYXJ+9fs6WHXz7CSWKbOqiMZsubC+BQsVKuul+3vKLuwTHsS2c2y9EoKwxQ==
+  resolved "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.25.9.tgz"
+  integrity sha512-iSwByxzRe48YVkmpbgoxVzn76BXjlYFXC7NvLYq+b+kDjyyk30J0JY47DIn8z1MO3K0oSl9fZoRmZPQI4Hklzg==
 
 "@eslint-community/eslint-utils@^4.2.0":
   version "4.7.0"
@@ -1627,10 +1627,15 @@
     estree-walker "^1.0.1"
     picomatch "^2.2.2"
 
-"@rollup/rollup-win32-x64-msvc@4.48.1":
+"@rollup/rollup-linux-x64-gnu@4.48.1":
   version "4.48.1"
-  resolved "https://registry.npmjs.org/@rollup/rollup-win32-x64-msvc/-/rollup-win32-x64-msvc-4.48.1.tgz"
-  integrity sha512-8a/caCUN4vkTChxkaIJcMtwIVcBhi4X2PQRoT+yCK3qRYaZ7cURrmJFL5Ux9H9RaMIXj9RuihckdmkBX3zZsgg==
+  resolved "https://registry.npmjs.org/@rollup/rollup-linux-x64-gnu/-/rollup-linux-x64-gnu-4.48.1.tgz"
+  integrity sha512-90taWXCWxTbClWuMZD0DKYohY1EovA+W5iytpE89oUPmT5O1HFdf8cuuVIylE6vCbrGdIGv85lVRzTcpTRZ+kA==
+
+"@rollup/rollup-linux-x64-musl@4.48.1":
+  version "4.48.1"
+  resolved "https://registry.npmjs.org/@rollup/rollup-linux-x64-musl/-/rollup-linux-x64-musl-4.48.1.tgz"
+  integrity sha512-2Gu29SkFh1FfTRuN1GR1afMuND2GKzlORQUP3mNMJbqdndOg7gNsa81JnORctazHRokiDzQ5+MLE5XYmZW5VWg==
 
 "@rtsao/scc@^1.1.0":
   version "1.1.0"
