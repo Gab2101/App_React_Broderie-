@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/components/CommandeFormModal.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { getAllowedBroderieForArticle, normalizeOne } from "../../../../utils/nettoyageRules";
 
 export default function CommandeFormModal({
@@ -25,42 +25,65 @@ export default function CommandeFormModal({
   // tags
   articleTags = [],
   broderieTags = [],
-  // machines (kept for consistency if parent passes it)
+  // machines (cohérence)
   machines = [],
+  // règles de nettoyage/associations (⚠️ PASSÉES PAR LE PARENT)
+  nettoyageRules = [],
   // édition ?
   isEditing = false,
 }) {
   const [multiEnabled, setMultiEnabled] = useState(false);
 
+  // On considère que l'article sélectionné est le premier libellé de "types"
   const selectedArticleLabel = formData?.types?.[0] ?? null;
 
+  // Ensemble des broderieTags autorisés (normalisés) pour l'article sélectionné
   const allowedSet = useMemo(() => {
     try {
       if (!selectedArticleLabel) return null;
-      return getAllowedBroderieForArticle([], selectedArticleLabel);
-    } catch {
+      // ✅ UTILISER LES RÈGLES REÇUES, PAS []
+      return getAllowedBroderieForArticle(nettoyageRules, selectedArticleLabel);
+    } catch (e) {
+      console.warn("[CommandeFormModal] getAllowedBroderieForArticle error:", e);
       return null;
     }
-  }, [selectedArticleLabel]);
+  }, [nettoyageRules, selectedArticleLabel]);
 
+  // Filtrage des tags broderie selon allowedSet
   const filteredBroderieTags = useMemo(() => {
     const list = Array.isArray(broderieTags) ? broderieTags : [];
-    if (!allowedSet || allowedSet.size === 0) return list;
+    if (!allowedSet) return list;                 // si pas d'article, on montre tout
+    if (allowedSet.size === 0) return [];         // article connu mais aucun tag autorisé
     return list.filter((tag) => allowedSet.has(normalizeOne(tag.label)));
   }, [broderieTags, allowedSet]);
+
+  // Nettoyage automatique des options devenues non autorisées quand l’article change
+  useEffect(() => {
+    if (!Array.isArray(formData?.options)) return;
+
+    const visible = new Set(
+      (filteredBroderieTags || [])
+        .map((t) => t?.label)
+        .filter(Boolean)
+        .map(normalizeOne)
+    );
+
+    const sanitized = formData.options.filter((opt) => visible.has(normalizeOne(opt)));
+    if (sanitized.length !== formData.options.length) {
+      handleChange({
+        target: {
+          name: "options",
+          value: sanitized,
+        },
+      });
+    }
+  }, [filteredBroderieTags, formData?.options, handleChange]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    // Route simplement selon la case "multi"
-    if (multiEnabled) {
-      onSubmit({ flow: "multi" });
-      return;
-    }
-
-    onSubmit({ flow: "mono" });
+    onSubmit({ flow: multiEnabled ? "multi" : "mono" });
   };
 
   return (
@@ -213,7 +236,7 @@ export default function CommandeFormModal({
             </select>
           </label>
 
-          {/* ----- TAGS ----- */}
+          {/* ----- TAGS : ARTICLES ----- */}
           <label>Types :</label>
           <div className="tags-container">
             {Array.isArray(articleTags) &&
@@ -229,22 +252,29 @@ export default function CommandeFormModal({
               ))}
           </div>
 
+          {/* ----- TAGS : BRODERIE (filtrés) ----- */}
           <label>Options :</label>
-          <div className="tags-container">
+          <div className="tags-container" aria-disabled={!selectedArticleLabel}>
             {Array.isArray(filteredBroderieTags) &&
               filteredBroderieTags.map((tag) => (
                 <button
                   key={tag.id ?? tag.label}
                   type="button"
                   className={`tag ${formData.options.includes(tag.label) ? "active" : ""}`}
+                  disabled={!selectedArticleLabel}
                   onClick={() => toggleTag("options", tag.label)}
                 >
                   {tag.label}
                 </button>
               ))}
           </div>
+          {!selectedArticleLabel && (
+            <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
+              Sélectionnez d’abord un article pour voir les options disponibles.
+            </div>
+          )}
 
-          {/* ✅ Multi-machines (pas de bouton "Configurer…") */}
+          {/* ✅ Multi-machines */}
           <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input

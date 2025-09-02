@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/CommandesPage.jsx
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useMemo, useCallback } from "react";
 import "../../../styles/Commandes.css";
 import NewButton from "../../../components/common/NewButton";
 import { EtiquettesContext } from "../../../context/EtiquettesContext";
@@ -15,7 +15,13 @@ import useLinkedCommande from "./hooks/useLinkedCommande";
 import useSimulation from "./hooks/useSimulation";
 import useStatut from "./hooks/useStatut";
 
-import { parseLocalDatetime, toUTCISOString, snapToNextWorkStart, addMinutesWithinWorkHours, DEFAULT_WORKDAY } from "./utils/workhours";
+import {
+  parseLocalDatetime,
+  toUTCISOString,
+  snapToNextWorkStart,
+  addMinutesWithinWorkHours,
+  DEFAULT_WORKDAY,
+} from "./utils/workhours";
 
 import {
   createCommandeAndPlanning,
@@ -57,7 +63,7 @@ export default function CommandesPage() {
   const { STATUTS, handleChangeStatut } = useStatut({ commandes, setCommandes });
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);     // mono
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false); // mono
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Verrou de flux : "idle" | "mono" | "multi"
@@ -66,6 +72,62 @@ export default function CommandesPage() {
   // Modal de confirmation MULTI
   const [isMultiConfirmOpen, setIsMultiConfirmOpen] = useState(false);
   const [pendingMultiPayload, setPendingMultiPayload] = useState(null);
+
+  // --- Barre de recherche ---
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // normalisation FR (accents/majuscules) — mémorisée pour une identité stable
+  const normalize = useCallback(
+    (v) =>
+      (v ?? "")
+        .toString()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .trim(),
+    []
+  );
+
+  // ✅ stringifyCommande avec useCallback (dépend de normalize, stable)
+  const stringifyCommande = useCallback(
+    (cmd) => {
+      const parts = [
+        cmd?.reference,
+        cmd?.ref_commande,
+        cmd?.ref_client,
+        cmd?.client,
+        cmd?.nom_client,
+        cmd?.description,
+        cmd?.libelle,
+        cmd?.statut,
+        // tags éventuels (ta structure locale)
+        ...(Array.isArray(cmd?.types) ? cmd.types : []),
+        ...(Array.isArray(cmd?.options) ? cmd.options : []),
+        ...(Array.isArray(cmd?.article_tags) ? cmd.article_tags : []),
+        ...(Array.isArray(cmd?.broderie_tags) ? cmd.broderie_tags : []),
+        // machine / assignations éventuelles
+        cmd?.machine_name,
+        ...(Array.isArray(cmd?.assignations)
+          ? cmd.assignations.map((a) => `${a?.machine_name ?? ""} ${a?.quantity ?? ""}`)
+          : []),
+        // quelques nombres utiles
+        String(cmd?.quantite ?? ""),
+        String(cmd?.points ?? ""),
+        String(cmd?.urgence ?? ""),
+        // dates (format simple)
+        cmd?.date_debut_planning ?? "",
+        cmd?.date_fin_planning ?? "",
+      ].filter(Boolean);
+      return normalize(parts.join(" "));
+    },
+    [normalize]
+  );
+
+  const filteredCommandes = useMemo(() => {
+    const q = normalize(searchQuery);
+    if (!q) return commandes;
+    return (commandes || []).filter((cmd) => stringifyCommande(cmd).includes(q));
+  }, [commandes, searchQuery, stringifyCommande, normalize]);
 
   const resetCreationState = () => {
     form.resetForm();
@@ -144,9 +206,9 @@ export default function CommandesPage() {
       // --- MULTI (prioritaire & exclusif) ---
       if (config?.flow === "multi") {
         setIsFormOpen(false);
-        setIsConfirmOpen(false);      // jamais de modale mono dans ce flux
+        setIsConfirmOpen(false); // jamais de modale mono dans ce flux
         setIsMultiConfirmOpen(true);
-        return;                       // pas d'insert ici
+        return; // pas d'insert ici
       }
 
       // --- MONO (explicit only) ---
@@ -171,87 +233,72 @@ export default function CommandesPage() {
   };
 
   // Enregistrement final MULTI (depuis la modale de confirmation MULTI)
-  const handleConfirmMultiSave = async ({ perMachine, meta, plannedStartLocal, respectWorkHours }) => {
-  if (isSubmitting) return;
-  setIsSubmitting(true);
-  try {
+  const handleConfirmMultiSave = async ({
+    perMachine,
+    meta,
+    plannedStartLocal,
+    respectWorkHours,
+  }) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      // 1) base locale choisie dans le modal
+      let baseLocal = parseLocalDatetime(plannedStartLocal);
 
-    /*const list = Array.isArray(config.perMachine) ? config.perMachine : [];
-        const validList = list.filter(r => r && r.machineId && Number(r.quantity) > 0);
+      // 2) si on respecte les heures ouvrées, on "snap" à la prochaine fenêtre ouvrée (08:00)
+      if (respectWorkHours) {
+        baseLocal = snapToNextWorkStart(baseLocal, DEFAULT_WORKDAY);
+      }
 
-        if (validList.length < 2) {
-          alert("Sélectionnez au moins 2 machines avec des quantités > 0.");
-          return;
-        }
+      // 3) pour CHAQUE assignation, on pose le même début et on calcule la fin en heures ouvrées
+      const enriched = perMachine.map((r) => {
+        const dur = Number(r.durationCalcMinutes || r.durationTheoreticalMinutes || 0);
+        const { end } = respectWorkHours
+          ? addMinutesWithinWorkHours(baseLocal, dur, DEFAULT_WORKDAY)
+          : { end: new Date(baseLocal.getTime() + dur * 60000) };
 
-        setPendingMultiPayload({
-          perMachine: validList,
-          meta: config.meta || null,
-          plannedStartISO:
-            config.plannedStartISO ||
-            form.formData?.date_debut_planning ||
-            new Date().toISOString(),
-        });*/
-    // 1) base locale choisie dans le modal
-    let baseLocal = parseLocalDatetime(plannedStartLocal);
+        return {
+          ...r,
+          planned_start_iso_utc: toUTCISOString(baseLocal),
+          planned_end_iso_utc: toUTCISOString(end),
+        };
+      });
 
-    // 2) si on respecte les heures ouvrées, on "snap" à la prochaine fenêtre ouvrée (08:00)
-    if (respectWorkHours) {
-      baseLocal = snapToNextWorkStart(baseLocal, DEFAULT_WORKDAY);
+      // 4) API : envoyer UTC pour éviter le décalage
+      const { errorCmd, errorAssign } = await createCommandeWithAssignations({
+        formData: {
+          ...form.formData,
+          linked_commande_id: linked.linkedCommandeId,
+          same_machine_as_linked: linked.sameMachineAsLinked,
+          start_after_linked: linked.startAfterLinked,
+        },
+        perMachine: enriched.map((r) => ({
+          machineId: r.machineId,
+          quantity: r.quantity,
+          durationTheoreticalMinutes: r.durationTheoreticalMinutes,
+          durationCalcMinutes: r.durationCalcMinutes,
+          planned_start: r.planned_start_iso_utc,
+          planned_end: r.planned_end_iso_utc,
+        })),
+        meta,
+        plannedStartISO: null,
+      });
+
+      if (errorCmd || errorAssign) {
+        console.error("Erreur création multi-machines:", errorCmd || errorAssign);
+        alert("Erreur lors de la création (multi-machines).");
+        return;
+      }
+
+      setIsMultiConfirmOpen(false);
+      setPendingMultiPayload(null);
+      setCreationFlow("idle");
+      await reloadData();
+      form.resetForm();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // 3) pour CHAQUE assignation, on pose le même début (ou tu peux les enchaîner si tu préfères)
-    //    et on calcule la fin en restant dans les heures ouvrées.
-    const enriched = perMachine.map((r) => {
-      const dur = Number(r.durationCalcMinutes || r.durationTheoreticalMinutes || 0);
-      const { end } = respectWorkHours
-        ? addMinutesWithinWorkHours(baseLocal, dur, DEFAULT_WORKDAY)
-        : { end: new Date(baseLocal.getTime() + dur * 60000) };
-
-      return {
-        ...r,
-        planned_start_iso_utc: toUTCISOString(baseLocal),
-        planned_end_iso_utc: toUTCISOString(end),
-      };
-    });
-
-    // 4) Appel API : on envoie bien l’UTC (évite le décalage de 2h)
-    const { errorCmd, errorAssign } = await createCommandeWithAssignations({
-      formData: {
-        ...form.formData,
-        linked_commande_id: linked.linkedCommandeId,
-        same_machine_as_linked: linked.sameMachineAsLinked,
-        start_after_linked: linked.startAfterLinked,
-      },
-      // on passe la liste enrichie pour que le service prenne planned_start/planned_end
-      perMachine: enriched.map((r) => ({
-        machineId: r.machineId,
-        quantity: r.quantity,
-        durationTheoreticalMinutes: r.durationTheoreticalMinutes,
-        durationCalcMinutes: r.durationCalcMinutes,
-        // on donne explicitement les dates
-        planned_start: r.planned_start_iso_utc,
-        planned_end: r.planned_end_iso_utc,
-      })),
-      meta,
-      plannedStartISO: null, // on n’utilise plus ce champ “global”
-    });
-
-    if (errorCmd || errorAssign) {
-      console.error("Erreur création multi-machines:", errorCmd || errorAssign);
-      alert("Erreur lors de la création (multi-machines).");
-      return;
-    }
-
-    setIsMultiConfirmOpen(false);
-    setPendingMultiPayload(null);
-    setCreationFlow("idle");
-    await reloadData();
-    form.resetForm();
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   // Confirmation création (flux mono)
   const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed }) => {
@@ -280,12 +327,18 @@ export default function CommandesPage() {
 
     if (errorCmd) {
       console.error("Erreur création commande:", errorCmd);
-      alert("Erreur lors de la création de la commande.\n" + (errorCmd.message || "Regarde la console."));
+      alert(
+        "Erreur lors de la création de la commande.\n" +
+          (errorCmd.message || "Regarde la console.")
+      );
       return;
     }
     if (errorPlanning) {
       console.error("Erreur création planning:", errorPlanning);
-      alert("La commande a été créée, mais l'insertion dans le planning a échoué.\n" + (errorPlanning.message || ""));
+      alert(
+        "La commande a été créée, mais l'insertion dans le planning a échoué.\n" +
+          (errorPlanning.message || "")
+      );
     }
 
     sim.setSelectedScenario(null);
@@ -316,11 +369,44 @@ export default function CommandesPage() {
         Nouvelle commande
       </NewButton>
 
+      {/* Barre de recherche */}
+      <div className="commandes-search" style={{ margin: "12px 0", display: "flex", gap: 8 }}>
+        <input
+          type="text"
+          placeholder="Rechercher une commande (client, référence, statut, machine, tags...)"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            flex: 1,
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #ddd",
+            outline: "none",
+          }}
+        />
+        {searchQuery ? (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="btn-clear-search"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: "1px solid #ddd",
+              background: "#f6f6f6",
+              cursor: "pointer",
+            }}
+          >
+            Effacer
+          </button>
+        ) : null}
+      </div>
+
       {/* 1) Formulaire création/édition */}
       <CommandeFormModal
         isOpen={isFormOpen}
         onClose={() => !isSubmitting && setIsFormOpen(false)}
-        onSubmit={handleSubmitForm}  // doit recevoir { flow:"multi", ... } ou { flow:"mono" }
+        onSubmit={handleSubmitForm} // { flow:"multi" } ou { flow:"mono" }
         formData={form.formData}
         handleChange={form.handleChange}
         handleDateChange={form.handleDateChange}
@@ -338,6 +424,8 @@ export default function CommandesPage() {
         articleTags={articleTags}
         broderieTags={broderieTags}
         machines={machines}
+        // ✅ on passe les règles au modal pour filtrer les broderieTags par article
+        nettoyageRules={nettoyageRules}
         isEditing={Boolean(form.formData?.id)}
       />
 
@@ -372,9 +460,9 @@ export default function CommandesPage() {
         onConfirm={handleConfirmMultiSave}
       />
 
-      {/* Liste commandes */}
+      {/* Liste commandes (filtrée) */}
       <div className="liste-commandes">
-        {commandes.map((cmd) => (
+        {filteredCommandes.map((cmd) => (
           <CommandeCard
             key={cmd.id}
             cmd={cmd}
@@ -387,6 +475,11 @@ export default function CommandesPage() {
             nettoyageRules={nettoyageRules}
           />
         ))}
+        {filteredCommandes.length === 0 && (
+          <div style={{ padding: 16, color: "#666" }}>
+            Aucune commande ne correspond à « {searchQuery} ».
+          </div>
+        )}
       </div>
     </div>
   );
