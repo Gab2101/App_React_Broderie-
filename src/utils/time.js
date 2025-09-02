@@ -271,10 +271,12 @@ export function getNextFullHour(minHour = WORKDAY.start, opts = {}) {
 
 /** 1.23 → "1h 14min" */
 export function convertDecimalToTime(decimal) {
-  const hours = Math.floor(decimal);
-  const minutes = Math.round((decimal - hours) * 60);
+  const totalMinutes = Math.round((Number(decimal) || 0) * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   return `${hours}h ${String(minutes).padStart(2, "0")}min`;
 }
+
 
 /** 1.75 → "1h 45min" */
 export function convertHoursToHHMM(hoursDecimal) {
