@@ -93,7 +93,7 @@ export function isBusinessDay(input, holidays = new Set()) {
  *  Si on est:
  *   - avant 08:00 → 08:00
  *   - entre 12:00-13:00 → 13:00
- *   - après >=17:00 → 17:00 (marque la fin de journée)
+ *   - après >=17:00 → 16:00 (marque la fin de journée)
  */
 function clampToWorkBoundsSameDay(input) {
   const c = toDate(input);
