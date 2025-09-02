@@ -11,7 +11,7 @@ Gestion des commandes
     Création et modification de commandes.
     Calcul automatique de la durée de broderie (points, vitesse, nombre de têtes).
     Calcul du temps de nettoyage par type d’article (tags).
-    Découpage automatique si une commande dépasse la fin de journée (17h → reprise le lendemain 8h).
+    Découpage automatique si une commande dépasse la fin de journée (16h → reprise le lendemain 8h).
 
 Gestion des machines
     Liste des machines de broderie avec leurs caractéristiques (nombre de têtes, type).
