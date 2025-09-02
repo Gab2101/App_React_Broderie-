@@ -61,10 +61,13 @@ export default function CommandeModal({
           </span>
           <select value={statut} onChange={(e) => setStatut(e.target.value)} disabled={saving}>
             {STATUTS.map((s) => <option key={s} value={s}>{s}</option>)}
+            )
+            }
           </select>
         </label>
 
         {error && <div className="error" style={{ marginTop: 8 }}>{error}</div>}
+        }
 
         <div className="modal-actions" style={{ marginTop: 16, display: "flex", gap: 8 }}>
           <button onClick={onClose} disabled={saving}>Fermer</button>

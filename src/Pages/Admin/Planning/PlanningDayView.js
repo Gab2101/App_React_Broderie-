@@ -34,7 +34,7 @@ export default function PlanningDayView({
     const d3 = new Date(day); d3.setHours(lunchEnd, 0, 0, 0); return d3;
   }, [day, lunchEnd]);
 
-  // En-tête horaires: on SAUTE midi (12–13 n’apparaît pas)
+  // En-tête horaires: on SAUTE midi (12–13 n'apparaît pas)
   const slots = useMemo(() => {
     const arr = [];
     for (let h = workStart; h < workEnd; h++) {
@@ -44,7 +44,7 @@ export default function PlanningDayView({
     return arr;
   }, [workStart, workEnd, lunchStart, lunchEnd]);
 
-  // Minutes “ouvrées” (on retire la pause de la largeur)
+  // Minutes "ouvrées" (on retire la pause de la largeur)
   const minutesBeforeLunch = Math.max(0, (lunchStartDate - startOfDay) / 60000);
   const lunchMinutes = Math.max(0, (lunchEndDate - lunchStartDate) / 60000);
   const totalWorkingMinutes = Math.max(
@@ -52,12 +52,12 @@ export default function PlanningDayView({
     (endOfDay - startOfDay) / 60000 - lunchMinutes
   );
 
-  // Convertit un instant -> offset en minutes sur l’axe OUVRÉ (pause compressée)
+  // Convertit un instant -> offset en minutes sur l'axe OUVRÉ (pause compressée)
   const toWorkingOffsetMin = (t) => {
     if (t <= lunchStartDate) return Math.max(0, (t - startOfDay) / 60000);
     if (t >= lunchEndDate)
       return minutesBeforeLunch + (t - lunchEndDate) / 60000;
-    // si t est dans la pause, on le “clampe” au début de la pause
+    // si t est dans la pause, on le "clampe" au début de la pause
     return minutesBeforeLunch;
   };
   const pctFromOffset = (min) => (min / totalWorkingMinutes) * 100;
