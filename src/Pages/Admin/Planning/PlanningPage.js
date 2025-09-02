@@ -190,7 +190,7 @@ export default function PlanningPage() {
           .map(p => (p.id === currentAssignation.id ? { ...p, fin: endIso } : p));
       });
     },
-    []
+    [compactMachineColumnAfter]
   );
 
   /**
@@ -289,7 +289,7 @@ export default function PlanningPage() {
     } catch (error) {
       console.error("❌ Erreur lors du compactage de la machine:", error);
     }
-  }, [getWorkingMinutesBetween, roundToNearest5Minutes, utilsNextWorkStart, utilsAddWorkingHours]);
+  }, []);
 
   // Chargement + réajustement automatique
   const fetchAndReflow = useCallback(async () => {

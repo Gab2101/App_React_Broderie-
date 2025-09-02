@@ -1,92 +1,119 @@
-// src/Pages/Admin/Commandes/services/assignationsApi.js
-import { supabase } from "../../../../supabaseClient";
+// src/Pages/Admin/Commandes/components/CommandeCard.js
+import React from "react";
+import StatusBadge from "../../../../components/common/StatusBadge";
 
-// ✅ petit helper local: arrondit une Date au multiple supérieur de 5 min
-function roundDateTo5(dateInput) {
-  const d = new Date(dateInput);
-  const step = 5 * 60 * 1000;
-  return new Date(Math.ceil(d.getTime() / step) * step);
-}
+export default function CommandeCard({
+  cmd,
+  STATUTS,
+  onChangeStatut,
+  onEdit,
+  onDelete,
+  machines = [],
+  articleTags = [],
+  nettoyageRules = [],
+}) {
+  if (!cmd) return null;
 
-export async function createCommandeWithAssignations({ formData, perMachine, meta, plannedStartISO }) {
-  // ---- 1) Créer la commande -------------------------------------------------
-  const totalCalcMinutes = Array.isArray(perMachine) 
-    ? perMachine.reduce((sum, r) => sum + (Number(r.durationCalcMinutes) || 0), 0)
-    : 0;
-  
-  const payloadCommande = {
-    numero: formData.numero,
-    client: formData.client,
-    quantite: Number(formData.quantite),
-    points: Number(formData.points),
-    vitesseMoyenne: formData.vitesseMoyenne ? Number(formData.vitesseMoyenne) : null,
-    dateLivraison: formData.dateLivraison || null,
-    urgence: Number(formData.urgence || 3),
-    types: formData.types || [],
-    options: formData.options || [],
-    statut: "A commencer",
-    multi_machine: true,
-    duree_totale_heures: totalCalcMinutes / 60,
-    mono_units_used: 1,
-    extra_percent: meta?.coefPercent ? Math.max(0, meta.coefPercent - 100) : 0,
-    linked_commande_id: formData.linked_commande_id || null,
-    same_machine_as_linked: !!formData.same_machine_as_linked,
-    start_after_linked: formData.start_after_linked ?? true,
+  // Utilisation directe des valeurs stockées en base
+  const b = cmd.duree_broderie_heures;
+  const n = cmd.duree_nettoyage_heures;
+  const t = cmd.duree_totale_heures;
+
+  // Calcul du coefficient affiché basé sur la durée théorique vs réelle
+  const theoriqueTotal = (Number(b) || 0) + (Number(n) || 0);
+  const reelleTotal = Number(t) || 0;
+  const coefAffiche = theoriqueTotal > 0 ? Math.round((reelleTotal / theoriqueTotal) * 100) : 100;
+
+  const handleStatutChange = (e) => {
+    const newStatut = e.target.value;
+    if (newStatut !== cmd.statut) {
+      onChangeStatut(cmd.id, newStatut);
+    }
   };
 
-  const { data: cmdInserted, error: errorCmd } = await supabase
-    .from("commandes")
-    .insert(payloadCommande)
-    .select("id")
-    .single();
+  return (
+    <div className="commande-card">
+      <div className="commande-header">
+        <h3>#{cmd.numero}</h3>
+        <StatusBadge statut={cmd.statut} />
+      </div>
 
-  if (errorCmd) return { errorCmd, errorAssign: null, commandeId: null };
+      <div className="commande-details">
+        <p><strong>Client :</strong> {cmd.client}</p>
+        <p><strong>Quantité :</strong> {cmd.quantite}</p>
+        <p><strong>Points :</strong> {cmd.points}</p>
+        
+        {cmd.dateLivraison && (
+          <p><strong>Livraison :</strong> {new Date(cmd.dateLivraison).toLocaleDateString("fr-FR")}</p>
+        )}
 
-  const commandeId = cmdInserted.id;
+        {cmd.urgence && (
+          <p><strong>Urgence :</strong> {cmd.urgence}/5</p>
+        )}
 
-  // ---- 2) Préparer les assignations ----------------------------------------
-  if (!Array.isArray(perMachine) || perMachine.length < 1) {
-    return { errorCmd: null, errorAssign: new Error("Aucune machine fournie."), commandeId };
-  }
+        {/* Affichage des durées */}
+        <div className="durees-section">
+          {b != null && <p><strong>Durée broderie :</strong> {Number(b).toFixed(2)}h</p>}
+          {n != null && <p><strong>Durée nettoyage :</strong> {Number(n).toFixed(2)}h</p>}
+          {t != null && (
+            <p><strong>Durée totale (réelle appliquée) :</strong> {Number(t).toFixed(2)}h</p>
+          )}
+          {coefAffiche !== 100 && (
+            <p><strong>Coefficient appliqué :</strong> {coefAffiche}%</p>
+          )}
+        </div>
 
-  const rows = perMachine.map((r) => {
-    // ✅ qty provient du split multi: r.quantity (garde 'qty' comme nom de colonne DB)
-    const qty = Number(r.quantity ?? r.qty ?? 0);
+        {/* Types et options */}
+        {cmd.types && cmd.types.length > 0 && (
+          <div className="tags-section">
+            <strong>Types :</strong>
+            <div className="tag-list">
+              {cmd.types.map((type, i) => (
+                <span key={i} className="tag">{type}</span>
+              ))}
+            </div>
+          </div>
+        )}
 
-    const planned_start = r.planned_start ?? plannedStartISO ?? null;
-    const planned_end   = r.planned_end ?? null;
+        {cmd.options && cmd.options.length > 0 && (
+          <div className="tags-section">
+            <strong>Options :</strong>
+            <div className="tag-list">
+              {cmd.options.map((option, i) => (
+                <span key={i} className="tag">{option}</span>
+              ))}
+            </div>
+          </div>
+        )}
 
-    // ✅ arrondi 5 min sur les Dates
-    const roundedStart = planned_start ? roundDateTo5(planned_start) : null;
-    const roundedEnd   = planned_end   ? roundDateTo5(planned_end)   : null;
+        {/* Machine assignée */}
+        {cmd.machineAssignee && (
+          <p><strong>Machine :</strong> {cmd.machineAssignee}</p>
+        )}
 
-    const calc = Math.max(0, Math.round(Number(r.durationCalcMinutes || 0)));
-    const extraPercent = meta?.extraPercent ?? 0;
-    const cleanPerItem = meta?.cleaningPerItemMinutes ?? 0;
+        {/* Liaison */}
+        {cmd.linked_commande_id && (
+          <p><strong>Liée à :</strong> Commande #{cmd.linked_commande_id}</p>
+        )}
+      </div>
 
-    return {
-      commande_id: commandeId,
-      machine_id: r.machineId,
-      qty,                                   // <-- colonne de la table commandes_assignations
-      status: "A commencer",
-      planned_start: roundedStart ? roundedStart.toISOString() : null,
-      planned_end:   roundedEnd   ? roundedEnd.toISOString()   : null,
-      duration_calc_minutes: calc,
-      extra_percent: extraPercent,
-      cleaning_minutes: Math.round(cleanPerItem * qty),
-    };
-  });
+      <div className="commande-actions">
+        <select value={cmd.statut} onChange={handleStatutChange}>
+          {STATUTS.map((statut) => (
+            <option key={statut} value={statut}>
+              {statut}
+            </option>
+          ))}
+        </select>
 
-  // validation simple
-  if (rows.some((x) => x.qty <= 0)) {
-    return { errorCmd: null, errorAssign: new Error("Répartition invalide (qty <= 0)."), commandeId };
-  }
+        <button onClick={() => onEdit(cmd)} className="btn-edit">
+          Modifier
+        </button>
 
-  // ---- 3) Insert ------------------------------------------------------------
-  const { data: assign, error: errorAssign } = await supabase
-    .from("commandes_assignations")
-    .insert(rows)
-    .select("id, machine_id, qty, planned_start, planned_end");
-
-  return { errorCmd: null, errorAssign, commandeId, assign };
+        <button onClick={() => onDelete(cmd.id)} className="btn-delete">
+          Supprimer
+        </button>
+      </div>
+    </div>
+  );
 }
