@@ -3,7 +3,7 @@
 
 export const DEFAULT_WORKDAY = {
   startHour: 8,
-  endHour: 17,
+  endHour: 16,
   weekend: [0, 6], // 0=dim, 6=sam
 };
 
