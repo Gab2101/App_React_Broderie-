@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/utils/workhours.js
-// Règles simples et robustes (8h–17h, skip week-ends)
+// Règles simples et robustes (8h–16h, skip week-ends)
 
 export const DEFAULT_WORKDAY = {
   startHour: 8,
