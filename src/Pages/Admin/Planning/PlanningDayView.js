@@ -75,6 +75,7 @@ export default function PlanningDayView({
       map.set(c.machineId, list);
     }
     for (const [k, L] of map) L.sort((a, b) => a.start - b.start);
+    for (const [_, L] of map) L.sort((a, b) => a.start - b.start);
     return map;
   }, [commandes, startOfDay, endOfDay]);
 

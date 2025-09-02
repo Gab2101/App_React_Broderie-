@@ -12,8 +12,7 @@ import {
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
-import { roundMinutesTo5 } from "../../Commandes/utils/timeRealtime";
-import { DEFAULT_WORKDAY } from "../../Commandes/utils/workhours";
+import { roundMinutesTo5 } from "../Commandes/utils/timeRealtime";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
@@ -401,7 +400,7 @@ export default function PlanningPage() {
     } finally {
       isUpdatingRef.current = false;
     }
-  }, [workOpts]);
+  }, [workOpts, compactMachineColumnAfter]);
 
   useEffect(() => {
     fetchAndReflow();
