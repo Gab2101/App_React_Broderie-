@@ -13,17 +13,17 @@ export default function CommandeCard({
   onChangeStatut,
   onEdit,
   onDelete,
-  machines,
-  articleTags,       // dispo si besoin futur
-  nettoyageRules,    // pour fallback calcul
+  machines = [],
+  articleTags,
+  nettoyageRules,
 }) {
   const theme = getStatusTheme(cmd.statut);
 
   // Durées
   let b = cmd.duree_broderie_heures;
   let n = cmd.duree_nettoyage_heures;
-  // ✅ CORRECTION: Utiliser duree_totale_heures_arrondie pour l'affichage cohérent
-  let t = cmd.duree_totale_heures_arrondie || cmd.duree_totale_heures;
+  // ✅ source de vérité pour l’affichage
+  let t = cmd.duree_totale_heures_arrondie ?? cmd.duree_totale_heures;
 
   if (b == null || n == null || t == null) {
     const etiquetteArticle = cmd.types?.[0] || null;
@@ -36,7 +36,8 @@ export default function CommandeCard({
 
     const quantite = Number(cmd.quantite || 0);
     const points = Number(cmd.points || 0);
-    const nbTetes = Number(machines.find((m) => m.nom === cmd.machineAssignee)?.nbTetes || 1);
+    const nbTetes =
+      Number((machines || []).find((m) => m.nom === cmd.machineAssignee)?.nbTetes || 1);
     const vitessePPM = Number(cmd.vitesseMoyenne || 680);
 
     const calc = calculerDurees({
@@ -49,15 +50,14 @@ export default function CommandeCard({
 
     b = calc.dureeBroderieHeures;
     n = calc.dureeNettoyageHeures;
-    // ✅ CORRECTION: Utiliser la durée arrondie pour la cohérence d'affichage
-    t = calc.dureeTotaleHeuresArrondie || calc.dureeTotaleHeures;
+    // ✅ garder l’arrondie si dispo
+    t = calc.dureeTotaleHeuresArrondie ?? calc.dureeTotaleHeures;
   }
 
-  // ✅ CORRECTION: Calcul du coefficient basé sur la durée théorique vs arrondie
-  const theoriqueTotal = (Number(b) || 0) + (Number(n) || 0);
-  const dureeReelleArrondie = Number(t || 0);
-  const coefAffiche = theoriqueTotal > 0 ? 
-    clampPercentToStep5(Math.round((dureeReelleArrondie / theoriqueTotal) * 100)) : null;
+  // ✅ Affichage du % : si extra_percent (coef-100) est stocké, on l’utilise. Sinon on ne montre rien.
+  const coefAffiche = Number.isFinite(cmd?.extra_percent)
+    ? clampPercentToStep5(100 + Number(cmd.extra_percent || 0))
+    : null;
 
   const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
   const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;
@@ -129,25 +129,18 @@ export default function CommandeCard({
       <p><strong>Durée broderie (théorique) :</strong> {convertDecimalToTime(b ?? 0)}</p>
       <p><strong>Durée nettoyage (théorique) :</strong> {convertDecimalToTime(n ?? 0)}</p>
       <p>
-        <strong>Durée totale (planifiée - arrondie à l'heure) :</strong> {convertDecimalToTime(t ?? 0)}
-        )
-        {coefAffiche ? <em style={{ marginLeft: 6, opacity: 0.7 }}>({coefAffiche}% appliqué)</em> : null}
-        }
+        <strong>Durée totale (planifiée — arrondie à l’heure) :</strong>{" "}
+        {convertDecimalToTime(t ?? 0)}
+        {coefAffiche != null && (
+          <em style={{ marginLeft: 6, opacity: 0.7 }}>({coefAffiche}% appliqué)</em>
+        )}
       </p>
 
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-        <button
-          onClick={() => onEdit(cmd)}
-          className="btn-enregistrer"
-          style={{ borderRadius: 8 }}
-        >
+        <button onClick={() => onEdit(cmd)} className="btn-enregistrer" style={{ borderRadius: 8 }}>
           Modifier
         </button>
-        <button
-          onClick={() => onDelete(cmd.id)}
-          className="btn-fermer"
-          style={{ borderRadius: 8 }}
-        >
+        <button onClick={() => onDelete(cmd.id)} className="btn-fermer" style={{ borderRadius: 8 }}>
           Supprimer
         </button>
       </div>
