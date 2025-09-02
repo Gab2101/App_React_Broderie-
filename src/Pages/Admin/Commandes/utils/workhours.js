@@ -34,7 +34,7 @@ export function atTime(date, hour, minute = 0) {
  * Aligne une date sur la prochaine fenêtre ouvrée (08:00–16:00)
  * - si week-end -> passe à lundi 08:00
  * - si avant 08:00 -> même jour 08:00
- * - si après 17:00 -> jour suivant ouvré 08:00
+ * - si après 16:00 -> jour suivant ouvré 08:00
  */
 export function snapToNextWorkStart(date, cfg = DEFAULT_WORKDAY) {
   let d = new Date(date);
