@@ -161,7 +161,7 @@ export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = ne
   // Appliquer les bornes de la journée (midi/nuit)
   cur = clampToWorkBoundsSameDay(cur);
 
-  // Si on est pile à/au-delà de la fin (17:00) → demain 08:00 (ouvré si demandé)
+  // Si on est pile à/au-delà de la fin (16:00) → demain 08:00 (ouvré si demandé)
   if (cur.getHours() >= WORKDAY.end) {
     cur = skipNonBusiness ? nextBusinessMorning(cur, holidays) : toDate(cur);
     if (!skipNonBusiness) {
@@ -195,7 +195,8 @@ export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = ne
 
 /** Ajoute N heures ouvrées (entier ; arrondi à l’heure sup appliqué en amont en général)
  *  – saute 12–13
- *  – coupe à 17:00 et reprend à 08:00
+ *  – coupe à 16
+ :00 et reprend à 08:00
  *  – option week-ends/jours fériés
  */
 export function addWorkingHours(start, hours, { skipNonBusiness = false, holidays = new Set() } = {}) {
