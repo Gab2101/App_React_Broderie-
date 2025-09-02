@@ -8,8 +8,8 @@ export default function PlanningDayView({
   machines = [],
   commandes = [],
   onOpenCommande,
-  workStart = WORKDAY.start,
-  workEnd = WORKDAY.end,
+  workStart = WORKDAY.start,     // 8:00 AM
+  workEnd = 16,                  // 4:00 PM (8-hour shift)
   lunchStart = WORKDAY.lunchStart,
   lunchEnd = WORKDAY.lunchEnd,
 }) {
@@ -44,6 +44,12 @@ export default function PlanningDayView({
     }
     return arr;
   }, [workStart, workEnd, lunchStart, lunchEnd]);
+
+  // Display helper for hour headers - shows the 8-hour work period clearly
+  const formatHourSlot = (hour) => {
+    const nextHour = hour + 1;
+    return `${String(hour).padStart(2, "0")}:00–${String(nextHour).padStart(2, "0")}:00`;
+  };
 
   // Minutes "ouvrées" (on retire la pause de la largeur)
   const minutesBeforeLunch = Math.max(0, (lunchStartDate - startOfDay) / 60000);
@@ -92,6 +98,24 @@ export default function PlanningDayView({
 
   return (
     <div className="planning-day">
+      {/* Work period indicator */}
+      <div className="work-period-indicator" style={{
+        background: '#f0f9ff',
+        border: '1px solid #0ea5e9',
+        borderRadius: '8px',
+        padding: '12px 16px',
+        marginBottom: '16px',
+        textAlign: 'center',
+        fontWeight: '600',
+        color: '#0c4a6e'
+      }}>
+        📅 Période de travail: {workStart}:00 - {workEnd}:00 
+        {lunchStart !== lunchEnd && ` (pause ${lunchStart}:00-${lunchEnd}:00)`}
+        <span style={{ marginLeft: '16px', fontWeight: 'normal', opacity: 0.8 }}>
+          • Durée effective: {totalWorkingMinutes / 60}h
+        </span>
+      </div>
+
       <div className="dayview-table-container">
         <table className="dayview-table">
           <thead>
@@ -99,7 +123,7 @@ export default function PlanningDayView({
               <th className="machine-header">Machines</th>
               {slots.map((h) => (
                 <th key={h} className="hour-header">
-                  {String(h).padStart(2, "0")}–{String(h + 1).padStart(2, "0")}
+                  {formatHourSlot(h)}
                 </th>
               ))}
             </tr>
