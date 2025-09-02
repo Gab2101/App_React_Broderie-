@@ -64,7 +64,9 @@ export default function CommandeCard({
       style={{
         backgroundColor: theme.bgSoft,
         borderLeft: `6px solid ${theme.border}`,
-        border: "1px solid #e0e0e0",
+        borderTop: "1px solid #e0e0e0",
+        borderRight: "1px solid #e0e0e0",
+        borderBottom: "1px solid #e0e0e0",
         borderRadius: 12,
         padding: 12,
         marginBottom: 12,
