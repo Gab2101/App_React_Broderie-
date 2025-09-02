@@ -3,7 +3,7 @@ const TZ = 'Europe/Paris';
 const DAY_START_H = 8;
 const LUNCH_START_H = 12;
 const LUNCH_END_H = 13;
-const DAY_END_H = 17;
+const DAY_END_H = 16;
 
 let HOLIDAYS = new Set();
 let SKIP_NON_BUSINESS = false;
