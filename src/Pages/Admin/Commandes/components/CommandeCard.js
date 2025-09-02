@@ -77,7 +77,7 @@ export default function CommandeCard({
   const t = cmd.duree_totale_heures || 0;
 
   // Calculer le coefficient affiché à partir du extra_percent stocké
-  const coefAffiche = 100 + (Number(cmd.extra_percent) || 0);
+  const coefAffiche = theoriqueTotal > 0 ? Math.round((Number(t) / theoriqueTotal) * 100) : 100;
 
   const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
   const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;

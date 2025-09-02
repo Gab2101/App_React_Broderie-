@@ -40,8 +40,6 @@ export async function createCommandeWithAssignations({ formData, perMachine, met
     multi_machine: true,
     // Durées calculées pour cohérence avec le planning
     duree_totale_heures: totalCalcMinutes / 60,
-    mono_units_used: 1, // Fixé à 1 pour les commandes multi-machines
-    extra_percent: meta?.coefPercent ? Math.max(0, meta.coefPercent - 100) : 0,
     // liaisons éventuelles
     linked_commande_id: formData.linked_commande_id || null,
     same_machine_as_linked: !!formData.same_machine_as_linked,
