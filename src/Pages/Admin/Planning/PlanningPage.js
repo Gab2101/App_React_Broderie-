@@ -9,12 +9,10 @@ import {
   addWorkingHours,
   isBusinessDay,
   ceilToHour,
-  getNextFullHour,
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
-import { roundMinutesTo5 } from "../../Commandes/utils/timeRealtime";
-import { DEFAULT_WORKDAY } from "../../../Pages/Admin/Commandes/utils/workhours";
+import { roundMinutesTo5 } from "../Commandes/utils/timeRealtime";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
@@ -22,8 +20,7 @@ import PlanningDayView from "./PlanningDayView";
 
 import { parseISOAny } from "./lib/parse";
 import { normalizeSlotForGrid } from "./lib/grid";
-import { workingHoursBetween } from "./lib/workingHours";
-import { sortByPriority, getUrgencyColor, calculateUrgency } from "./lib/priority";
+import { getUrgencyColor, calculateUrgency } from "./lib/priority";
 
 console.log("[Planning] module loaded (refactor + inversion jours/machines + vue jour)");
 
