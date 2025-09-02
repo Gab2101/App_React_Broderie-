@@ -11,7 +11,7 @@ import {
   ceilToHour,
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
-import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
+import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time.js";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
@@ -289,7 +289,7 @@ export default function PlanningPage() {
     } catch (error) {
       console.error("❌ Erreur lors du compactage de la machine:", error);
     }
-  }, [getWorkingMinutesBetween, roundToNearest5Minutes, utilsNextWorkStart, utilsAddWorkingHours]);
+  }, []);
   // Chargement + réajustement automatique
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;

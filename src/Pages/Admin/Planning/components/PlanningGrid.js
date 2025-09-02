@@ -1,6 +1,6 @@
 // src/Pages/Admin/Planning/components/PlanningGrid.js
 import React, { useMemo } from "react";
-import { WORKDAY } from "../../../../utils/time"; // 4 niveaux pour remonter à src/utils/time
+import { WORKDAY } from "../../../../utils/time.js"; // 4 niveaux pour remonter à src/utils/time
 import { getColorFromId } from "../lib/priority"; // plus de computeUrgency/urgencyColors ici
 
 function formatDayFR(d) {

@@ -146,6 +146,22 @@ export async function updateCommande(formData) {
 
 export async function deleteCommandeWithPlanning(id) {
   try {
+    // 1. D'abord, supprimer les références à cette commande dans d'autres commandes
+    const { error: unlinkError } = await supabase
+      .from("commandes")
+      .update({
+        linked_commande_id: null,
+        same_machine_as_linked: false,
+        start_after_linked: false
+      })
+      .eq("linked_commande_id", id);
+
+    if (unlinkError) {
+      console.error("Erreur suppression des liens:", unlinkError);
+      return { error: unlinkError };
+    }
+
+    // 2. Ensuite, supprimer le planning associé
     const { data: planningServeur, error: errorPlanningSelect } = await supabase
       .from("planning")
       .select("*")
@@ -163,6 +179,7 @@ export async function deleteCommandeWithPlanning(id) {
       console.warn("planningServeur n'est pas un tableau :", planningServeur);
     }
 
+    // 3. Enfin, supprimer la commande elle-même
     const { error: deleteError } = await supabase.from("commandes").delete().eq("id", id);
     if (deleteError) return { error: deleteError };
 

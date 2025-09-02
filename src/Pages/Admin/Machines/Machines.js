@@ -154,7 +154,6 @@ export default function Machines() {
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
-  }, [validTagSet]);
 
   const toggleTag = useCallback(
     (label) => {
@@ -167,7 +166,7 @@ export default function Machines() {
         return { ...prev, etiquettes: cleaned };
       });
     },
-    [validTagSet]
+    []
   );
 
   /* =========================
