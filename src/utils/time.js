@@ -252,22 +252,20 @@ export function formatHourRangeFR(dateStart) {
 
 /** Prochaine heure pleine à partir de "maintenant", respectant les règles ouvrées */
 export function getNextFullHour(minHour = WORKDAY.start, opts = {}) {
-  // On part de l’instant T, arrondi à l’heure suivante, puis on applique nextWorkStart
+  const { skipNonBusiness = false, holidays = new Set() } = opts;
   const base = toDate(new Date());
   const nextHour = ceilToHour(base);
-  let res = nextWorkStart(nextHour, opts);
+  let res = nextWorkStart(nextHour, { skipNonBusiness, holidays });
 
-  // Optionnel : si on veut imposer une heure mini sur le même jour ouvré
-  if (res.getHours() < minHour && isBusinessDay(res)) {
+  if (res.getHours() < minHour && isBusinessDay(res, holidays)) {
     res.setHours(minHour, 0, 0, 0);
     if (!isWorkHour(res)) {
-      // Si minHour tombe hors tranche (ex: 12), ré-appliquer les règles
-      res = nextWorkStart(res, opts);
+      res = nextWorkStart(res, { skipNonBusiness, holidays });
     }
   }
-
   return res;
 }
+
 
 /** 1.23 → "1h 14min" */
 export function convertDecimalToTime(decimal) {
