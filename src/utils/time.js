@@ -31,7 +31,7 @@ export const WORKDAY = {
   start: 8,       // début journée
   lunchStart: 12, // début pause
   lunchEnd: 13,   // fin pause
-  end: 17,        // fin journée (exclu)
+  end: 16,        // fin journée (exclu)
 };
 
 /** =========================
