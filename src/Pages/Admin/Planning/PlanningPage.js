@@ -68,39 +68,6 @@ function normalizeMachineIds(raw) {
   return [s];
 }
 
-/**
- * Normalise les bornes d'une commande selon les règles métier :
- * - Si statut = "A commencer" et planned_start < now, alors début = ceilToHour(now)
- * - Recalcule la fin en respectant les heures ouvrées
- */
-function normalizeCommandBounds(commande, planning, now = new Date()) {
-  const planningEntry = planning.find(p => p.commandeId === commande.id);
-  if (!planningEntry) return null;
-
-  let plannedStart = new Date(planningEntry.debut);
-  let plannedEnd = new Date(planningEntry.fin);
-
-  // Règle : si "A commencer" et début dans le passé, recaler à ceilToHour(now)
-  if (commande.statut === "A commencer" && plannedStart < now) {
-    const newStart = ceilToHour(now);
-    const duration = getWorkingMinutesBetween(plannedStart, plannedEnd, {
-      skipNonBusiness: true,
-      holidays: new Set()
-    });
-    
-    plannedStart = nextWorkStart(newStart, { skipNonBusiness: true, holidays: new Set() });
-    plannedEnd = addWorkingHours(plannedStart, duration / 60, { skipNonBusiness: true, holidays: new Set() });
-  }
-
-  return {
-    ...planningEntry,
-    debut: plannedStart.toISOString(),
-    fin: plannedEnd.toISOString(),
-    normalizedStart: plannedStart,
-    normalizedEnd: plannedEnd
-  };
-}
-
 export default function PlanningPage() {
   console.log("[Planning] render", { time: new Date().toISOString() });
 
@@ -325,6 +292,7 @@ export default function PlanningPage() {
       console.error("❌ Erreur lors du compactage de la machine:", error);
     }
   }, [getWorkingMinutesBetween, roundToNearest5Minutes, utilsNextWorkStart, utilsAddWorkingHours]);
+
   // Chargement + réajustement automatique
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;
@@ -351,10 +319,6 @@ export default function PlanningPage() {
       setCommandes(commandesData);
       setPlanning(planningData);
 
-      // Get the next full hour for scheduling non-"En cours" orders
-      const now = new Date();
-      const nextFullHour = getNextFullHour(undefined, workOpts);
-
       const planningParMachine = planningData.reduce((acc, ligne) => {
         (acc[ligne.machineId] ||= []).push(ligne);
         return acc;
@@ -362,32 +326,7 @@ export default function PlanningPage() {
 
       const updates = [];
 
-      // STEP 1: Reschedule all non-"En cours" orders to start at next full hour
-      for (const p of planningData) {
-        const cmd = commandeByIdMap.get(p.commandeId);
-        if (!cmd) continue;
-
-        // Only reschedule orders that are NOT "En cours"
-        if (cmd.statut !== "En cours") {
-          const currentDebut = new Date(p.debut);
-          const newDebut = nextFullHour;
-          
-          // Calculate new end time based on order duration
-          const durationHours = cmd.duree_totale_heures_arrondie ?? cmd.duree_totale_heures ?? 0;
-          const newFin = addWorkingHours(newDebut, durationHours, workOpts);
-
-          // Only update if the start time has actually changed
-          if (newDebut.getTime() !== currentDebut.getTime()) {
-            updates.push({
-              id: p.id,
-              debut: newDebut.toISOString(),
-              fin: newFin.toISOString()
-            });
-          }
-        }
-      }
-
-      // STEP 2: Auto-extend "En cours" orders by 1 hour (existing logic)
+      // Auto-extend "En cours" orders by 1 hour (existing logic)
       for (const lignes of Object.values(planningParMachine)) {
         const enrichies = lignes
           .map((p) => {
@@ -404,15 +343,7 @@ export default function PlanningPage() {
           const finActuel = new Date(current.p.fin);
           const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
           if (nouvelleFin.getTime() !== finActuel.getTime()) {
-            // Check if this planning entry already has an update from STEP 1
-            const existingUpdateIndex = updates.findIndex(u => u.id === current.p.id);
-            if (existingUpdateIndex >= 0) {
-              // Update the existing entry to also include the extended fin time
-              updates[existingUpdateIndex].fin = nouvelleFin.toISOString();
-            } else {
-              // Add new update for extending "En cours" order
-              updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
-            }
+            updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
           }
         }
       }
@@ -466,22 +397,11 @@ export default function PlanningPage() {
   // 🔸 FILTRAGE UI anti-phantoms : libération à l’heure pleine pour commandes "Terminée"
   const filteredPlanning = useMemo(() => {
     if (!planning?.length) return [];
-    const now = new Date();
     const out = [];
 
     for (const row of planning) {
       const cmd = commandeById.get(row.commandeId);
       if (!cmd) { out.push(row); continue; }
-
-      // Normaliser les bornes selon les règles métier
-      const normalized = normalizeCommandBounds(cmd, [row], now);
-      if (normalized) {
-        // Si les bornes ont changé, utiliser les nouvelles
-        if (normalized.debut !== row.debut || normalized.fin !== row.fin) {
-          out.push(normalized);
-          continue;
-        }
-      }
 
       if (String(cmd.statut || "").toLowerCase() !== "terminée") {
         out.push(row);
@@ -588,35 +508,19 @@ export default function PlanningPage() {
   );
 
   const dayViewOrders = useMemo(() => {
-    const now = new Date();
     const out = [];
     for (const p of filteredPlanning) {
       const c = commandeById.get(p.commandeId);
       const client = c?.client || c?.client_nom || c?.client_name || "";
       const color = c ? commandeColorMap.get(c.id) : undefined;
 
-      // Appliquer la même normalisation des bornes pour la vue jour
-      let startTime = new Date(p.debut);
-      let endTime = new Date(p.fin);
-
-      if (c && c.statut === "A commencer" && startTime < now) {
-        const newStart = ceilToHour(now);
-        const duration = getWorkingMinutesBetween(startTime, endTime, {
-          skipNonBusiness: true,
-          holidays: new Set()
-        });
-        
-        startTime = nextWorkStart(newStart, { skipNonBusiness: true, holidays: new Set() });
-        endTime = addWorkingHours(startTime, duration / 60, { skipNonBusiness: true, holidays: new Set() });
-      }
-
       const mids = normalizeMachineIds(p.machineId);
       for (const mid of mids) {
         out.push({
           id: p.id,                 // id du slot planning
           machineId: String(mid),   // IMPORTANT: clé identique à machines[].id (string)
-          start: startTime,
-          end: endTime,
+          start: new Date(p.debut),
+          end: new Date(p.fin),
           title: client || `Commande ${p.commandeId}`, // client seul
           status: c?.statut || "",
           color,                    // même couleur que le planning général
@@ -624,7 +528,7 @@ export default function PlanningPage() {
       }
     }
     return out;
-  }, [filteredPlanning, commandeById, commandeColorMap, getWorkingMinutesBetween, nextWorkStart, addWorkingHours]);
+  }, [filteredPlanning, commandeById, commandeColorMap]);
 
   // ----- Rendu -----
   return (
