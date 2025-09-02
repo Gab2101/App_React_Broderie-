@@ -12,26 +12,24 @@ export default function PlanningDayView({
   workEnd = 16,
   lunchStart = 12,
   lunchEnd = 13,
-  hideWeekends= true,
-  holidays = [],
+  hideWeekends = true,
+  holidays = [], // ex: ['2025-11-01','2025-12-25']
 }) {
   // Jour local à minuit (évite le -2h)
   const day = useMemo(() => {
     const d = date ? new Date(date) : new Date();
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }, [date]);
-  // Masquer week-ends (et fériés si fournis)
+
+  // Déterminer si jour ouvré (utilise des hooks mais SANS return avant)
   const holidaysSet = useMemo(() => new Set(holidays), [holidays]);
   const isBizDay = useMemo(() => isBusinessDay(day, holidaysSet), [day, holidaysSet]);
-  if (hideWeekends && !isBizDay) {
-    return null; // ou retourne un placeholder si tu préfères afficher un message
-    // return <div className="planning-day--empty">Aucune production — week-end</div>;
-  }
 
   // Bornes locales
   const startOfDay = useMemo(() => {
     const d0 = new Date(day); d0.setHours(workStart, 0, 0, 0); return d0;
   }, [day, workStart]);
+
   const endOfDay = useMemo(() => {
     const d1 = new Date(day); d1.setHours(workEnd, 0, 0, 0); return d1;
   }, [day, workEnd]);
@@ -40,6 +38,7 @@ export default function PlanningDayView({
   const lunchStartDate = useMemo(() => {
     const d2 = new Date(day); d2.setHours(lunchStart, 0, 0, 0); return d2;
   }, [day, lunchStart]);
+
   const lunchEndDate = useMemo(() => {
     const d3 = new Date(day); d3.setHours(lunchEnd, 0, 0, 0); return d3;
   }, [day, lunchEnd]);
@@ -65,15 +64,17 @@ export default function PlanningDayView({
   // Convertit un instant -> offset en minutes sur l’axe OUVRÉ (pause compressée)
   const toWorkingOffsetMin = (t) => {
     if (t <= lunchStartDate) return Math.max(0, (t - startOfDay) / 60000);
-    if (t >= lunchEndDate)
-      return minutesBeforeLunch + (t - lunchEndDate) / 60000;
+    if (t >= lunchEndDate) return minutesBeforeLunch + (t - lunchEndDate) / 60000;
     // si t est dans la pause, on le “clampe” au début de la pause
     return minutesBeforeLunch;
   };
   const pctFromOffset = (min) => (min / totalWorkingMinutes) * 100;
 
   // Regroupe & tronque à la journée (local)
+  const hideAll = hideWeekends && !isBizDay;
+
   const ordersByMachineForDay = useMemo(() => {
+    if (hideAll) return new Map(); // on appelle le hook, mais on sort tôt le calcul
     const map = new Map();
     for (const c of commandes || []) {
       if (!c?.start || !c?.end) continue;
@@ -86,7 +87,7 @@ export default function PlanningDayView({
     }
     for (const [k, L] of map) L.sort((a, b) => a.start - b.start);
     return map;
-  }, [commandes, startOfDay, endOfDay]);
+  }, [hideAll, commandes, startOfDay, endOfDay]);
 
   // Coupe un intervalle par la pause → 1 ou 2 segments
   const splitByLunch = (s, e) => {
@@ -98,6 +99,12 @@ export default function PlanningDayView({
   };
 
   const labelOf = (o) => o?.client || o?.title || "";
+
+  // 🚫 Le return conditionnel arrive APRÈS tous les hooks
+  if (hideAll) {
+    return null; // ou un placeholder si tu préfères
+    // return <div className="planning-day--empty">Aucune production — week-end</div>;
+  }
 
   return (
     <div className="planning-day">
@@ -122,7 +129,7 @@ export default function PlanningDayView({
                   <td className="machine-col">{machineName}</td>
                   <td colSpan={slots.length} className="slot-cell">
                     <div className="timeline-row">
-                      {/* Marqueur visuel de la pause (ligne pointillée + libellé) */}
+                      {/* Marqueur pause */}
                       <div
                         className="lunch-marker"
                         style={{ left: `${pctFromOffset(minutesBeforeLunch)}%` }}
@@ -131,12 +138,11 @@ export default function PlanningDayView({
                         <span>Pause</span>
                       </div>
 
-                      {/* Commandes — blocs proportionnels, coupés à 12–13 */}
+                      {/* Commandes */}
                       {list.map((o) =>
                         splitByLunch(o.start, o.end).map(([s, e], i) => {
                           const leftPct = pctFromOffset(toWorkingOffsetMin(s));
-                          const widthPct =
-                            pctFromOffset(toWorkingOffsetMin(e)) - leftPct;
+                          const widthPct = pctFromOffset(toWorkingOffsetMin(e)) - leftPct;
                           return (
                             <div
                               key={`${o.id}-${i}`}
