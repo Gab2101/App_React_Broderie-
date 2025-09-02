@@ -49,6 +49,7 @@ export default function CommandeFormModal({
   // tags
   articleTags = [],
   broderieTags = [],
+  nettoyageRules = [],
   // machines (kept for consistency if parent passes it)
   machines = [],
   // édition ?
@@ -61,11 +62,11 @@ export default function CommandeFormModal({
   const allowedSet = useMemo(() => {
     try {
       if (!selectedArticleLabel) return null;
-      return getAllowedBroderieForArticle([], selectedArticleLabel);
+      return getAllowedBroderieForArticle(nettoyageRules, selectedArticleLabel);
     } catch {
       return null;
     }
-  }, [selectedArticleLabel]);
+  }, [selectedArticleLabel, nettoyageRules]);
 
   const filteredBroderieTags = useMemo(() => {
     const list = Array.isArray(broderieTags) ? broderieTags : [];
@@ -319,6 +320,26 @@ export default function CommandeFormModal({
               ))}
           </div>
 
+          {/* Indicateur de filtrage des options */}
+          {selectedArticleLabel && (
+            <div style={{ 
+              padding: "8px 12px", 
+              backgroundColor: "#e3f2fd", 
+              border: "1px solid #90caf9",
+              borderRadius: "6px", 
+              fontSize: "13px",
+              color: "#1565c0",
+              marginBottom: "8px"
+            }}>
+              📋 Options filtrées pour : <strong>{selectedArticleLabel}</strong>
+              {allowedSet && allowedSet.size > 0 && (
+                <span style={{ marginLeft: "8px", opacity: 0.8 }}>
+                  ({allowedSet.size} option{allowedSet.size > 1 ? 's' : ''} disponible{allowedSet.size > 1 ? 's' : ''})
+                </span>
+              )}
+            </div>
+          )}
+
           <label>Options :</label>
           <div className="tags-container">
             {Array.isArray(filteredBroderieTags) &&
@@ -333,6 +354,23 @@ export default function CommandeFormModal({
                 </button>
               ))}
           </div>
+
+          {/* Message si aucune option disponible */}
+          {selectedArticleLabel && filteredBroderieTags.length === 0 && (
+            <div style={{ 
+              padding: "8px 12px", 
+              backgroundColor: "#fff3e0", 
+              border: "1px solid #ffcc02",
+              borderRadius: "6px", 
+              fontSize: "13px",
+              color: "#e65100",
+              marginTop: "8px"
+            }}>
+              ⚠️ Aucune option de broderie configurée pour cet article. 
+              <br />
+              Configurez les règles dans la page <strong>Paramètres</strong>.
+            </div>
+          )}
 
           {/* ✅ Multi-machines (pas de bouton "Configurer…") */}
           <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>

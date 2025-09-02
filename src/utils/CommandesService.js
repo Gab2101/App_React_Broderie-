@@ -1,6 +1,6 @@
 import { supabase } from "../supabaseClient";
 import { ceilToHour, nextWorkStart, addWorkingHours, getWorkingMinutesBetween } from "./time";
-
+import { DEFAULT_WORKDAY } from "../Pages/Admin/Commandes/utils/workhours";
 /**
  * Calcule la durée réelle (en minutes, arrondie au supérieur)
  * entre deux timestamptz.
@@ -27,8 +27,9 @@ const fetchCommandeCore = async (id) => {
 };
 
 /**
- * Ajuste le planning d'une commande lors du passage en "En cours"
+ * Ajuste le planning d'une commande UNIQUEMENT lors du passage en "En cours"
  * Si le début planifié est dans le passé, le recale à ceilToHour(now)
+ * Respecte les heures ouvrées et préserve la durée originale
  */
 const adjustPlanningForEnCours = async (commandeId, now) => {
   try {
@@ -48,25 +49,13 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
       return;
     }
 
-    // 2. Récupérer les données de la commande pour la durée
-    const { data: commandeData, error: commandeError } = await supabase
-      .from("commandes")
-      .select("duree_totale_heures, duree_totale_heures_arrondie")
-      .eq("id", commandeId)
-      .single();
-
-    if (commandeError) {
-      console.error("❌ Erreur récupération données commande", commandeId, ":", commandeError);
-      return;
-    }
-
-    // 3. Traiter chaque entrée de planning
+    // 2. Traiter chaque entrée de planning
     const updates = [];
     for (const entry of planningEntries) {
       const plannedStart = new Date(entry.debut);
       const plannedEnd = new Date(entry.fin);
 
-      // Si le début planifié est dans le passé, recaler
+      // RÈGLE : Si le début planifié est dans le passé, recaler à ceilToHour(now)
       if (plannedStart < now) {
         const newStart = ceilToHour(now);
         
@@ -76,27 +65,33 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
           holidays: new Set()
         });
 
-        // Ajuster le début aux heures ouvrées
+        // Ajuster le début aux heures ouvrées (respecte DEFAULT_WORKDAY)
         const adjustedStart = nextWorkStart(newStart, { 
           skipNonBusiness: true, 
           holidays: new Set() 
         });
 
-        // Calculer la nouvelle fin en respectant les heures ouvrées
+        // Calculer la nouvelle fin en préservant la durée et respectant les heures ouvrées
         const adjustedEnd = addWorkingHours(adjustedStart, originalDuration / 60, {
           skipNonBusiness: true,
           holidays: new Set()
         });
 
+        // Arrondir aux 5 minutes pour cohérence avec le système
+        const roundedStart = roundToNearest5Minutes(adjustedStart);
+        const roundedEnd = roundToNearest5Minutes(adjustedEnd);
+
         updates.push({
           id: entry.id,
-          debut: adjustedStart.toISOString(),
-          fin: adjustedEnd.toISOString()
+          debut: roundedStart.toISOString(),
+          fin: roundedEnd.toISOString()
         });
+
+        console.log(`📅 Recalage commande ${commandeId}: ${plannedStart.toLocaleString()} → ${roundedStart.toLocaleString()}`);
       }
     }
 
-    // 4. Appliquer les mises à jour si nécessaire
+    // 3. Appliquer les mises à jour si nécessaire
     if (updates.length > 0) {
       await Promise.all(
         updates.map(update => 
@@ -106,10 +101,10 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
           }).eq("id", update.id)
         )
       );
-      console.log(`✅ Planning ajusté pour commande ${commandeId}: ${updates.length} entrée(s) mise(s) à jour`);
+      console.log(`✅ Planning recalé pour commande ${commandeId}: ${updates.length} entrée(s) mise(s) à jour`);
     }
   } catch (error) {
-    console.error("❌ Erreur lors de l'ajustement du planning:", error);
+    console.error("❌ Erreur lors du recalage du planning:", error);
   }
 };
 
@@ -118,11 +113,12 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
  *  - started_at (pose si on passe en "En cours" et qu'il est vide)
  *  - finished_at (pose si on passe en "Terminée")
  *  - broderie_minutes_reel (calculée au passage en "Terminée" si started_at existe)
+ *  - Recalage du planning UNIQUEMENT lors du passage en "En cours"
  *
  * IMPORTANT:
  *  - On NE touche JAMAIS à started_at s'il existe déjà (pas d'effacement).
  *  - On écrit started_at / finished_at en UTC (timestamptz) via toISOString().
- *  - Si passage en "En cours", ajuster le planning si le début est dans le passé.
+ *  - Si passage en "En cours", recaler le planning si le début est dans le passé.
  *
  * Usage côté UI (inchangé) :
  *   await updateCommandeStatut(commande.id, "En cours");
@@ -143,7 +139,7 @@ export async function updateCommandeStatut(id, nextStatut) {
       patch.started_at = now.toISOString(); // timestamptz → OK en UTC
     }
     
-    // Ajuster le planning si le début est dans le passé
+    // RÈGLE FEATURE 2: Recaler le planning UNIQUEMENT lors du passage en "En cours"
     await adjustPlanningForEnCours(id, now);
     
     // On ne modifie pas finished_at ici (si tu veux "reprendre" on peut le remettre à NULL)

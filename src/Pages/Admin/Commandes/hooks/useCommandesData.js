@@ -10,6 +10,8 @@ export default function useCommandesData() {
   const [planning, setPlanning] = useState([]);
   const [linkableCommandes, setLinkableCommandes] = useState([]);
   const [nettoyageRules, setNettoyageRules] = useState([]);
+  const [rulesLoading, setRulesLoading] = useState(true);
+  const [rulesError, setRulesError] = useState(null);
 
   const reloadData = async () => {
     try {
@@ -38,15 +40,49 @@ export default function useCommandesData() {
         .in("statut", ["A commencer", "En cours"]);
       if (!errLink) setLinkableCommandes(cmdLinkables || []);
 
-      const rules = await fetchNettoyageRules();
-      setNettoyageRules(rules || []);
+      // Chargement des règles de nettoyage avec gestion d'erreur
+      setRulesLoading(true);
+      setRulesError(null);
+      try {
+        const rules = await fetchNettoyageRules();
+        setNettoyageRules(rules || []);
+      } catch (error) {
+        console.error("Erreur chargement règles de nettoyage:", error);
+        setRulesError(error.message || "Erreur de chargement des règles");
+        setNettoyageRules([]);
+      } finally {
+        setRulesLoading(false);
+      }
     } catch (err) {
       console.error("Erreur reloadData:", err);
+      setRulesLoading(false);
     }
   };
 
   useEffect(() => {
     reloadData();
+  }, []);
+
+  // Realtime sur nettoyage_rules pour mise à jour automatique
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-nettoyage-rules")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "nettoyage_rules" },
+        () => {
+          // Recharger les règles quand elles changent
+          fetchNettoyageRules()
+            .then(rules => setNettoyageRules(rules || []))
+            .catch(error => {
+              console.error("Erreur rechargement règles:", error);
+              setRulesError(error.message || "Erreur de rechargement");
+            });
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, []);
 
   useEffect(() => {
@@ -77,6 +113,8 @@ export default function useCommandesData() {
     planning,
     linkableCommandes,
     nettoyageRules,
+    rulesLoading,
+    rulesError,
     reloadData,
   };
 }

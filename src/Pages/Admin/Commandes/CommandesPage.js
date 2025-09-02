@@ -215,7 +215,7 @@ export default function CommandesPage() {
       };
     });
 
-    // 4) Appel API : on envoie bien l’UTC (évite le décalage de 2h)
+    // 4) Appel API : on envoie bien l'UTC (évite le décalage de 2h)
     const { errorCmd, errorAssign } = await createCommandeWithAssignations({
       formData: {
         ...form.formData,
@@ -234,7 +234,7 @@ export default function CommandesPage() {
         planned_end: r.planned_end_iso_utc,
       })),
       meta,
-      plannedStartISO: null, // on n’utilise plus ce champ “global”
+      plannedStartISO: null, // on n'utilise plus ce champ "global"
     });
 
     if (errorCmd || errorAssign) {
@@ -337,6 +337,7 @@ export default function CommandesPage() {
         linkableCommandes={linkableCommandes}
         articleTags={articleTags}
         broderieTags={broderieTags}
+        nettoyageRules={nettoyageRules}
         machines={machines}
         isEditing={Boolean(form.formData?.id)}
       />
