@@ -7,6 +7,42 @@ import { calculerDurees } from "../../../../utils/calculs";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
 import { clampPercentToStep5 } from "../utils/timeRealtime";
 
+/**
+ * Calcule automatiquement le niveau d'urgence basé sur la date de livraison
+ */
+const calculateUrgency = (dateLivraison) => {
+  if (!dateLivraison) return 1;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const livraison = new Date(dateLivraison);
+  livraison.setHours(0, 0, 0, 0);
+  
+  const diffTime = livraison.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 2) return 5;
+  if (diffDays < 5) return 4;
+  if (diffDays < 10) return 3;
+  if (diffDays < 15) return 2;
+  return 1;
+};
+
+/**
+ * Obtient la couleur correspondant au niveau d'urgence
+ */
+const getUrgencyColor = (level) => {
+  const urgencyColors = {
+    1: "#4caf50", // Vert - Faible
+    2: "#2196f3", // Bleu - Moyenne
+    3: "#ff9800", // Orange - Élevée
+    4: "#f44336", // Rouge - Critique
+    5: "#000000", // Noir - Urgence maximale
+  };
+  return urgencyColors[level] || "#4caf50";
+};
+
 export default function CommandeCard({
   cmd,
   STATUTS,
@@ -18,6 +54,21 @@ export default function CommandeCard({
   nettoyageRules,    // pour fallback calcul
 }) {
   const theme = getStatusTheme(cmd.statut);
+  
+  // Calcul automatique de l'urgence basé sur la date de livraison
+  const calculatedUrgency = calculateUrgency(cmd.dateLivraison);
+  const urgencyColor = getUrgencyColor(calculatedUrgency);
+  
+  const getUrgencyLabel = (level) => {
+    const labels = {
+      1: "Faible",
+      2: "Moyenne", 
+      3: "Élevée",
+      4: "Critique",
+      5: "Urgence maximale"
+    };
+    return labels[level] || "Faible";
+  };
 
   // Durées
   let b = cmd.duree_broderie_heures;
@@ -79,12 +130,49 @@ export default function CommandeCard({
       >
         <h3 style={{ margin: 0 }}>Commande #{cmd.numero}</h3>
         <StatusBadge statut={cmd.statut || "A commencer"} />
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 8px",
+            borderRadius: "12px",
+            backgroundColor: urgencyColor,
+            color: urgencyColor === "#000000" ? "#ffffff" : "#ffffff",
+            fontSize: "11px",
+            fontWeight: "600",
+          }}
+          title={`Urgence: ${getUrgencyLabel(calculatedUrgency)}`}
+        >
+          <span
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              backgroundColor: "rgba(255,255,255,0.8)",
+            }}
+          />
+          {getUrgencyLabel(calculatedUrgency)}
+        </div>
       </div>
 
       <p><strong>Client :</strong> {cmd.client}</p>
       <p><strong>Quantité :</strong> {cmd.quantite}</p>
       <p><strong>Points :</strong> {cmd.points}</p>
-      <p><strong>Urgence :</strong> {cmd.urgence}</p>
+      <p>
+        <strong>Urgence :</strong> 
+        <span style={{ 
+          marginLeft: "8px",
+          padding: "2px 6px",
+          borderRadius: "4px",
+          backgroundColor: urgencyColor,
+          color: urgencyColor === "#000000" ? "#ffffff" : "#ffffff",
+          fontSize: "12px",
+          fontWeight: "600"
+        }}>
+          Niveau {calculatedUrgency} - {getUrgencyLabel(calculatedUrgency)}
+        </span>
+      </p>
       <p><strong>Livraison :</strong> {cmd.dateLivraison}</p>
 
       <p style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -1,3 +1,27 @@
+/**
+ * Calcule automatiquement le niveau d'urgence basé sur la date de livraison
+ * @param {string} dateLivraison - Date de livraison
+ * @returns {number} Niveau d'urgence (1-5)
+ */
+export const calculateUrgency = (dateLivraison) => {
+  if (!dateLivraison) return 1;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const livraison = new Date(dateLivraison);
+  livraison.setHours(0, 0, 0, 0);
+  
+  const diffTime = livraison.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 2) return 5;
+  if (diffDays < 5) return 4;
+  if (diffDays < 10) return 3;
+  if (diffDays < 15) return 2;
+  return 1;
+};
+
 export const getUrgencyColor = (level) => {
   const urgencyColors = {
     1: "#4caf50",
@@ -19,17 +43,8 @@ export const getColorFromId = (id) => {
   return colors[index];
 };
 
-export const computeUrgency = (dateLivraison) => {
-  if (!dateLivraison) return 1;
-  const today = new Date();
-  const livraison = new Date(dateLivraison);
-  const diffDays = Math.ceil((livraison - today) / (1000 * 60 * 60 * 24));
-  if (diffDays < 2) return 5;
-  if (diffDays < 5) return 4;
-  if (diffDays < 10) return 3;
-  if (diffDays < 15) return 2;
-  return 1;
-};
+// Alias pour compatibilité
+export const computeUrgency = calculateUrgency;
 
 export const sortByPriority = (a, b) => {
   const au = !!a.urgent;

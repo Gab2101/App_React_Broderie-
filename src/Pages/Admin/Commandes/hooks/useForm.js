@@ -1,6 +1,28 @@
 // src/Pages/Admin/Commandes/hooks/useForm.js
 import { useState } from "react";
 
+/**
+ * Calcule automatiquement le niveau d'urgence basé sur la date de livraison
+ */
+const calculateUrgency = (dateLivraison) => {
+  if (!dateLivraison) return 1;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const livraison = new Date(dateLivraison);
+  livraison.setHours(0, 0, 0, 0);
+  
+  const diffTime = livraison.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 2) return 5;
+  if (diffDays < 5) return 4;
+  if (diffDays < 10) return 3;
+  if (diffDays < 15) return 2;
+  return 1;
+};
+
 export default function useForm() {
   const emptyForm = {
     id: null,
@@ -25,16 +47,7 @@ export default function useForm() {
 
   const handleDateChange = (e) => {
     const value = e.target.value;
-    const today = new Date();
-    const selectedDate = new Date(value);
-
-    const diffDays = Math.ceil((selectedDate - today) / (1000 * 60 * 60 * 24));
-
-    let urgence = 1;
-    if (diffDays < 2) urgence = 5;
-    else if (diffDays < 5) urgence = 4;
-    else if (diffDays < 10) urgence = 3;
-    else if (diffDays < 15) urgence = 2;
+    const urgence = calculateUrgency(value);
 
     setFormData((prev) => ({
       ...prev,

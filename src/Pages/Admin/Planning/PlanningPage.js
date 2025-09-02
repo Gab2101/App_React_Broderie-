@@ -22,7 +22,7 @@ import PlanningDayView from "./PlanningDayView";
 import { parseISOAny } from "./lib/parse";
 import { normalizeSlotForGrid } from "./lib/grid";
 import { workingHoursBetween } from "./lib/workingHours";
-import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority";
+import { sortByPriority, getUrgencyColor, calculateUrgency } from "./lib/priority";
 
 console.log("[Planning] module loaded (refactor + inversion jours/machines + vue jour)");
 
@@ -516,7 +516,7 @@ export default function PlanningPage() {
       const dateLivraison =
         c.dateLivraison || c.deadline || c.date_livraison || c.date_limite || null;
 
-      const level = computeUrgency(dateLivraison);        // 1..5
+      const level = calculateUrgency(dateLivraison);        // 1..5
       const color = getUrgencyColor(level);               // hex (inclut noir si 5)
       m.set(c.id, color);
     }
