@@ -22,7 +22,8 @@ export default function CommandeCard({
   // Durées
   let b = cmd.duree_broderie_heures;
   let n = cmd.duree_nettoyage_heures;
-  let t = cmd.duree_totale_heures;
+  // ✅ CORRECTION: Utiliser duree_totale_heures_arrondie pour l'affichage cohérent
+  let t = cmd.duree_totale_heures_arrondie || cmd.duree_totale_heures;
 
   if (b == null || n == null || t == null) {
     const etiquetteArticle = cmd.types?.[0] || null;
@@ -48,12 +49,15 @@ export default function CommandeCard({
 
     b = calc.dureeBroderieHeures;
     n = calc.dureeNettoyageHeures;
-    t = calc.dureeTotaleHeures;
+    // ✅ CORRECTION: Utiliser la durée arrondie pour la cohérence d'affichage
+    t = calc.dureeTotaleHeuresArrondie || calc.dureeTotaleHeures;
   }
 
+  // ✅ CORRECTION: Calcul du coefficient basé sur la durée théorique vs arrondie
   const theoriqueTotal = (Number(b) || 0) + (Number(n) || 0);
-  const coefAffiche =
-    theoriqueTotal > 0 ? clampPercentToStep5(Math.round((Number(t || 0) / theoriqueTotal) * 100)) : null;
+  const dureeReelleArrondie = Number(t || 0);
+  const coefAffiche = theoriqueTotal > 0 ? 
+    clampPercentToStep5(Math.round((dureeReelleArrondie / theoriqueTotal) * 100)) : null;
 
   const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
   const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;
@@ -125,7 +129,7 @@ export default function CommandeCard({
       <p><strong>Durée broderie (théorique) :</strong> {convertDecimalToTime(b ?? 0)}</p>
       <p><strong>Durée nettoyage (théorique) :</strong> {convertDecimalToTime(n ?? 0)}</p>
       <p>
-        <strong>Durée totale (réelle appliquée) :</strong> {convertDecimalToTime(t ?? 0)}
+        <strong>Durée totale (planifiée - arrondie à l'heure) :</strong> {convertDecimalToTime(t ?? 0)}
         {coefAffiche ? <em style={{ marginLeft: 6, opacity: 0.7 }}>({coefAffiche}% appliqué)</em> : null}
       </p>
 

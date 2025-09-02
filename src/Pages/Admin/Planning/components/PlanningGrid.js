@@ -101,10 +101,10 @@ function cellSegmentsForDay(slots, day) {
 function mergeContinuousSegments(segs) {
   if (!segs.length) return [];
 
-  // Tolérance large pour absorber les créneaux "à l'heure" avec micro-gaps
-  // (ex. slots d'1h qui laissent 1-2 min ou quelques secondes entre eux).
-  // Ajuste à 30-90 min selon ton générateur de créneaux.
-  const toleranceMs = 65 * 60 * 1000; // 65 minutes
+  // ✅ CORRECTION: Tolérance réduite pour garantir la cohérence avec duree_totale_heures_arrondie
+  // Seuls les segments strictement contigus ou avec un micro-gap (< 5 min) seront fusionnés
+  // Cela évite de regrouper des créneaux qui devraient rester distincts selon l'arrondi à l'heure
+  const toleranceMs = 5 * 60 * 1000; // 5 minutes maximum
 
   // Tri par début (sécurité)
   const sorted = [...segs].sort((a, b) => a.segStart - b.segStart);
@@ -118,11 +118,11 @@ function mergeContinuousSegments(segs) {
     // Même commande ?
     const sameCmd = s.commandeId === cur.commandeId;
 
-    // Si même commande, on fusionne si le nouveau commence AVANT (ou très
-    // peu après) la fin du courant + tolérance. Ça couvre :
+    // ✅ CORRECTION: Fusion plus stricte pour respecter l'arrondi à l'heure
+    // Si même commande, on fusionne seulement si vraiment contigu ou micro-gap
     // - chevauchement (s.segStart < cur.segEnd)
     // - contiguïté exacte (s.segStart === cur.segEnd)
-    // - petit trou (s.segStart - cur.segEnd <= toleranceMs)
+    // - très petit trou uniquement (s.segStart - cur.segEnd <= 5min)
     if (sameCmd && s.segStart <= cur.segEnd + toleranceMs) {
       cur.segEnd = Math.max(cur.segEnd, s.segEnd);
     } else {

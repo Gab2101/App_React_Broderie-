@@ -96,12 +96,16 @@ export async function createCommandeAndPlanning({
   const anchorBase = lastFin && lastFin > nowDispo ? lastFin : nowDispo;
   const anchor = debutMinOverride && debutMinOverride > anchorBase ? debutMinOverride : anchorBase;
   const debut = nextWorkStart(anchor);
-  const fin = addWorkingHours(debut, minutesReellesLocal / 60);
+  
+  // ✅ CORRECTION: Utiliser duree_totale_heures_arrondie pour calculer la fin
+  // Cela garantit que la durée planifiée correspond exactement à l'affichage
+  const dureeTotaleHeuresArrondie = Math.ceil(dureeTotaleHeuresTheorique);
+  const fin = addWorkingHours(debut, dureeTotaleHeuresArrondie);
 
   const { id, ...formSansId } = formData;
 
+  // ✅ CORRECTION: Cohérence entre les valeurs stockées et la planification
   const dureeTotaleHeuresReelleAppliquee = minutesReellesLocal / 60;
-  const dureeTotaleHeuresArrondie = Math.ceil(dureeTotaleHeuresReelleAppliquee);
 
   const payload = {
     ...formSansId,
@@ -110,7 +114,7 @@ export async function createCommandeAndPlanning({
     duree_broderie_heures: dureeBroderieHeures,
     duree_nettoyage_heures: dureeNettoyageHeures,
     duree_totale_heures: dureeTotaleHeuresReelleAppliquee,
-    duree_totale_heures_arrondie: dureeTotaleHeuresArrondie,
+    duree_totale_heures_arrondie: dureeTotaleHeuresArrondie, // Utilisée pour la planification
     statut: "A commencer",
     linked_commande_id: isLinked ? Number(linkedCommandeId) : null,
     same_machine_as_linked: Boolean(isLinked && sameMachineAsLinked),
