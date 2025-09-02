@@ -46,6 +46,9 @@ export default function Machines() {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ nom: "", nbTetes: "", etiquettes: [] });
 
+  // État pour la barre de recherche
+  const [searchQuery, setSearchQuery] = useState('');
+
   /* =========================
      Load machines + normalize
   ========================= */
@@ -272,6 +275,31 @@ export default function Machines() {
   );
 
   /* =========================
+     Search functionality
+  ========================= */
+  const filteredMachines = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return machines;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    return machines.filter(machine => {
+      // Recherche par nom
+      const nameMatch = machine.nom?.toLowerCase().includes(query);
+      
+      // Recherche par nombre de têtes
+      const nbTetesMatch = String(machine.nbTetes || '').includes(query);
+      
+      // Recherche par étiquettes
+      const etiquettesMatch = machine.etiquettes?.some(tag => 
+        tag.toLowerCase().includes(query)
+      );
+      
+      return nameMatch || nbTetesMatch || etiquettesMatch;
+    });
+  }, [machines, searchQuery]);
+
+  /* =========================
      UI
   ========================= */
   return (
@@ -281,9 +309,32 @@ export default function Machines() {
         {loading && <span className="muted">Chargement…</span>}
       </div>
 
+      {/* Barre de recherche */}
+      <div className="search-bar-container">
+        <input
+          type="text"
+          placeholder="Rechercher une machine par nom, têtes ou étiquette..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="search-input"
+          aria-label="Rechercher une machine"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="clear-search-btn"
+            aria-label="Effacer la recherche"
+            title="Effacer la recherche"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       {/* Liste des machines */}
       <div className="liste-machines">
-        {machines.map((machine) => (
+        {filteredMachines.map((machine) => (
           <MachinesCard
             key={machine.id}
             machine={machine}
@@ -292,7 +343,18 @@ export default function Machines() {
             onClick={openDetails}
           />
         ))}
-        {!loading && machines.length === 0 && (
+        {!loading && filteredMachines.length === 0 && searchQuery && (
+          <div className="empty-state">
+            Aucune machine trouvée pour "{searchQuery}".
+            <button 
+              onClick={() => setSearchQuery('')}
+              style={{ marginLeft: 8, textDecoration: 'underline', background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+            >
+              Effacer la recherche
+            </button>
+          </div>
+        )}
+        {!loading && machines.length === 0 && !searchQuery && (
           <div className="empty-state">Aucune machine enregistrée.</div>
         )}
       </div>

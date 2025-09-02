@@ -71,40 +71,13 @@ export default function CommandeCard({
   };
 
   // Durées
-  let b = cmd.duree_broderie_heures;
-  let n = cmd.duree_nettoyage_heures;
-  let t = cmd.duree_totale_heures;
+  // Utiliser directement les valeurs stockées dans la base de données
+  const b = cmd.duree_broderie_heures || 0;
+  const n = cmd.duree_nettoyage_heures || 0;
+  const t = cmd.duree_totale_heures || 0;
 
-  if (b == null || n == null || t == null) {
-    const etiquetteArticle = cmd.types?.[0] || null;
-    const nettoyageSec = computeNettoyageSecondsForOrder(
-      etiquetteArticle,
-      cmd.options,
-      nettoyageRules,
-      articleTags
-    );
-
-    const quantite = Number(cmd.quantite || 0);
-    const points = Number(cmd.points || 0);
-    const nbTetes = Number(machines.find((m) => m.nom === cmd.machineAssignee)?.nbTetes || 1);
-    const vitessePPM = Number(cmd.vitesseMoyenne || 680);
-
-    const calc = calculerDurees({
-      quantite,
-      points,
-      vitesse: vitessePPM,
-      nbTetes,
-      nettoyageParArticleSec: nettoyageSec,
-    });
-
-    b = calc.dureeBroderieHeures;
-    n = calc.dureeNettoyageHeures;
-    t = calc.dureeTotaleHeures;
-  }
-
-  const theoriqueTotal = (Number(b) || 0) + (Number(n) || 0);
-  const coefAffiche =
-    theoriqueTotal > 0 ? clampPercentToStep5(Math.round((Number(t || 0) / theoriqueTotal) * 100)) : null;
+  // Calculer le coefficient affiché à partir du extra_percent stocké
+  const coefAffiche = 100 + (Number(cmd.extra_percent) || 0);
 
   const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
   const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;

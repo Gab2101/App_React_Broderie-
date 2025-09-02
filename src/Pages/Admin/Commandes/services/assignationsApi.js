@@ -20,6 +20,12 @@ import { supabase } from "../../../../supabaseClient";
  */
 export async function createCommandeWithAssignations({ formData, perMachine, meta, plannedStartISO }) {
   // ---- 1) Créer la commande -------------------------------------------------
+  
+  // Calculer la durée totale appliquée pour la commande principale
+  const totalCalcMinutes = Array.isArray(perMachine) 
+    ? perMachine.reduce((sum, r) => sum + (Number(r.durationCalcMinutes) || 0), 0)
+    : 0;
+  
   const payloadCommande = {
     numero: formData.numero,
     client: formData.client,
@@ -32,6 +38,10 @@ export async function createCommandeWithAssignations({ formData, perMachine, met
     options: formData.options || [],
     statut: "A commencer",
     multi_machine: true,
+    // Durées calculées pour cohérence avec le planning
+    duree_totale_heures: totalCalcMinutes / 60,
+    mono_units_used: 1, // Fixé à 1 pour les commandes multi-machines
+    extra_percent: meta?.coefPercent ? Math.max(0, meta.coefPercent - 100) : 0,
     // liaisons éventuelles
     linked_commande_id: formData.linked_commande_id || null,
     same_machine_as_linked: !!formData.same_machine_as_linked,
@@ -58,16 +68,20 @@ export async function createCommandeWithAssignations({ formData, perMachine, met
   }
 
   const rows = perMachine.map((r) => {
-    const qty = Number(r.quantity || 0);
-    const theo = Math.max(0, Math.round(Number(r.durationTheoreticalMinutes || 0)));
+    const planned_start = r.planned_start ?? plannedStartISO ?? null;
+    const planned_end = r.planned_end ?? null;
+    
+    // Appliquer l'arrondi aux 5 minutes pour cohérence
+    const roundedStart = planned_start ? roundMinutesTo5(new Date(planned_start)) : null;
+    const roundedEnd = planned_end ? roundMinutesTo5(new Date(planned_end)) : null;
     const calc = Math.max(0, Math.round(Number(r.durationCalcMinutes || 0)));
     return {
       commande_id: commandeId,
       machine_id: r.machineId,
       qty,
       status: "A commencer",
-      planned_start: startISO,                // la fin sera calculée par trigger en DB
-      duration_minutes: theo,                 // on garde la durée "base"
+      planned_start: roundedStart ? roundedStart.toISOString() : null,
+      planned_end: roundedEnd ? roundedEnd.toISOString() : null,
       duration_calc_minutes: calc,            // et la durée finale
       extra_percent: extraPercent,
       cleaning_minutes: Math.round(cleanPerItem * qty),

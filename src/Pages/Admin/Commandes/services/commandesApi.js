@@ -113,13 +113,14 @@ export async function createCommandeAndPlanning({
     vitesseMoyenne: vitesseBase,
     duree_broderie_heures: dureeBroderieHeures,
     duree_nettoyage_heures: dureeNettoyageHeures,
-    duree_totale_heures: dureeTotaleHeuresReelleAppliquee,
+    duree_totale_heures: minutesReellesLocal / 60, // Durée réelle appliquée (avec coef)
     duree_totale_heures_arrondie: dureeTotaleHeuresArrondie,
     statut: "A commencer",
     linked_commande_id: isLinked ? Number(linkedCommandeId) : null,
     same_machine_as_linked: Boolean(isLinked && sameMachineAsLinked),
     start_after_linked: Boolean(isLinked && startAfterLinked),
-    mono_units_used: Math.max(1, Number(monoUnitsUsed || 1)), // 👈 trace
+    mono_units_used: Math.max(1, Number(monoUnitsUsed || 1)),
+    extra_percent: Math.max(0, coef - 100), // Stocke le pourcentage additionnel appliqué
   };
 
   const { data: createdCmd, error: errorCmd } = await supabase
