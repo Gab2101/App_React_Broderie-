@@ -21,11 +21,11 @@ export default function PlanningDayView({
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }, [date]);
 
-  // Déterminer si jour ouvré (utilise des hooks mais SANS return avant)
+  // Déterminer si jour ouvré (pas de return avant les hooks)
   const holidaysSet = useMemo(() => new Set(holidays), [holidays]);
   const isBizDay = useMemo(() => isBusinessDay(day, holidaysSet), [day, holidaysSet]);
 
-  // Bornes locales
+  // Bornes locales (journée)
   const startOfDay = useMemo(() => {
     const d0 = new Date(day); d0.setHours(workStart, 0, 0, 0); return d0;
   }, [day, workStart]);
@@ -34,58 +34,72 @@ export default function PlanningDayView({
     const d1 = new Date(day); d1.setHours(workEnd, 0, 0, 0); return d1;
   }, [day, workEnd]);
 
+  // Clamp pause dans les bornes de la journée (robustesse)
+  const [lunchStartClamped, lunchEndClamped] = useMemo(() => {
+    const ls = Math.min(Math.max(lunchStart, workStart), workEnd);
+    const le = Math.min(Math.max(lunchEnd,   workStart), workEnd);
+    return [ls, Math.max(le, ls)];
+  }, [lunchStart, lunchEnd, workStart, workEnd]);
+
   // Bornes pause (locales)
   const lunchStartDate = useMemo(() => {
-    const d2 = new Date(day); d2.setHours(lunchStart, 0, 0, 0); return d2;
-  }, [day, lunchStart]);
+    const d2 = new Date(day); d2.setHours(lunchStartClamped, 0, 0, 0); return d2;
+  }, [day, lunchStartClamped]);
 
   const lunchEndDate = useMemo(() => {
-    const d3 = new Date(day); d3.setHours(lunchEnd, 0, 0, 0); return d3;
-  }, [day, lunchEnd]);
+    const d3 = new Date(day); d3.setHours(lunchEndClamped, 0, 0, 0); return d3;
+  }, [day, lunchEndClamped]);
 
   // En-tête horaires: on SAUTE midi (12–13 n’apparaît pas)
   const slots = useMemo(() => {
     const arr = [];
     for (let h = workStart; h < workEnd; h++) {
-      if (h >= lunchStart && h < lunchEnd) continue; // skip pause
+      if (h >= lunchStartClamped && h < lunchEndClamped) continue; // skip pause
       arr.push(h);
     }
     return arr;
-  }, [workStart, workEnd, lunchStart, lunchEnd]);
+  }, [workStart, workEnd, lunchStartClamped, lunchEndClamped]);
 
   // Minutes “ouvrées” (on retire la pause de la largeur)
   const minutesBeforeLunch = Math.max(0, (lunchStartDate - startOfDay) / 60000);
   const lunchMinutes = Math.max(0, (lunchEndDate - lunchStartDate) / 60000);
+
   const totalWorkingMinutes = Math.max(
     0,
     (endOfDay - startOfDay) / 60000 - lunchMinutes
   );
 
+  // Si pas de minutes ouvrées (borne incohérente), on masque l’affichage
+  const noWorkingTime = totalWorkingMinutes <= 0;
+  const hideAll = (hideWeekends && !isBizDay) || noWorkingTime;
+
   // Convertit un instant -> offset en minutes sur l’axe OUVRÉ (pause compressée)
   const toWorkingOffsetMin = (t) => {
     if (t <= lunchStartDate) return Math.max(0, (t - startOfDay) / 60000);
-    if (t >= lunchEndDate) return minutesBeforeLunch + (t - lunchEndDate) / 60000;
+    if (t >= lunchEndDate)  return minutesBeforeLunch + (t - lunchEndDate) / 60000;
     // si t est dans la pause, on le “clampe” au début de la pause
     return minutesBeforeLunch;
   };
-  const pctFromOffset = (min) => (min / totalWorkingMinutes) * 100;
+
+  const pctFromOffset = (min) =>
+    totalWorkingMinutes > 0 ? (min / totalWorkingMinutes) * 100 : 0;
 
   // Regroupe & tronque à la journée (local)
-  const hideAll = hideWeekends && !isBizDay;
-
   const ordersByMachineForDay = useMemo(() => {
     if (hideAll) return new Map(); // on appelle le hook, mais on sort tôt le calcul
     const map = new Map();
     for (const c of commandes || []) {
       if (!c?.start || !c?.end) continue;
-      const s = new Date(Math.max(new Date(c.start).getTime(), startOfDay.getTime()));
-      const e = new Date(Math.min(new Date(c.end).getTime(),   endOfDay.getTime()));
+      const startMs = new Date(c.start).getTime();
+      const endMs   = new Date(c.end).getTime();
+      const s = new Date(Math.max(startMs, startOfDay.getTime()));
+      const e = new Date(Math.min(endMs,   endOfDay.getTime()));
       if (s >= e) continue;
       const list = map.get(c.machineId) || [];
       list.push({ ...c, start: s, end: e });
       map.set(c.machineId, list);
     }
-    for (const [k, L] of map) L.sort((a, b) => a.start - b.start);
+    for (const [, L] of map) L.sort((a, b) => a.start - b.start);
     return map;
   }, [hideAll, commandes, startOfDay, endOfDay]);
 
@@ -94,16 +108,15 @@ export default function PlanningDayView({
     if (e <= lunchStartDate || s >= lunchEndDate) return [[s, e]];
     const segs = [];
     if (s < lunchStartDate) segs.push([s, lunchStartDate]);
-    if (e > lunchEndDate) segs.push([lunchEndDate, e]);
+    if (e > lunchEndDate)   segs.push([lunchEndDate, e]);
     return segs;
   };
 
   const labelOf = (o) => o?.client || o?.title || "";
 
-  // 🚫 Le return conditionnel arrive APRÈS tous les hooks
+  // Return conditionnel APRÈS tous les hooks
   if (hideAll) {
-    return null; // ou un placeholder si tu préfères
-    // return <div className="planning-day--empty">Aucune production — week-end</div>;
+    return null; // ou <div className="planning-day--empty">Aucune production</div>
   }
 
   return (
@@ -142,7 +155,10 @@ export default function PlanningDayView({
                       {list.map((o) =>
                         splitByLunch(o.start, o.end).map(([s, e], i) => {
                           const leftPct = pctFromOffset(toWorkingOffsetMin(s));
-                          const widthPct = pctFromOffset(toWorkingOffsetMin(e)) - leftPct;
+                          const widthPctRaw =
+                            pctFromOffset(toWorkingOffsetMin(e)) - leftPct;
+                          const widthPct = Math.max(0, widthPctRaw); // évite largeur négative
+
                           return (
                             <div
                               key={`${o.id}-${i}`}
