@@ -1,6 +1,7 @@
 // src/Pages/Admin/Planning/PlanningDayView.jsx
 import React, { useMemo } from "react";
 import "./PlanningDayView.css";
+import { isBusinessDay } from "../../../utils/time";
 
 export default function PlanningDayView({
   date,
@@ -11,12 +12,21 @@ export default function PlanningDayView({
   workEnd = 16,
   lunchStart = 12,
   lunchEnd = 13,
+  hideWeekends= true,
+  holidays = [],
 }) {
   // Jour local à minuit (évite le -2h)
   const day = useMemo(() => {
     const d = date ? new Date(date) : new Date();
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }, [date]);
+  // Masquer week-ends (et fériés si fournis)
+  const holidaysSet = useMemo(() => new Set(holidays), [holidays]);
+  const isBizDay = useMemo(() => isBusinessDay(day, holidaysSet), [day, holidaysSet]);
+  if (hideWeekends && !isBizDay) {
+    return null; // ou retourne un placeholder si tu préfères afficher un message
+    // return <div className="planning-day--empty">Aucune production — week-end</div>;
+  }
 
   // Bornes locales
   const startOfDay = useMemo(() => {
