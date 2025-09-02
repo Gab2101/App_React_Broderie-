@@ -112,7 +112,7 @@ function buildBlocksForCommande(cmd, visibleStart, visibleEnd) {
 
 /**
  * (Optionnel) Filtrer les blocs en dehors des heures ouvrées,
- * si ta grille ne rend que 8–12 & 13–17.
+ * si ta grille ne rend que 8–12 & 13–16.
  */
 function filterToWorkHours(blocks, { keepSlotIfTouches = false } = {}) {
   return blocks.filter((b) => {
@@ -183,7 +183,7 @@ function defaultComparator(a, b) {
  * @param {Array} commandes - liste de commandes
  * @param {Object} options
  *   - now: Date pour les décisions “à l’instant T” (défaut: new Date())
- *   - onlyWorkHours: boolean -> filtrer hors 8–12 / 13–17
+ *   - onlyWorkHours: boolean -> filtrer hors 8–12 / 13–16
  *   - resolveByPriority: boolean -> activer la résolution de collisions
  *   - comparator: function(a,b) -> si tu veux une stratégie custom
  *
