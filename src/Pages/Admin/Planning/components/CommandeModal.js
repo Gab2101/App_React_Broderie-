@@ -1,4 +1,5 @@
 import React from "react";
+import { roundToNearest5Minutes } from "../../../utils/time";
 
 export default function CommandeModal({
   commande,
@@ -29,7 +30,9 @@ export default function CommandeModal({
       onOptimisticReplace?.(saved);
 
       if (statut === "Terminée") {
-        await onTermineeShortenPlanning?.(commande.id, new Date());
+        // Arrondir l'heure de fin aux 5 minutes les plus proches
+        const roundedEnd = roundToNearest5Minutes(new Date());
+        await onTermineeShortenPlanning?.(commande.id, roundedEnd);
       }
       onClose();
     } catch (e) {

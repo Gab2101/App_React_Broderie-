@@ -101,10 +101,9 @@ function cellSegmentsForDay(slots, day) {
 function mergeContinuousSegments(segs) {
   if (!segs.length) return [];
 
-  // Tolérance large pour absorber les créneaux "à l'heure" avec micro-gaps
-  // (ex. slots d'1h qui laissent 1-2 min ou quelques secondes entre eux).
-  // Ajuste à 30-90 min selon ton générateur de créneaux.
-  const toleranceMs = 65 * 60 * 1000; // 65 minutes
+  // Réduction de la tolérance pour une précision visuelle exacte
+  // Seuls les segments vraiment contigus seront fusionnés
+  const toleranceMs = 1 * 60 * 1000; // 1 minute seulement
 
   // Tri par début (sécurité)
   const sorted = [...segs].sort((a, b) => a.segStart - b.segStart);
@@ -146,7 +145,8 @@ export default function PlanningGrid({
   onOpenCommande,
   onDayColumnClick, // optionnel
 }) {
-  const workingWidthMs = (WORKDAY.end - WORKDAY.start) * 3600 * 1000;
+  // Correction: calculer la largeur réelle en excluant la pause déjeuner
+  const workingWidthMs = ((WORKDAY.lunchStart - WORKDAY.start) + (WORKDAY.end - WORKDAY.lunchEnd)) * 3600 * 1000;
   const colStyle = useMemo(
     () => ({ gridTemplateColumns: `200px repeat(${dayColumns.length}, 1fr)` }),
     [dayColumns.length]

@@ -18,7 +18,13 @@ export function ceilToHourMs(d) {
 }
 
 export function normalizeSlotForGrid(slot) {
-  const gs = floorToHourMs(parseISOAny(slot.debut));
-  const ge = ceilToHourMs(parseISOAny(slot.fin));
-  return { ...slot, gridStartMs: gs, gridEndMs: ge };
+  // Utiliser directement les valeurs de la base de données sans arrondi supplémentaire
+  // car elles sont déjà arrondies à 5 minutes et respectent les heures ouvrées
+  const startDate = parseISOAny(slot.debut);
+  const endDate = parseISOAny(slot.fin);
+  return { 
+    ...slot, 
+    gridStartMs: startDate.getTime(), 
+    gridEndMs: endDate.getTime() 
+  };
 }

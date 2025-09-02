@@ -11,6 +11,9 @@ import {
   ceilToHour,
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
+import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
+import { roundMinutesTo5 } from "../../Commandes/utils/timeRealtime";
+import { DEFAULT_WORKDAY } from "../../Commandes/utils/workhours";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
@@ -114,50 +117,181 @@ export default function PlanningPage() {
   // Raccourcir le planning lorsque statut Terminé
   const shortenPlanningForCommandeTerminee = useCallback(
     async (commandeId, actualEnd = new Date()) => {
-      const endIso = new Date(actualEnd).toISOString();
-      const nowMs = new Date(endIso).getTime();
+      // S'assurer que actualEnd est arrondi aux 5 minutes
+      const roundedActualEnd = roundToNearest5Minutes(actualEnd);
+      const endIso = roundedActualEnd.toISOString();
+      const nowMs = roundedActualEnd.getTime();
 
-      const { data: rows, error } = await supabase
+      // 1. Récupérer toutes les assignations de cette commande
+      const { data: commandeRows, error: commandeError } = await supabase
         .from("planning")
-        .select("id, debut, fin, commandeId")
+        .select("id, debut, fin, commandeId, machineId")
         .eq("commandeId", commandeId);
 
-      if (error) {
-        console.error("❌ Erreur fetch planning by commandeId:", error);
+      if (commandeError) {
+        console.error("❌ Erreur fetch planning by commandeId:", commandeError);
         return;
       }
-      if (!rows || rows.length === 0) return;
+      if (!commandeRows || commandeRows.length === 0) return;
 
-      let current = null;
-      for (const r of rows) {
+      // 2. Identifier l'assignation active (celle qui contient l'instant actuel)
+      let currentAssignation = null;
+      for (const r of commandeRows) {
         const s = new Date(r.debut).getTime();
         const e = new Date(r.fin).getTime();
-        if (s <= nowMs && nowMs < e) { current = r; break; }
+        if (s <= nowMs && nowMs < e) { 
+          currentAssignation = r; 
+          break; 
+        }
       }
 
-      const mutations = [];
-      if (current) {
-        mutations.push(supabase.from("planning").update({ fin: endIso }).eq("id", current.id));
+      if (!currentAssignation) {
+        console.warn("Aucune assignation active trouvée pour la commande", commandeId);
+        return;
       }
-      const future = rows.filter(r => {
-        const s = new Date(r.debut).getTime();
-        return s >= nowMs && (!current || r.id !== current.id);
+
+      // 3. Calculer le temps libéré (en minutes ouvrées)
+      const originalEnd = new Date(currentAssignation.fin);
+      const gapMinutes = getWorkingMinutesBetween(roundedActualEnd, originalEnd, {
+        skipNonBusiness: true,
+        holidays: new Set()
       });
-      if (future.length) {
-        mutations.push(supabase.from("planning").delete().in("id", future.map(f => f.id)));
-      }
-      if (mutations.length) await Promise.all(mutations);
 
+      // 4. Tronquer l'assignation active
+      const mutations = [];
+      mutations.push(
+        supabase.from("planning").update({ fin: endIso }).eq("id", currentAssignation.id)
+      );
+
+      // 5. Supprimer les assignations futures de cette commande
+      const futureAssignations = commandeRows.filter(r => {
+        const s = new Date(r.debut).getTime();
+        return s >= nowMs && r.id !== currentAssignation.id;
+      });
+      if (futureAssignations.length) {
+        mutations.push(
+          supabase.from("planning").delete().in("id", futureAssignations.map(f => f.id))
+        );
+      }
+
+      // 6. Si on a libéré du temps, réorganiser les assignations suivantes sur la même machine
+      if (gapMinutes > 0) {
+        await compactMachineColumnAfter(roundedActualEnd, currentAssignation.machineId, gapMinutes);
+      }
+
+      // 7. Appliquer les mutations
+      if (mutations.length) {
+        await Promise.all(mutations);
+      }
+
+      // 8. Mettre à jour l'état local
       setPlanning(prev => {
-        const deletedIds = new Set(future.map(f => f.id));
+        const deletedIds = new Set(futureAssignations.map(f => f.id));
         return prev
           .filter(p => !deletedIds.has(p.id))
-          .map(p => (current && p.id === current.id ? { ...p, fin: endIso } : p));
+          .map(p => (p.id === currentAssignation.id ? { ...p, fin: endIso } : p));
       });
     },
     []
   );
 
+  /**
+   * Compacte automatiquement les assignations suivantes sur une machine
+   * après qu'une commande soit terminée plus tôt que prévu
+   */
+  const compactMachineColumnAfter = useCallback(async (dateRef, machineId, gapMinutes) => {
+    try {
+      // 1. Récupérer toutes les assignations futures sur cette machine
+      const { data: futureAssignations, error } = await supabase
+        .from("planning")
+        .select("id, debut, fin, commandeId, machineId")
+        .eq("machineId", machineId)
+        .gte("debut", dateRef.toISOString())
+        .order("debut", { ascending: true });
+
+      if (error) {
+        console.error("❌ Erreur récupération assignations futures:", error);
+        return;
+      }
+
+      if (!futureAssignations || futureAssignations.length === 0) {
+        return; // Rien à compacter
+      }
+
+      // 2. Calculer les nouvelles heures pour chaque assignation
+      const updates = [];
+      let cumulativeShift = gapMinutes;
+
+      for (const assignation of futureAssignations) {
+        const originalStart = new Date(assignation.debut);
+        const originalEnd = new Date(assignation.fin);
+        const duration = getWorkingMinutesBetween(originalStart, originalEnd, {
+          skipNonBusiness: true,
+          holidays: new Set()
+        });
+
+        // Calculer le nouveau début en reculant de cumulativeShift minutes
+        const shiftedStartMs = originalStart.getTime() - (cumulativeShift * 60 * 1000);
+        let newStart = utilsNextWorkStart(new Date(shiftedStartMs), {
+          skipNonBusiness: true,
+          holidays: new Set()
+        });
+
+        // S'assurer que le nouveau début n'est pas avant dateRef
+        if (newStart < dateRef) {
+          newStart = utilsNextWorkStart(dateRef, {
+            skipNonBusiness: true,
+            holidays: new Set()
+          });
+        }
+
+        // Calculer la nouvelle fin en respectant les heures ouvrées
+        const newEnd = utilsAddWorkingHours(newStart, duration / 60, {
+          skipNonBusiness: true,
+          holidays: new Set()
+        });
+
+        // Arrondir aux 5 minutes
+        const roundedNewStart = roundToNearest5Minutes(newStart);
+        const roundedNewEnd = roundToNearest5Minutes(newEnd);
+
+        updates.push({
+          id: assignation.id,
+          debut: roundedNewStart.toISOString(),
+          fin: roundedNewEnd.toISOString()
+        });
+
+        // Réduire le décalage cumulatif pour les assignations suivantes
+        const actualShift = getWorkingMinutesBetween(roundedNewStart, originalStart, {
+          skipNonBusiness: true,
+          holidays: new Set()
+        });
+        cumulativeShift = Math.max(0, cumulativeShift - actualShift);
+      }
+
+      // 3. Appliquer les mises à jour en base
+      if (updates.length > 0) {
+        await Promise.all(
+          updates.map(update => 
+            supabase.from("planning").update({
+              debut: update.debut,
+              fin: update.fin
+            }).eq("id", update.id)
+          )
+        );
+
+        // 4. Mettre à jour l'état local
+        setPlanning(prev => 
+          prev.map(p => {
+            const update = updates.find(u => u.id === p.id);
+            return update ? { ...p, debut: update.debut, fin: update.fin } : p;
+          })
+        );
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors du compactage de la machine:", error);
+    }
+  }, []);
   // Chargement + réajustement automatique
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;

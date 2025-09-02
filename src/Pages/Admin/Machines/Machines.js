@@ -145,7 +145,15 @@ export default function Machines() {
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'etiquettes') {
+      // Gérer le cas spécial des étiquettes (array)
+      const cleanedEtiquettes = Array.isArray(value) 
+        ? value.filter(t => validTagSet.has(t))
+        : [];
+      setFormData((prev) => ({ ...prev, etiquettes: cleanedEtiquettes }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   }, []);
 
   const toggleTag = useCallback(

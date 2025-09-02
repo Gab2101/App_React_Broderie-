@@ -291,3 +291,76 @@ export function ajusterHeureFin(debut, dureeHeures, opts = {}) {
 
 /** Exports complémentaires provenant de ./slots si tu les utilises déjà */
 export { configureSlots, expandToHourSlots } from "./slots";
+
+/**
+ * Calcule le nombre de minutes ouvrées entre deux dates
+ * en respectant les heures de travail et les pauses
+ */
+export function getWorkingMinutesBetween(startDate, endDate, { skipNonBusiness = false, holidays = new Set() } = {}) {
+  const start = toDate(startDate);
+  const end = toDate(endDate);
+  
+  if (end <= start) return 0;
+  
+  let totalMinutes = 0;
+  let current = new Date(start);
+  
+  while (current < end) {
+    // Si on doit ignorer les jours non ouvrés et que ce n'est pas un jour ouvré
+    if (skipNonBusiness && !isBusinessDay(current, holidays)) {
+      current.setDate(current.getDate() + 1);
+      current.setHours(WORKDAY.start, 0, 0, 0);
+      continue;
+    }
+    
+    // Calculer les bornes de travail pour ce jour
+    const dayStart = new Date(current);
+    dayStart.setHours(WORKDAY.start, 0, 0, 0);
+    
+    const lunchStart = new Date(current);
+    lunchStart.setHours(WORKDAY.lunchStart, 0, 0, 0);
+    
+    const lunchEnd = new Date(current);
+    lunchEnd.setHours(WORKDAY.lunchEnd, 0, 0, 0);
+    
+    const dayEnd = new Date(current);
+    dayEnd.setHours(WORKDAY.end, 0, 0, 0);
+    
+    // Calculer l'intersection avec la période demandée
+    const periodStart = new Date(Math.max(current.getTime(), start.getTime()));
+    const periodEnd = new Date(Math.min(dayEnd.getTime(), end.getTime()));
+    
+    if (periodStart < periodEnd) {
+      // Matin (8h-12h)
+      const morningStart = new Date(Math.max(periodStart.getTime(), dayStart.getTime()));
+      const morningEnd = new Date(Math.min(periodEnd.getTime(), lunchStart.getTime()));
+      if (morningStart < morningEnd) {
+        totalMinutes += (morningEnd.getTime() - morningStart.getTime()) / 60000;
+      }
+      
+      // Après-midi (13h-17h)
+      const afternoonStart = new Date(Math.max(periodStart.getTime(), lunchEnd.getTime()));
+      const afternoonEnd = new Date(Math.min(periodEnd.getTime(), dayEnd.getTime()));
+      if (afternoonStart < afternoonEnd) {
+        totalMinutes += (afternoonEnd.getTime() - afternoonStart.getTime()) / 60000;
+      }
+    }
+    
+    // Passer au jour suivant
+    current.setDate(current.getDate() + 1);
+    current.setHours(WORKDAY.start, 0, 0, 0);
+  }
+  
+  return Math.round(totalMinutes);
+}
+
+/**
+ * Arrondit une date aux 5 minutes les plus proches
+ */
+export function roundToNearest5Minutes(date) {
+  const d = toDate(date);
+  const minutes = d.getMinutes();
+  const roundedMinutes = Math.round(minutes / 5) * 5;
+  d.setMinutes(roundedMinutes, 0, 0);
+  return d;
+}

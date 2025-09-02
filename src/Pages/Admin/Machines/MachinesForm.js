@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
+import MultiSelectDropdown from "../../../components/common/MultiSelectDropdown";
 
 function MachinesForm({
   formData,
@@ -19,6 +20,28 @@ function MachinesForm({
     return nameOk && headsOk;
   }, [formData]);
 
+  // Préparer les items pour les dropdowns
+  const articleItems = useMemo(() => 
+    articleTags.map(tag => ({ label: tag.label, value: tag.label })),
+    [articleTags]
+  );
+
+  const broderieItems = useMemo(() => 
+    broderieTags.map(tag => ({ label: tag.label, value: tag.label })),
+    [broderieTags]
+  );
+
+  const handleEtiquettesChange = (selectedLabels) => {
+    // Remplacer complètement les étiquettes par la nouvelle sélection
+    const event = {
+      target: {
+        name: 'etiquettes',
+        value: selectedLabels
+      }
+    };
+    // Simuler un changement de champ pour maintenir la compatibilité
+    onChange(event);
+  };
   return (
     <form
       onSubmit={onSubmit}
@@ -58,53 +81,37 @@ function MachinesForm({
         </select>
       </label>
 
-      <label>Étiquettes :</label>
+      <MultiSelectDropdown
+        label="Articles :"
+        items={articleItems}
+        selectedValues={(formData.etiquettes || []).filter(label => 
+          articleTags.some(tag => tag.label === label)
+        )}
+        onChange={(selectedArticles) => {
+          const currentBroderies = (formData.etiquettes || []).filter(label => 
+            broderieTags.some(tag => tag.label === label)
+          );
+          handleEtiquettesChange([...selectedArticles, ...currentBroderies]);
+        }}
+        placeholder="Sélectionner des articles..."
+        searchPlaceholder="Rechercher un article..."
+      />
 
-      {/* Groupe Articles */}
-      <div className="tags-section">
-        <p className="tags-title">Articles :</p>
-        <div className="tags-container">
-          {articleTags.length > 0 ? (
-            articleTags.map((tag) => (
-              <button
-                key={tag.label}
-                type="button"
-                className={`tag ${
-                  (formData.etiquettes || []).includes(tag.label) ? "active" : ""
-                }`}
-                onClick={() => toggleTag(tag.label)}
-              >
-                {tag.label}
-              </button>
-            ))
-          ) : (
-            <span className="muted">Aucun article disponible</span>
-          )}
-        </div>
-      </div>
-
-      {/* Groupe Broderie */}
-      <div className="tags-section">
-        <p className="tags-title">Options de broderie :</p>
-        <div className="tags-container">
-          {broderieTags.length > 0 ? (
-            broderieTags.map((tag) => (
-              <button
-                key={tag.label}
-                type="button"
-                className={`tag ${
-                  (formData.etiquettes || []).includes(tag.label) ? "active" : ""
-                }`}
-                onClick={() => toggleTag(tag.label)}
-              >
-                {tag.label}
-              </button>
-            ))
-          ) : (
-            <span className="muted">Aucune option disponible</span>
-          )}
-        </div>
-      </div>
+      <MultiSelectDropdown
+        label="Options de broderie :"
+        items={broderieItems}
+        selectedValues={(formData.etiquettes || []).filter(label => 
+          broderieTags.some(tag => tag.label === label)
+        )}
+        onChange={(selectedBroderies) => {
+          const currentArticles = (formData.etiquettes || []).filter(label => 
+            articleTags.some(tag => tag.label === label)
+          );
+          handleEtiquettesChange([...currentArticles, ...selectedBroderies]);
+        }}
+        placeholder="Sélectionner des options..."
+        searchPlaceholder="Rechercher une option..."
+      />
 
       <div className="btn-zone">
         <button
