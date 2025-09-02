@@ -1,5 +1,6 @@
 // src/Pages/Admin/Commandes/services/assignationsApi.js
 import { supabase } from "../../../../supabaseClient";
+import { roundMinutesTo5 } from "../utils/timeRealtime";
 
 /**
  * Crée une commande + ses assignations (multi-machine).
@@ -91,8 +92,8 @@ export async function createCommandeWithAssignations({
       machine_id: r.machineId,
       qty,
       status: "A commencer",
-      planned_start,
-      planned_end,
+      planned_start: planned_start ? roundMinutesTo5(new Date(planned_start)).toISOString() : null,
+      planned_end: planned_end ? roundMinutesTo5(new Date(planned_end)).toISOString() : null,
       duration_minutes,           // <-- colonne existante dans ta table
       // duration_calc_minutes: durCalc, // <-- décommente si ta table possède cette colonne
     };

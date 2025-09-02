@@ -98,6 +98,10 @@ export async function createCommandeAndPlanning({
   const debut = nextWorkStart(anchor);
   const fin = addWorkingHours(debut, minutesReellesLocal / 60);
 
+  // Apply 5-minute rounding for schedule consistency
+  const roundedDebut = roundMinutesTo5(debut);
+  const roundedFin = roundMinutesTo5(fin);
+
   const { id, ...formSansId } = formData;
 
   const dureeTotaleHeuresReelleAppliquee = minutesReellesLocal / 60;
@@ -130,9 +134,9 @@ export async function createCommandeAndPlanning({
     {
       machineId: machine.id,
       commandeId: createdCmd.id,
-      debut: debut.toISOString(),
-      debutTheorique: debut.toISOString(),
-      fin: fin.toISOString(),
+      debut: roundedDebut.toISOString(),
+      debutTheorique: roundedDebut.toISOString(),
+      fin: roundedFin.toISOString(),
     },
   ]);
 

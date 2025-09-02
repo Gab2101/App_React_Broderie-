@@ -80,8 +80,8 @@ const adjustPlanningForEnCours = async (commandeId, now) => {
         });
 
         // ✅ Arrondir aux 5 minutes pour cohérence avec le système
-        const roundedStart = roundMinutesTo5(adjustedStart);
-        const roundedEnd = roundMinutesTo5(adjustedEnd);
+        const roundedStart = new Date(roundMinutesTo5(adjustedStart));
+        const roundedEnd = new Date(roundMinutesTo5(adjustedEnd));
 
         updates.push({
           id: entry.id,

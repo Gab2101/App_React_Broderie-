@@ -13,6 +13,7 @@ import {
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
+import { roundMinutesTo5 } from "../../Commandes/utils/timeRealtime";
 import { DEFAULT_WORKDAY } from "../../../Pages/Admin/Commandes/utils/workhours";
 
 import CommandeModal from "./components/CommandeModal";
@@ -319,14 +320,48 @@ export default function PlanningPage() {
       setCommandes(commandesData);
       setPlanning(planningData);
 
+      const now = new Date();
+      const updates = [];
+
+      // STEP 1: Automatic rescheduling for non-"En cours" orders with past start times
+      for (const p of planningData) {
+        const commande = commandeByIdMap.get(p.commandeId);
+        if (!commande) continue;
+
+        // Only reschedule orders that are NOT "En cours"
+        if (commande.statut === "En cours") continue;
+
+        const plannedStart = new Date(p.debut);
+        const plannedEnd = new Date(p.fin);
+
+        // If planned start is in the past, reschedule to next available slot
+        if (plannedStart < now) {
+          // Calculate original duration in hours
+          const durationMs = plannedEnd.getTime() - plannedStart.getTime();
+          const durationHours = durationMs / (60 * 60 * 1000);
+
+          // Calculate new start time (next work start from now)
+          const newStart = nextWorkStart(now, workOpts);
+          const newEnd = addWorkingHours(newStart, durationHours, workOpts);
+
+          // Apply 5-minute rounding for consistency
+          const roundedStart = roundMinutesTo5(newStart);
+          const roundedEnd = roundMinutesTo5(newEnd);
+
+          updates.push({
+            id: p.id,
+            debut: roundedStart.toISOString(),
+            fin: roundedEnd.toISOString()
+          });
+        }
+      }
+
+      // STEP 2: Auto-extend "En cours" orders by 1 hour (existing logic)
       const planningParMachine = planningData.reduce((acc, ligne) => {
         (acc[ligne.machineId] ||= []).push(ligne);
         return acc;
       }, {});
 
-      const updates = [];
-
-      // Auto-extend "En cours" orders by 1 hour (existing logic)
       for (const lignes of Object.values(planningParMachine)) {
         const enrichies = lignes
           .map((p) => {
@@ -342,8 +377,10 @@ export default function PlanningPage() {
           const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
           const finActuel = new Date(current.p.fin);
           const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
-          if (nouvelleFin.getTime() !== finActuel.getTime()) {
-            updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
+          const roundedNouvelleFin = roundMinutesTo5(nouvelleFin);
+          
+          if (roundedNouvelleFin.getTime() !== finActuel.getTime()) {
+            updates.push({ id: current.p.id, fin: roundedNouvelleFin.toISOString() });
           }
         }
       }
@@ -358,6 +395,7 @@ export default function PlanningPage() {
             return supabase.from("planning").update(updateData).eq("id", u.id);
           })
         );
+        // Refresh planning data after updates
         const { data: planningAfter } = await supabase.from("planning").select("*");
         setPlanning(planningAfter || []);
       }
