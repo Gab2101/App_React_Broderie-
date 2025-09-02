@@ -142,7 +142,7 @@ export function isWorkHour(input) {
  *  - si minutes/secondes/ms != 0 → passe à l’heure suivante
  *  - si < 08:00 → 08:00
  *  - si dans 12–13 → 13:00
- *  - si >=17:00 → demain 08:00 (prochain jour ouvré si demandé)
+ *  - si >=16:00 → demain 08:00 (prochain jour ouvré si demandé)
  *  - option skipNonBusiness/holidays
  */
 export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = new Set() } = {}) {
