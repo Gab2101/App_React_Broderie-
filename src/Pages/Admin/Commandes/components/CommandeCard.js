@@ -129,6 +129,7 @@ export default function CommandeCard({
       <p>
         <strong>Durée totale (réelle appliquée) :</strong> {convertDecimalToTime(t ?? 0)}
         {coefAffiche ? <em style={{ marginLeft: 6, opacity: 0.7 }}>({coefAffiche}% appliqué)</em> : null}
+        }
       </p>
 
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
