@@ -125,7 +125,7 @@ function nextBusinessMorning(input, holidays) {
   return c;
 }
 
-/** Renvoie true si l'heure est strictement dans une tranche travaillée (8–12 ou 13–17) */
+/** Renvoie true si l'heure est strictement dans une tranche travaillée (8–12 ou 13–16) */
 export function isWorkHour(input) {
   const d = toDate(input);
   const h = d.getHours();
