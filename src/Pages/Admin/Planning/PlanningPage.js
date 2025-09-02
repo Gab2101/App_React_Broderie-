@@ -9,9 +9,10 @@ import {
   addWorkingHours,
   isBusinessDay,
   ceilToHour,
+  getNextFullHour,
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
-import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time.js";
+import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
@@ -289,7 +290,7 @@ export default function PlanningPage() {
     } catch (error) {
       console.error("❌ Erreur lors du compactage de la machine:", error);
     }
-  }, []);
+  }, [getWorkingMinutesBetween, roundToNearest5Minutes, utilsNextWorkStart, utilsAddWorkingHours]);
   // Chargement + réajustement automatique
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;
@@ -306,16 +307,19 @@ export default function PlanningPage() {
       const commandesData = cRes.data || [];
       const planningData = pRes.data || [];
 
+      // Create command lookup map for efficient access
+      const commandeByIdMap = new Map();
+      for (const cmd of commandesData) {
+        commandeByIdMap.set(cmd.id, cmd);
+      }
+
       setMachines(machinesData);
       setCommandes(commandesData);
       setPlanning(planningData);
 
-      // Auto-étendre 'En cours' d'1h et replanifier 'A commencer'
+      // Get the next full hour for scheduling non-"En cours" orders
       const now = new Date();
-      const nextHour = new Date(now);
-      nextHour.setMinutes(0, 0, 0);
-      nextHour.setHours(now.getHours() + 1);
-      const startAnchor = nextWorkStart(nextHour, workOpts);
+      const nextFullHour = getNextFullHour(undefined, workOpts);
 
       const planningParMachine = planningData.reduce((acc, ligne) => {
         (acc[ligne.machineId] ||= []).push(ligne);
@@ -323,74 +327,72 @@ export default function PlanningPage() {
       }, {});
 
       const updates = [];
+
+      // STEP 1: Reschedule all non-"En cours" orders to start at next full hour
+      for (const p of planningData) {
+        const cmd = commandeByIdMap.get(p.commandeId);
+        if (!cmd) continue;
+
+        // Only reschedule orders that are NOT "En cours"
+        if (cmd.statut !== "En cours") {
+          const currentDebut = new Date(p.debut);
+          const newDebut = nextFullHour;
+          
+          // Calculate new end time based on order duration
+          const durationHours = cmd.duree_totale_heures_arrondie ?? cmd.duree_totale_heures ?? 0;
+          const newFin = addWorkingHours(newDebut, durationHours, workOpts);
+
+          // Only update if the start time has actually changed
+          if (newDebut.getTime() !== currentDebut.getTime()) {
+            updates.push({
+              id: p.id,
+              debut: newDebut.toISOString(),
+              fin: newFin.toISOString()
+            });
+          }
+        }
+      }
+
+      // STEP 2: Auto-extend "En cours" orders by 1 hour (existing logic)
       for (const lignes of Object.values(planningParMachine)) {
         const enrichies = lignes
           .map((p) => {
-            const c = commandesData.find((x) => x.id === p.commandeId);
+            const c = commandeByIdMap.get(p.commandeId);
             return c ? { p, c } : null;
           })
           .filter(Boolean);
 
         const enCours = enrichies.filter(({ c }) => c.statut === "En cours");
-        const aCommencer = enrichies.filter(({ c }) => c.statut === "A commencer");
-        const autres = enrichies.filter(({ c }) => c.statut !== "En cours" && c.statut !== "A commencer");
 
-        let cursor;
+        // Extend "En cours" orders by 1 hour
         if (enCours.length > 0) {
           const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
           const finActuel = new Date(current.p.fin);
           const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
           if (nouvelleFin.getTime() !== finActuel.getTime()) {
-            updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
+            // Check if this planning entry already has an update from STEP 1
+            const existingUpdateIndex = updates.findIndex(u => u.id === current.p.id);
+            if (existingUpdateIndex >= 0) {
+              // Update the existing entry to also include the extended fin time
+              updates[existingUpdateIndex].fin = nouvelleFin.toISOString();
+            } else {
+              // Add new update for extending "En cours" order
+              updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
+            }
           }
-          cursor = nouvelleFin;
-        } else {
-          cursor = new Date(startAnchor);
-        }
-
-        const queue = aCommencer
-          .map(({ p, c }) => ({
-            p,
-            c,
-            urgent: !!c.urgent,
-            deadline: c.dateLivraison || null,
-            created_at: c.created_at || p.created_at || null,
-            expectedHours:
-              c.duree_totale_heures_arrondie ??
-              c.duree_totale_heures ??
-              (c.duree_totale_heures_minutes ?? c.duree_minutes ?? 0) / 60 ?? 0,
-          }))
-          .sort(sortByPriority);
-
-        for (const item of queue) {
-          const debutActuel = new Date(item.p.debut);
-          const finActuel = new Date(item.p.fin);
-
-          const newDebut = nextWorkStart(cursor, workOpts);
-          let newFin = addWorkingHours(newDebut, item.expectedHours, workOpts);
-
-          let plannedCells = workingHoursBetween(newDebut.toISOString(), newFin.toISOString(), workOpts);
-          if (plannedCells < item.expectedHours) {
-            const delta = item.expectedHours - plannedCells;
-            newFin = addWorkingHours(newFin, delta, workOpts);
-            plannedCells = workingHoursBetween(newDebut.toISOString(), newFin.toISOString(), workOpts);
-          }
-
-          if (newDebut.getTime() !== debutActuel.getTime() || newFin.getTime() !== finActuel.getTime()) {
-            updates.push({ id: item.p.id, debut: newDebut.toISOString(), fin: newFin.toISOString() });
-          }
-
-          cursor = newFin;
-        }
-
-        for (const { p } of autres) {
-          const finActuel = new Date(p.fin);
-          if (finActuel > cursor) cursor = finActuel;
         }
       }
 
+      // Apply all updates to the database
       if (updates.length) {
-        await Promise.all(updates.map((u) => supabase.from("planning").update(u).eq("id", u.id)));
+        await Promise.all(
+          updates.map((u) => {
+            const updateData = {};
+            if (u.debut) updateData.debut = u.debut;
+            if (u.fin) updateData.fin = u.fin;
+            return supabase.from("planning").update(updateData).eq("id", u.id);
+          })
+        );
         const { data: planningAfter } = await supabase.from("planning").select("*");
         setPlanning(planningAfter || []);
       }
