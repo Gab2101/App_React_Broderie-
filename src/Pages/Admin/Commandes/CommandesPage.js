@@ -4,7 +4,7 @@ import "../../../styles/Commandes.css";
 import NewButton from "../../../components/common/NewButton";
 import { EtiquettesContext } from "../../../context/EtiquettesContext";
 
-import CommandeFormModal from "./components/CommandeFormModal";
+import CommandeFormModal from "./components/CommandeFormModal.jsx";
 import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal";
 import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal";
 import CommandeCard from "./components/CommandeCard";
