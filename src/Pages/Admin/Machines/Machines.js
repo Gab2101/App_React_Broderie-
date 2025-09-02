@@ -167,7 +167,7 @@ export default function Machines() {
         return { ...prev, etiquettes: cleaned };
       });
     },
-    []
+    [validTagSet]
   );
 
   /* =========================
