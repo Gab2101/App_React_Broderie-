@@ -1,5 +1,6 @@
 // src/Pages/Admin/Planning/PlanningDayView.jsx
 import React, { useMemo } from "react";
+import { WORKDAY } from "../../../utils/time";
 import "./PlanningDayView.css";
 
 export default function PlanningDayView({
@@ -7,10 +8,10 @@ export default function PlanningDayView({
   machines = [],
   commandes = [],
   onOpenCommande,
-  workStart = 8,
-  workEnd = 16,
-  lunchStart = 12,
-  lunchEnd = 13,
+  workStart = WORKDAY.start,
+  workEnd = WORKDAY.end,
+  lunchStart = WORKDAY.lunchStart,
+  lunchEnd = WORKDAY.lunchEnd,
 }) {
   // Jour local à minuit (évite le -2h)
   const day = useMemo(() => {
