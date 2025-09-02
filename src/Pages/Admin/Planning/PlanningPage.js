@@ -13,6 +13,7 @@ import {
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 import { getWorkingMinutesBetween, roundToNearest5Minutes, nextWorkStart as utilsNextWorkStart, addWorkingHours as utilsAddWorkingHours } from "../../../utils/time";
+import { DEFAULT_WORKDAY } from "../../../Pages/Admin/Commandes/utils/workhours";
 
 import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
@@ -65,6 +66,39 @@ function normalizeMachineIds(raw) {
   if (!s) return [];
   if (s.includes(",")) return s.split(",").map(x => x.trim()).filter(Boolean);
   return [s];
+}
+
+/**
+ * Normalise les bornes d'une commande selon les règles métier :
+ * - Si statut = "A commencer" et planned_start < now, alors début = ceilToHour(now)
+ * - Recalcule la fin en respectant les heures ouvrées
+ */
+function normalizeCommandBounds(commande, planning, now = new Date()) {
+  const planningEntry = planning.find(p => p.commandeId === commande.id);
+  if (!planningEntry) return null;
+
+  let plannedStart = new Date(planningEntry.debut);
+  let plannedEnd = new Date(planningEntry.fin);
+
+  // Règle : si "A commencer" et début dans le passé, recaler à ceilToHour(now)
+  if (commande.statut === "A commencer" && plannedStart < now) {
+    const newStart = ceilToHour(now);
+    const duration = getWorkingMinutesBetween(plannedStart, plannedEnd, {
+      skipNonBusiness: true,
+      holidays: new Set()
+    });
+    
+    plannedStart = nextWorkStart(newStart, { skipNonBusiness: true, holidays: new Set() });
+    plannedEnd = addWorkingHours(plannedStart, duration / 60, { skipNonBusiness: true, holidays: new Set() });
+  }
+
+  return {
+    ...planningEntry,
+    debut: plannedStart.toISOString(),
+    fin: plannedEnd.toISOString(),
+    normalizedStart: plannedStart,
+    normalizedEnd: plannedEnd
+  };
 }
 
 export default function PlanningPage() {
@@ -432,11 +466,22 @@ export default function PlanningPage() {
   // 🔸 FILTRAGE UI anti-phantoms : libération à l’heure pleine pour commandes "Terminée"
   const filteredPlanning = useMemo(() => {
     if (!planning?.length) return [];
+    const now = new Date();
     const out = [];
 
     for (const row of planning) {
       const cmd = commandeById.get(row.commandeId);
       if (!cmd) { out.push(row); continue; }
+
+      // Normaliser les bornes selon les règles métier
+      const normalized = normalizeCommandBounds(cmd, [row], now);
+      if (normalized) {
+        // Si les bornes ont changé, utiliser les nouvelles
+        if (normalized.debut !== row.debut || normalized.fin !== row.fin) {
+          out.push(normalized);
+          continue;
+        }
+      }
 
       if (String(cmd.statut || "").toLowerCase() !== "terminée") {
         out.push(row);
@@ -543,19 +588,35 @@ export default function PlanningPage() {
   );
 
   const dayViewOrders = useMemo(() => {
+    const now = new Date();
     const out = [];
     for (const p of filteredPlanning) {
       const c = commandeById.get(p.commandeId);
       const client = c?.client || c?.client_nom || c?.client_name || "";
       const color = c ? commandeColorMap.get(c.id) : undefined;
 
+      // Appliquer la même normalisation des bornes pour la vue jour
+      let startTime = new Date(p.debut);
+      let endTime = new Date(p.fin);
+
+      if (c && c.statut === "A commencer" && startTime < now) {
+        const newStart = ceilToHour(now);
+        const duration = getWorkingMinutesBetween(startTime, endTime, {
+          skipNonBusiness: true,
+          holidays: new Set()
+        });
+        
+        startTime = nextWorkStart(newStart, { skipNonBusiness: true, holidays: new Set() });
+        endTime = addWorkingHours(startTime, duration / 60, { skipNonBusiness: true, holidays: new Set() });
+      }
+
       const mids = normalizeMachineIds(p.machineId);
       for (const mid of mids) {
         out.push({
           id: p.id,                 // id du slot planning
           machineId: String(mid),   // IMPORTANT: clé identique à machines[].id (string)
-          start: new Date(p.debut),
-          end: new Date(p.fin),
+          start: startTime,
+          end: endTime,
           title: client || `Commande ${p.commandeId}`, // client seul
           status: c?.statut || "",
           color,                    // même couleur que le planning général
@@ -563,7 +624,7 @@ export default function PlanningPage() {
       }
     }
     return out;
-  }, [filteredPlanning, commandeById, commandeColorMap]);
+  }, [filteredPlanning, commandeById, commandeColorMap, getWorkingMinutesBetween, nextWorkStart, addWorkingHours]);
 
   // ----- Rendu -----
   return (
