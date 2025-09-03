@@ -273,7 +273,6 @@ export default function CommandeFormModal({
                 checked={multiEnabled}
                 onChange={(e) => setMultiEnabled(e.target.checked)}
               />
-              Faire avec plusieurs machines
             </label>
           </div>
 
