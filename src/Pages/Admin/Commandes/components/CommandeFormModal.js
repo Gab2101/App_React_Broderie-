@@ -265,17 +265,6 @@ export default function CommandeFormModal({
             </div>
           )}
 
-          {/* Multi-machines */}
-          <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={multiEnabled}
-                onChange={(e) => setMultiEnabled(e.target.checked)}
-              />
-            </label>
-          </div>
-
           <button type="submit" className="btn-enregistrer">Enregistrer</button>
         </form>
 
