@@ -161,3 +161,8 @@
   border-color: var(--brand);
   color: #7a0f12;
 }
+
+.dropdown { border-radius: 12px; background:#f5f5f5; padding:6px 10px; margin:10px 0; }
+.dropdown > summary { cursor:pointer; font-weight:600; list-style:none; }
+.dropdown > summary::-webkit-details-marker { display:none; }
+

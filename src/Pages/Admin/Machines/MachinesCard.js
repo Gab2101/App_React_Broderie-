@@ -1,3 +1,4 @@
+// src/pages/Machines/MachinesCard.js
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import "./MachinesCard.css";
@@ -39,7 +40,8 @@ function MachinesCard({ machine, onClick, articleTags = [], broderieTags = [] })
     return { articleList: art, broderieList: brd };
   }, [etiquettes, articleSet, broderieSet]);
 
-  const showFallback = etiquettes.length > 0 && articleList.length === 0 && broderieList.length === 0;
+  const showFallback =
+    etiquettes.length > 0 && articleList.length === 0 && broderieList.length === 0;
 
   const handleKey = (e) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -47,6 +49,9 @@ function MachinesCard({ machine, onClick, articleTags = [], broderieTags = [] })
       onClick?.(machine);
     }
   };
+
+  // Empêche l’ouverture de la modale quand on clique dans les menus déroulants
+  const stop = (e) => e.stopPropagation();
 
   return (
     <div
@@ -63,25 +68,25 @@ function MachinesCard({ machine, onClick, articleTags = [], broderieTags = [] })
       </p>
 
       {articleList.length > 0 && (
-        <div className="tag-group">
-          <p><strong>Articles :</strong></p>
-          <div className="tag-list">
+        <details className="dropdown" open onClick={stop} onKeyDown={stop}>
+          <summary><strong>Articles</strong></summary>
+          <div className="tag-list" onClick={stop} onKeyDown={stop}>
             {articleList.map((t, i) => (
               <span key={`art-${i}`} className="tag readonly">{t}</span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {broderieList.length > 0 && (
-        <div className="tag-group">
-          <p><strong>Options de broderie :</strong></p>
-          <div className="tag-list">
+        <details className="dropdown" onClick={stop} onKeyDown={stop}>
+          <summary><strong>Options de broderie</strong></summary>
+          <div className="tag-list" onClick={stop} onKeyDown={stop}>
             {broderieList.map((t, i) => (
               <span key={`brd-${i}`} className="tag readonly">{t}</span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {showFallback && (

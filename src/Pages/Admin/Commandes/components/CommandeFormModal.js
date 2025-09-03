@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/components/CommandeFormModal.js
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { getAllowedBroderieForArticle, normalizeOne } from "../../../../utils/nettoyageRules";
 
 export default function CommandeFormModal({
@@ -25,61 +25,49 @@ export default function CommandeFormModal({
   // tags
   articleTags = [],
   broderieTags = [],
+  // règles d’association (⚠️ ajoutées)
+  nettoyageRules = [],
   // machines (cohérence)
   machines = [],
-  // règles de nettoyage/associations (⚠️ PASSÉES PAR LE PARENT)
-  nettoyageRules = [],
   // édition ?
   isEditing = false,
 }) {
+  // ---- Hooks (toujours en haut) ----
   const [multiEnabled, setMultiEnabled] = useState(false);
 
-  // On considère que l'article sélectionné est le premier libellé de "types"
+  // Article sélectionné = premier libellé de "types"
   const selectedArticleLabel = formData?.types?.[0] ?? null;
 
-  // Ensemble des broderieTags autorisés (normalisés) pour l'article sélectionné
+  // Set des options autorisées pour l’article sélectionné
   const allowedSet = useMemo(() => {
     try {
-      if (!selectedArticleLabel) return null;
-      // ✅ UTILISER LES RÈGLES REÇUES, PAS []
-      return getAllowedBroderieForArticle(nettoyageRules, selectedArticleLabel);
+      if (!selectedArticleLabel) return null; // pas d’article => pas de filtre
+      return getAllowedBroderieForArticle(nettoyageRules, selectedArticleLabel); // Set(normalized labels)
     } catch (e) {
       console.warn("[CommandeFormModal] getAllowedBroderieForArticle error:", e);
       return null;
     }
   }, [nettoyageRules, selectedArticleLabel]);
 
-  // Filtrage des tags broderie selon allowedSet
+  // Liste des tags broderie affichés (filtrés si article choisi)
   const filteredBroderieTags = useMemo(() => {
     const list = Array.isArray(broderieTags) ? broderieTags : [];
-    if (!allowedSet) return list;                 // si pas d'article, on montre tout
-    if (allowedSet.size === 0) return [];         // article connu mais aucun tag autorisé
+    if (!selectedArticleLabel) return list;        // avant choix d’article, on montre tout
+    if (!allowedSet) return list;                  // si pas de règles, ne filtre pas
     return list.filter((tag) => allowedSet.has(normalizeOne(tag.label)));
-  }, [broderieTags, allowedSet]);
+  }, [broderieTags, selectedArticleLabel, allowedSet]);
 
-  // Nettoyage automatique des options devenues non autorisées quand l’article change
-  useEffect(() => {
-    if (!Array.isArray(formData?.options)) return;
-
-    const visible = new Set(
-      (filteredBroderieTags || [])
-        .map((t) => t?.label)
-        .filter(Boolean)
-        .map(normalizeOne)
-    );
-
-    const sanitized = formData.options.filter((opt) => visible.has(normalizeOne(opt)));
-    if (sanitized.length !== formData.options.length) {
-      handleChange({
-        target: {
-          name: "options",
-          value: sanitized,
-        },
-      });
-    }
-  }, [filteredBroderieTags, formData?.options, handleChange]);
-
+  // ---- Garde l’early return APRÈS les hooks (ESLint OK) ----
   if (!isOpen) return null;
+
+  // Sélection d’un article : comportement exclusif (un seul type)
+  const handleSelectArticle = (label) => {
+    // si déjà sélectionné, ne rien faire (ou forcer quand même)
+    if (formData?.types?.[0] === label && (formData?.types?.length || 0) === 1) return;
+
+    handleChange({ target: { name: "types", value: [label] } });
+    // Les options seront auto-remplies par le useEffect ci-dessus
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -240,16 +228,19 @@ export default function CommandeFormModal({
           <label>Types :</label>
           <div className="tags-container">
             {Array.isArray(articleTags) &&
-              articleTags.map((tag) => (
-                <button
-                  key={tag.label}
-                  type="button"
-                  className={`tag ${formData.types.includes(tag.label) ? "active" : ""}`}
-                  onClick={() => toggleTag("types", tag.label)}
-                >
-                  {tag.label}
-                </button>
-              ))}
+              articleTags.map((tag) => {
+                const active = formData.types?.[0] === tag.label && (formData.types?.length || 0) === 1;
+                return (
+                  <button
+                    key={tag.label}
+                    type="button"
+                    className={`tag ${active ? "active" : ""}`}
+                    onClick={() => handleSelectArticle(tag.label)}
+                  >
+                    {tag.label}
+                  </button>
+                );
+              })}
           </div>
 
           {/* ----- TAGS : BRODERIE (filtrés) ----- */}
@@ -270,11 +261,11 @@ export default function CommandeFormModal({
           </div>
           {!selectedArticleLabel && (
             <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
-              Sélectionnez d’abord un article pour voir les options disponibles.
+              Sélectionnez d’abord un article pour voir/auto-sélectionner les options.
             </div>
           )}
 
-          {/* ✅ Multi-machines */}
+          {/* Multi-machines */}
           <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
@@ -286,15 +277,11 @@ export default function CommandeFormModal({
             </label>
           </div>
 
-          <button type="submit" className="btn-enregistrer">
-            Enregistrer
-          </button>
+          <button type="submit" className="btn-enregistrer">Enregistrer</button>
         </form>
 
         {saved && <div className="message-saved">✅ Enregistré</div>}
-        <button className="btn-fermer" onClick={onClose}>
-          Fermer
-        </button>
+        <button className="btn-fermer" onClick={onClose}>Fermer</button>
       </div>
     </div>
   );

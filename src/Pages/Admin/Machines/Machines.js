@@ -321,7 +321,7 @@ export default function Machines() {
 
                 {(machineDetails.etiquettes || []).length > 0 && (
                   <>
-                    <div className="etiquettes-section">
+                    <details className="dropdown" open>
                       <p><strong>Articles :</strong></p>
                       <div className="tag-list">
                         {(machineDetails.etiquettes || [])
@@ -330,9 +330,9 @@ export default function Machines() {
                             <span key={`art-${i}`} className="tag readonly">{t}</span>
                           ))}
                       </div>
-                    </div>
+                    </details>
 
-                    <div className="etiquettes-section">
+                    <details className="dropdown">
                       <p><strong>Options de broderie :</strong></p>
                       <div className="tag-list">
                         {(machineDetails.etiquettes || [])
@@ -341,7 +341,7 @@ export default function Machines() {
                             <span key={`brd-${i}`} className="tag readonly">{t}</span>
                           ))}
                       </div>
-                    </div>
+                    </details>
                   </>
                 )}
 

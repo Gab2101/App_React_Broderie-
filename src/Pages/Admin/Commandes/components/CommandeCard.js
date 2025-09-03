@@ -57,7 +57,7 @@ export default function CommandeCard({
 
   const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
   const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;
-
+  
   return (
     <div
       className="carte-commande"

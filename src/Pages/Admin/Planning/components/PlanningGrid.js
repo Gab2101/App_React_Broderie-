@@ -1,7 +1,7 @@
 // src/Pages/Admin/Planning/components/PlanningGrid.js
 import React, { useMemo } from "react";
-import { WORKDAY } from "../../../../utils/time"; // 4 niveaux pour remonter à src/utils/time
-import { getColorFromId } from "../lib/priority"; // plus de computeUrgency/urgencyColors ici
+import { WORKDAY } from "../../../../utils/time";
+import { getColorFromId } from "../lib/priority";
 
 function formatDayFR(d) {
   return d.toLocaleDateString("fr-FR", {
@@ -12,42 +12,10 @@ function formatDayFR(d) {
 }
 
 function dayBounds(d) {
-  const start = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    WORKDAY.start,
-    0,
-    0,
-    0
-  );
-  const lunchStart = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    WORKDAY.lunchStart,
-    0,
-    0,
-    0
-  );
-  const lunchEnd = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    WORKDAY.lunchEnd,
-    0,
-    0,
-    0
-  );
-  const end = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    WORKDAY.end,
-    0,
-    0,
-    0
-  );
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.start, 0, 0, 0);
+  const lunchStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.lunchStart, 0, 0, 0);
+  const lunchEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.lunchEnd, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.end, 0, 0, 0);
   return { start, lunchStart, lunchEnd, end };
 }
 
@@ -61,10 +29,7 @@ function clampToDay(ms, day) {
   return Math.max(start.getTime(), Math.min(end.getTime(), ms));
 }
 
-/**
- * Découpe les slots sur la pause déjeuner et sur les bornes de la journée,
- * puis trie les segments par heure de début.
- */
+/** Segments (clampés jour) + coupure sur pause déjeuner, triés par début */
 function cellSegmentsForDay(slots, day) {
   const { lunchStart, lunchEnd } = dayBounds(day);
   const out = [];
@@ -72,10 +37,14 @@ function cellSegmentsForDay(slots, day) {
     if (!intersectsDay(slot, day)) continue;
     const s = clampToDay(slot.startMs, day);
     const e = clampToDay(slot.endMs, day);
-    if (s < lunchStart.getTime() && e > lunchStart.getTime() && e > s) {
-      out.push({ ...slot, segStart: s, segEnd: lunchStart.getTime() });
-      if (lunchEnd.getTime() < e)
-        out.push({ ...slot, segStart: lunchEnd.getTime(), segEnd: e });
+    if (e <= s) continue;
+
+    // Coupe sur la pause si elle intersecte
+    if (s < lunchStart.getTime() && e > lunchStart.getTime()) {
+      out.push({ ...slot, segStart: s, segEnd: Math.min(e, lunchStart.getTime()) });
+      if (e > lunchEnd.getTime()) {
+        out.push({ ...slot, segStart: Math.max(lunchEnd.getTime(), s), segEnd: e });
+      }
     } else {
       out.push({ ...slot, segStart: s, segEnd: e });
     }
@@ -85,57 +54,39 @@ function cellSegmentsForDay(slots, day) {
 }
 
 /**
- * Regroupe les segments contigus d'une même commande (au sein d'une même machine/journée).
- * Tolérance pour les micro-écarts dus aux arrondis : 1 minute.
+ * Fusionne les segments contigus d'une même commande (même machine/jour)
+ * sans jamais franchir la pause déjeuner.
+ * - tolérance pour micro-gaps/overlaps
+ * - pas de fusion si le "trou" englobe exactement la pause [lunchStart, lunchEnd]
  */
-/**
- * Regroupe les segments contigus d'une même commande (même machine/jour).
- * On normalise à la minute et on accepte un petit gap (tolérance) car
- * beaucoup de générateurs de créneaux créent des micro-trous.
- */
-/**
- * Fusionne les segments d'une même commande (même machine/jour) même s'il existe
- * un petit trou OU un léger chevauchement entre eux.
- * On garde la coupure à midi car elle est faite AVANT ici (cellSegmentsForDay).
- */
-function mergeContinuousSegments(segs) {
+function mergeContinuousSegments(segs, lunchStartMs, lunchEndMs) {
   if (!segs.length) return [];
 
-  // Tolérance large pour absorber les créneaux "à l'heure" avec micro-gaps
-  // (ex. slots d'1h qui laissent 1-2 min ou quelques secondes entre eux).
-  // Ajuste à 30-90 min selon ton générateur de créneaux.
-  const toleranceMs = 65 * 60 * 1000; // 65 minutes
+  const toleranceMs = 5 * 60 * 1000; // 5 minutes (suffisant pour micro-gaps)
 
-  // Tri par début (sécurité)
   const sorted = [...segs].sort((a, b) => a.segStart - b.segStart);
-
   const merged = [];
   let cur = { ...sorted[0] };
 
   for (let i = 1; i < sorted.length; i++) {
     const s = sorted[i];
 
-    // Même commande ?
     const sameCmd = s.commandeId === cur.commandeId;
 
-    // Si même commande, on fusionne si le nouveau commence AVANT (ou très
-    // peu après) la fin du courant + tolérance. Ça couvre :
-    // - chevauchement (s.segStart < cur.segEnd)
-    // - contiguïté exacte (s.segStart === cur.segEnd)
-    // - petit trou (s.segStart - cur.segEnd <= toleranceMs)
-    if (sameCmd && s.segStart <= cur.segEnd + toleranceMs) {
+    // Est-ce que l'intervalle entre cur.fin et s.début correspond à un trou qui couvre la pause ?
+    const gapCoversLunch = cur.segEnd <= lunchStartMs && s.segStart >= lunchEndMs;
+
+    if (sameCmd && !gapCoversLunch && s.segStart <= cur.segEnd + toleranceMs) {
+      // Fusion: couvre chevauchement, contiguïté exacte, micro-gap
       cur.segEnd = Math.max(cur.segEnd, s.segEnd);
     } else {
       merged.push(cur);
       cur = { ...s };
     }
   }
-
   merged.push(cur);
   return merged;
 }
-
-
 
 export default function PlanningGrid({
   machines,
@@ -151,13 +102,14 @@ export default function PlanningGrid({
     () => ({ gridTemplateColumns: `200px repeat(${dayColumns.length}, 1fr)` }),
     [dayColumns.length]
   );
+  const keyOf = (v) => String(v); // normalise les clés (string/number)
 
   return (
     <div className="planning-grid-days" style={colStyle}>
       {/* coin */}
       <div className="pgd__corner" />
 
-      {/* headers colonnes (jours) */}
+      {/* entêtes colonnes (jours) */}
       {dayColumns.map((d, i) => (
         <div
           key={i}
@@ -175,17 +127,21 @@ export default function PlanningGrid({
         <React.Fragment key={m.id}>
           <div className="pgd__rowheader">{m.nom}</div>
           {dayColumns.map((d, i) => {
-            const slots = planningByMachine.get(m.id) || [];
+            const slots = planningByMachine.get(keyOf(m.id)) || []; // clé normalisée
             const segs = cellSegmentsForDay(slots, d);
-            const mergedSegs = mergeContinuousSegments(segs); // ← ★ un seul bloc par plage continue
-            const { start } = dayBounds(d);
+
+            const { start, lunchStart, lunchEnd } = dayBounds(d);
+            const mergedSegs = mergeContinuousSegments(
+              segs,
+              lunchStart.getTime(),
+              lunchEnd.getTime()
+            );
 
             return (
               <div
                 key={`${m.id}:${i}`}
                 className="pgd__cell"
-                // Clic sur zone vide → ouvrir la vue jour
-                onClick={() => onDayColumnClick?.(d)}
+                onClick={() => onDayColumnClick?.(d)} // clic zone vide → vue jour
                 title={onDayColumnClick ? "Cliquez pour voir la journée" : undefined}
                 style={{ cursor: onDayColumnClick ? "pointer" : undefined }}
               >
@@ -194,20 +150,13 @@ export default function PlanningGrid({
                 ) : (
                   mergedSegs.map((seg, idx) => {
                     const commande = commandeById.get(seg.commandeId);
-                    const title = commande
-                      ? `#${commande.numero} • ${commande.client ?? ""}`
-                      : "";
+                    const title = commande ? `#${commande.numero} • ${commande.client ?? ""}` : "";
 
-                    const leftPct =
-                      ((seg.segStart - start.getTime()) / workingWidthMs) * 100;
-                    const widthPct =
-                      ((seg.segEnd - seg.segStart) / workingWidthMs) * 100;
+                    const leftPct = ((seg.segStart - start.getTime()) / workingWidthMs) * 100;
+                    const widthPct = ((seg.segEnd - seg.segStart) / workingWidthMs) * 100;
 
-                    // Couleur d'urgence UNIQUE pour toute la commande
                     const urgencyColor =
-                      (commande && commandeColorMap?.get(commande.id)) || "#000000"; // fallback noir
-
-                    // Couleur de fond stable par commande pour différencier visuellement
+                      (commande && commandeColorMap?.get(commande.id)) || "#000000";
                     const fillColor = commande ? getColorFromId(commande.id) : "#eee";
 
                     return (
@@ -216,13 +165,11 @@ export default function PlanningGrid({
                         className="pgd__bar"
                         style={{
                           left: `${leftPct}%`,
-                          width: `${Math.max(2, widthPct)}%`,
+                          width: `${Math.max(0, widthPct)}%`, // jamais négatif
                           backgroundColor: fillColor,
-                          // Bord = couleur d'urgence uniforme (noir si dépassée)
-                          boxShadow: `inset 0 0 0 4px ${urgencyColor}`,
+                          boxShadow: `inset 0 0 0 4px ${urgencyColor}`, // bord = couleur d'urgence
                         }}
                         title={title}
-                        // Clic sur la barre → ouvrir la commande (sans propager à la cellule)
                         onClick={(e) => {
                           e.stopPropagation();
                           if (commande) onOpenCommande(commande);
