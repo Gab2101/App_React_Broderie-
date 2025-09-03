@@ -178,11 +178,12 @@ export default function PlanningPage() {
       setCommandes(commandesData);
       setPlanning(planningData);
 
-      // Auto-étendre 'En cours' d'1h et replanifier 'A commencer'
+      // Auto-étendre 'En cours' d'1h si nécessaire et replanifier 'A commencer' à la prochaine heure pleine
       const now = new Date();
-      const nextHour = new Date(now);
-      nextHour.setMinutes(0, 0, 0);
-      nextHour.setHours(now.getHours() + 1);
+      const currentHour = new Date(now);
+      currentHour.setMinutes(0, 0, 0);
+      const nextHour = new Date(currentHour);
+      nextHour.setHours(currentHour.getHours() + 1);
       const startAnchor = nextWorkStart(nextHour, workOpts);
 
       const planningParMachine = planningData.reduce((acc, ligne) => {
@@ -205,18 +206,29 @@ export default function PlanningPage() {
 
         let cursor;
         if (enCours.length > 0) {
-          const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
+          // Traiter tous les ordres "En cours" pour extension automatique
+          const sortedEnCours = enCours.sort((A, B) => new Date(A.p.debut) - new Date(B.p.debut));
+          let latestEnd = startAnchor;
+          
+          for (const current of sortedEnCours) {
           const finActuel = new Date(current.p.fin);
-          const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
-          if (nouvelleFin.getTime() !== finActuel.getTime()) {
-            updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
+            
+            // Si l'ordre "En cours" a atteint ou dépassé son heure de fin prévue, l'étendre d'1h
+            if (finActuel <= currentHour) {
+              const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
+              updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
+              latestEnd = nouvelleFin;
+            } else {
+              latestEnd = finActuel;
           }
-          cursor = nouvelleFin;
+          }
+          cursor = latestEnd;
         } else {
           cursor = new Date(startAnchor);
         }
 
-        const queue = aCommencer
+        // Replanifier les ordres "A commencer" à partir de la prochaine heure pleine disponible
+        const queueACommencer = aCommencer
           .map(({ p, c }) => ({
             p,
             c,
@@ -230,10 +242,16 @@ export default function PlanningPage() {
           }))
           .sort(sortByPriority);
 
-        for (const item of queue) {
+        // S'assurer que le cursor est au minimum à la prochaine heure pleine
+        if (cursor < nextHour) {
+          cursor = nextHour;
+        }
+
+        for (const item of queueACommencer) {
           const debutActuel = new Date(item.p.debut);
           const finActuel = new Date(item.p.fin);
 
+          // Planifier à partir de la prochaine heure pleine disponible
           const newDebut = nextWorkStart(cursor, workOpts);
           let newFin = addWorkingHours(newDebut, item.expectedHours, workOpts);
 
@@ -251,6 +269,7 @@ export default function PlanningPage() {
           cursor = newFin;
         }
 
+        // Les ordres "Terminée" et autres ne sont pas replanifiés, mais avancent le cursor si nécessaire
         for (const { p } of autres) {
           const finActuel = new Date(p.fin);
           if (finActuel > cursor) cursor = finActuel;
