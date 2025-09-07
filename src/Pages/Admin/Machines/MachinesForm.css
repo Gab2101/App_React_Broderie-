@@ -1,18 +1,29 @@
-/* MachinesForm.css */
+/* MachinesForm.css — amélioré (accessibilité, cohérence, dark-mode) */
+
+/* ====== Conteneur de tags ====== */
 .tags-container {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   padding: 8px 0;
+  align-items: center;
 }
 
+/* ====== Bouton tag (toggle) ====== */
 .formulaire-machine .tag {
+  appearance: none;
   background: #fff;
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 999px;
   padding: 8px 12px;
   font-weight: 600;
-  transition: background .15s ease, border-color .15s ease, transform .15s ease, color .15s ease;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: #111827;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease, color .15s ease, box-shadow .15s ease;
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.06));
 }
 
 .formulaire-machine .tag:hover {
@@ -20,18 +31,84 @@
   box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.12));
 }
 
-.formulaire-machine .tag.active {
+/* Focus accessible */
+.formulaire-machine .tag:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(183,28,33,0.18), var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.12));
+  border-color: var(--brand, #B71C21);
+}
+
+/* État actif (sélectionné) */
+.formulaire-machine .tag.active,
+.formulaire-machine .tag[aria-pressed="true"] {
   background: rgba(183,28,33,0.10);
   border-color: var(--brand, #B71C21);
   color: #7a0f12;
 }
+
+/* Appui clavier/souris */
+.formulaire-machine .tag:active {
+  transform: translateY(0);
+  filter: saturate(1.1);
+}
+
+/* États désactivés (si besoin) */
+.formulaire-machine .tag:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  filter: grayscale(0.15);
+}
+
+/* Badges internes éventuels (compteur/icône) */
+.formulaire-machine .tag .badge {
+  margin-left: 6px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+/* Variantes de taille (optionnelles) */
+.formulaire-machine .tag--sm { padding: 6px 10px; font-size: 0.85rem; }
+.formulaire-machine .tag--lg { padding: 10px 14px; font-size: 1rem; }
+
+/* ====== Sections ====== */
 .tags-section {
-  margin-top: 12px;
+  margin-top: 14px;
   text-align: left;
 }
 
 .tags-title {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #374151; /* gris foncé */
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+/* ====== Dark mode (automatique) ====== */
+@media (prefers-color-scheme: dark) {
+  .formulaire-machine .tag {
+    background: #0f172a; /* slate-900 */
+    color: #e5e7eb;
+    border-color: #1f2937;
+    box-shadow: none;
+  }
+  .formulaire-machine .tag:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
+  .formulaire-machine .tag.active,
+  .formulaire-machine .tag[aria-pressed="true"] {
+    background: rgba(183,28,33,0.18);
+    color: #fecaca; /* rouge clair lisible */
+    border-color: var(--brand, #B71C21);
+  }
+  .formulaire-machine .tag .badge {
+    background: #111827;
+    border-color: #1f2937;
+    color: #cbd5e1;
+  }
+}
+
+/* ====== Réduction de mouvement ====== */
+@media (prefers-reduced-motion: reduce) {
+  .formulaire-machine .tag { transition: none; }
 }

@@ -8,6 +8,8 @@ import { supabase } from "../../../supabaseClient";
 import MachinesCard from "./MachinesCard";
 import MachinesForm from "./MachinesForm";
 
+
+
 /* =========================
    Helpers
 ========================= */

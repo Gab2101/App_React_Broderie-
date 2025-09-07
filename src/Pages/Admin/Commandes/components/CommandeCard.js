@@ -1,11 +1,11 @@
 // src/Pages/Admin/Commandes/components/CommandeCard.jsx
 import React from "react";
 import StatusBadge from "../../../../components/common/StatusBadge";
-import { getStatusTheme } from "../../../../utils/statusTheme";
 import { convertDecimalToTime } from "../../../../utils/time";
 import { calculerDurees } from "../../../../utils/calculs";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
 import { clampPercentToStep5 } from "../utils/timeRealtime";
+import { getColorFromId, getUrgencyColor, computeUrgency } from "../../Planning/lib/priority";
 
 export default function CommandeCard({
   cmd,
@@ -14,10 +14,27 @@ export default function CommandeCard({
   onEdit,
   onDelete,
   machines,
-  articleTags,       // dispo si besoin futur
-  nettoyageRules,    // pour fallback calcul
+  articleTags,
+  nettoyageRules,
 }) {
-  const theme = getStatusTheme(cmd.statut);
+  // Couleurs: fond stable par ID + bordure = urgence
+  const bg = getColorFromId(cmd.id);
+  const urgencyLevel = Number(cmd.urgence ?? computeUrgency(cmd.dateLivraison));
+  const borderColor = getUrgencyColor(urgencyLevel);
+
+  // Verrouillage statut "Terminée"
+  const isTerminee = (cmd.statut || "") === "Terminée";
+  const handleStatusChange = (e) => {
+    const next = e.target.value;
+    if (next === "Terminée" && !isTerminee) {
+      const ok = window.confirm(
+        "Confirmer le passage au statut « Terminée » ?\n" +
+        "Ce statut sera verrouillé et ne pourra plus être modifié depuis cet écran."
+      );
+      if (!ok) return;
+    }
+    onChangeStatut(cmd.id, next);
+  };
 
   // Durées
   let b = cmd.duree_broderie_heures;
@@ -57,13 +74,13 @@ export default function CommandeCard({
 
   const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
   const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;
-  
+
   return (
     <div
       className="carte-commande"
       style={{
-        backgroundColor: theme.bgSoft,
-        borderLeft: `6px solid ${theme.border}`,
+        backgroundColor: bg,
+        borderLeft: `6px solid ${borderColor}`,
         border: "1px solid #e0e0e0",
         borderRadius: 12,
         padding: 12,
@@ -90,15 +107,18 @@ export default function CommandeCard({
         <StatusBadge statut={cmd.statut || "A commencer"} size="sm" />
         <select
           value={cmd.statut || "A commencer"}
-          onChange={(e) => onChangeStatut(cmd.id, e.target.value)}
+          onChange={handleStatusChange}
+          disabled={isTerminee}
           style={{
             padding: "6px 10px",
             borderRadius: 8,
-            border: `1px solid ${theme.border}`,
-            backgroundColor: "#fff",
+            border: `1px solid ${borderColor}`,
+            backgroundColor: isTerminee ? "#f5f5f5" : "#fff",
             color: "#333",
-            outlineColor: theme.border,
+            outlineColor: borderColor,
+            cursor: isTerminee ? "not-allowed" : "pointer",
           }}
+          title={isTerminee ? "Statut verrouillé (Terminée)" : "Changer le statut"}
         >
           {STATUTS.map((s) => (
             <option key={s} value={s}>{s}</option>
@@ -134,6 +154,8 @@ export default function CommandeCard({
           onClick={() => onEdit(cmd)}
           className="btn-enregistrer"
           style={{ borderRadius: 8 }}
+          disabled={isTerminee}
+          title={isTerminee ? "Commande terminée : édition désactivée" : "Modifier"}
         >
           Modifier
         </button>

@@ -31,7 +31,7 @@ export const WORKDAY = {
   start: 8,       // début journée
   lunchStart: 12, // début pause
   lunchEnd: 13,   // fin pause
-  end: 17,        // fin journée (exclu)
+  end: 16,        // fin journée (exclu)
 };
 
 /** =========================
@@ -93,7 +93,7 @@ export function isBusinessDay(input, holidays = new Set()) {
  *  Si on est:
  *   - avant 08:00 → 08:00
  *   - entre 12:00-13:00 → 13:00
- *   - après >=17:00 → 17:00 (marque la fin de journée)
+ *   - après >=16:00 → 16:00 (marque la fin de journée)
  */
 function clampToWorkBoundsSameDay(input) {
   const c = toDate(input);
@@ -125,7 +125,7 @@ function nextBusinessMorning(input, holidays) {
   return c;
 }
 
-/** Renvoie true si l'heure est strictement dans une tranche travaillée (8–12 ou 13–17) */
+/** Renvoie true si l'heure est strictement dans une tranche travaillée (8–12 ou 13–16) */
 export function isWorkHour(input) {
   const d = toDate(input);
   const h = d.getHours();
@@ -142,7 +142,7 @@ export function isWorkHour(input) {
  *  - si minutes/secondes/ms != 0 → passe à l’heure suivante
  *  - si < 08:00 → 08:00
  *  - si dans 12–13 → 13:00
- *  - si >=17:00 → demain 08:00 (prochain jour ouvré si demandé)
+ *  - si >=16:00 → demain 08:00 (prochain jour ouvré si demandé)
  *  - option skipNonBusiness/holidays
  */
 export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = new Set() } = {}) {
@@ -161,7 +161,7 @@ export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = ne
   // Appliquer les bornes de la journée (midi/nuit)
   cur = clampToWorkBoundsSameDay(cur);
 
-  // Si on est pile à/au-delà de la fin (17:00) → demain 08:00 (ouvré si demandé)
+  // Si on est pile à/au-delà de la fin (16:00) → demain 08:00 (ouvré si demandé)
   if (cur.getHours() >= WORKDAY.end) {
     cur = skipNonBusiness ? nextBusinessMorning(cur, holidays) : toDate(cur);
     if (!skipNonBusiness) {
@@ -195,7 +195,7 @@ export function nextWorkStart(dateLike, { skipNonBusiness = false, holidays = ne
 
 /** Ajoute N heures ouvrées (entier ; arrondi à l’heure sup appliqué en amont en général)
  *  – saute 12–13
- *  – coupe à 17:00 et reprend à 08:00
+ *  – coupe à 16:00 et reprend à 08:00
  *  – option week-ends/jours fériés
  */
 export function addWorkingHours(start, hours, { skipNonBusiness = false, holidays = new Set() } = {}) {
@@ -209,7 +209,7 @@ export function addWorkingHours(start, hours, { skipNonBusiness = false, holiday
     }
 
     const h = cur.getHours();
-    // Borne de fin de la plage en cours (12 ou 17)
+    // Borne de fin de la plage en cours (12 ou 16)
     const boundary = h < WORKDAY.lunchStart ? WORKDAY.lunchStart : WORKDAY.end;
     const available = boundary - h;
     const consume = Math.min(available, remaining);

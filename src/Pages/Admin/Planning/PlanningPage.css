@@ -1,0 +1,338 @@
+/* ==========================================================================
+   Planning Grid — CSS réécrit & organisé (spécificité corrigée)
+   - Les variantes data-* utilisent :where(...) pour rester à (0,1,0)
+   ========================================================================== */
+
+/* ------------------------------
+   1) Design Tokens (light theme)
+   ------------------------------ */
+:root {
+  /* Brand */
+  --brand: #B71C21;
+
+  /* Palette neutre */
+  --bg: #ffffff;
+  --bg-muted: #fafafa;
+  --surface: #ffffff;
+  --surface-muted: #f7f7f7;
+
+  --border: #eeeeee;
+  --border-strong: #dddddd;
+  --gridline: #f0f0f0;
+
+  --text: #161616;
+  --text-muted: #666666;
+  --text-subtle: #9a9a9a;
+  --text-inverse: #ffffff;
+
+  /* Urgences / priorités */
+  --urg-low: #e6f7f0;
+  --urg-med: #fff7e6;
+  --urg-high: #fff0f0;
+  --urg-late: #ffe9e9;
+
+  --urg-low-border: #cfeadc;
+  --urg-med-border: #f1e2c7;
+  --urg-high-border: #f0caca;
+  --urg-late-border: #eab6b6;
+
+  /* Badge date */
+  --badge-bg: #eef5ff;
+  --badge-border: #d7e6ff;
+
+  /* Espacements */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+
+  /* Rayons */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-round: 999px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 3px 8px rgba(0,0,0,0.15);
+
+  /* Z-index */
+  --z-base: 0;
+  --z-bar: 10;
+  --z-sticky: 20;
+  --z-popover: 100;
+  --z-modal: 1000;
+  --z-toast: 1100;
+
+  /* Typo */
+  --fs-12: 0.75rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+
+  /* Lignes & hauteurs */
+  --row-height: 40px;
+  --bar-inset: 4px;
+  --line-height-row: 1.2;
+
+  /* Grid */
+  --grid-gap: var(--space-2);
+
+  /* Transitions */
+  --easing: ease;
+  --dur-fast: 120ms;
+  --dur-med: 180ms;
+}
+
+/* ------------------------------
+   2) Thème sombre
+   ------------------------------ */
+.theme-dark {
+  --bg: #0f1115;
+  --bg-muted: #12151b;
+  --surface: #161a22;
+  --surface-muted: #1b2130;
+
+  --border: #2a3040;
+  --border-strong: #3a4358;
+  --gridline: #232a3a;
+
+  --text: #e6e8ec;
+  --text-muted: #a8b0bf;
+  --text-subtle: #7e8798;
+  --text-inverse: #0f1115;
+
+  --urg-low: #0f2d22;
+  --urg-med: #2c260f;
+  --urg-high: #311b1b;
+  --urg-late: #3b1a1a;
+
+  --urg-low-border: #214c3a;
+  --urg-med-border: #534520;
+  --urg-high-border: #5a2d2d;
+  --urg-late-border: #6a2a2a;
+
+  --badge-bg: #1d2535;
+  --badge-border: #2b3a57;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 6px 18px rgba(0,0,0,0.5);
+}
+
+/* -----------------------------------------
+   3) Densités
+   ----------------------------------------- */
+.density--compact { --row-height: 36px; --grid-gap: var(--space-1); }
+.density--comfortable { --row-height: 48px; --grid-gap: var(--space-3); }
+
+/* -----------------------------------------
+   4) Utilitaires
+   ----------------------------------------- */
+.u-center { display:flex; align-items:center; justify-content:center; }
+.u-scrollbars-minimal { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+.u-scrollbars-minimal::-webkit-scrollbar { height:8px; width:8px; }
+.u-scrollbars-minimal::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:var(--radius-sm); }
+
+/* ================================
+   5) Planning Grid — Structure
+   ================================ */
+.planning-grid-days { display:grid; gap:var(--grid-gap); background:var(--bg); color:var(--text); }
+
+.pgd__corner { height: var(--row-height); }
+
+.pgd__colheader {
+  font-weight:600; text-align:center; height:var(--row-height);
+  display:flex; align-items:center; justify-content:center;
+  background:var(--surface-muted); border:1px solid var(--border);
+  position:sticky; top:0; z-index:var(--z-sticky);
+}
+
+.pgd__rowheader {
+  display:flex; align-items:center;
+  padding-inline:var(--space-2); padding-block:calc(var(--space-2) - 2px);
+  background:var(--bg-muted); border:1px solid var(--border);
+  white-space:nowrap; position:sticky; left:0; z-index:var(--z-sticky);
+}
+
+.pgd__cell {
+  position:relative; height:var(--row-height);
+  border:1px solid var(--border); background:var(--surface); overflow:hidden;
+}
+
+/* .pgd__cell:nth-child(2n) { background: color-mix(in srgb, var(--surface) 96%, var(--gridline)); } */
+
+.pgd__cell .cell__dash {
+  color:var(--text-subtle); font-size:var(--fs-12);
+  display:flex; align-items:center; justify-content:center; height:100%;
+}
+
+/* ================================
+   6) Barres (commandes) + états
+   ================================ */
+.pgd__bar {
+  position:absolute; inset-block:var(--bar-inset); inset-inline:var(--bar-inset);
+  border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center;
+  padding-inline:var(--space-2); font-size:var(--fs-12); line-height:1;
+  cursor:pointer; user-select:none; z-index:var(--z-bar);
+  background:var(--surface-muted); border:1px solid var(--border); color:var(--text);
+  transition: transform var(--dur-fast) var(--easing),
+              box-shadow var(--dur-fast) var(--easing),
+              background-color var(--dur-fast) var(--easing),
+              border-color var(--dur-fast) var(--easing);
+}
+
+/* Hover/active */
+.pgd__bar:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.pgd__bar:active { transform: translateY(0); }
+
+/* Focus clavier */
+.pgd__bar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 70%, transparent);
+  outline-offset: 2px;
+}
+
+/* États sémantiques via data-attributes — spécificité abaissée */
+.pgd__bar:where([data-status="a-commencer"]) { /* style neutre si besoin */ }
+.pgd__bar:where([data-status="en-cours"]) { border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); }
+.pgd__bar:where([data-status="terminee"]) { opacity: 0.75; }
+
+/* Priorités (fond + bordure) — spécificité abaissée */
+.pgd__bar:where([data-priority="low"])  { background: var(--urg-low);  border-color: var(--urg-low-border); }
+.pgd__bar:where([data-priority="med"])  { background: var(--urg-med);  border-color: var(--urg-med-border); }
+.pgd__bar:where([data-priority="high"]) { background: var(--urg-high); border-color: var(--urg-high-border); }
+.pgd__bar:where([data-priority="late"]) { background: var(--urg-late); border-color: var(--urg-late-border); }
+
+/* Conflits & verrouillage — spécificité abaissée */
+.pgd__bar:where([data-conflict="true"]) {
+  border-style: dashed;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--brand) 40%, transparent);
+}
+.pgd__bar:where([data-locked="true"]) { opacity: 0.6; cursor: not-allowed; }
+
+/* Indicateur “maintenant” */
+.pgd__nowline {
+  position:absolute; inset-block:0; width:2px; background:var(--brand); z-index:var(--z-sticky);
+}
+.pgd__nowline::after {
+  content:""; position:absolute; inset-inline-start:-6px; inset-block-start:0;
+  width:14px; height:14px; border-radius:var(--radius-round); background:var(--brand);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 20%, transparent);
+}
+
+/* ================================
+   7) Modal minimal (normalisé)
+   ================================ */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.2);
+  display:flex; align-items:center; justify-content:center;
+  z-index:var(--z-modal); padding:var(--space-3);
+}
+.modal-content {
+  background:var(--surface); color:var(--text); padding:var(--space-4);
+  border-radius:var(--radius-md); width:420px; max-width:90vw;
+  border:1px solid var(--border); box-shadow:var(--shadow-md);
+}
+
+/* ================================
+   8) Légende d’urgence
+   ================================ */
+.urgency-legend {
+  margin-top:var(--space-3); display:flex; gap:var(--space-4);
+  flex-wrap:wrap; font-size:var(--fs-13, 0.8125rem); color:var(--text-muted);
+}
+.legend-item { display:inline-flex; align-items:center; gap:var(--space-2); }
+.legend-item::before {
+  content:""; width:12px; height:12px; border-radius:var(--radius-sm);
+  background:var(--gridline); border:1px solid var(--border);
+}
+.legend-item[data-priority="low"]::before  { background:var(--urg-low);  border-color:var(--urg-low-border); }
+.legend-item[data-priority="med"]::before  { background:var(--urg-med);  border-color:var(--urg-med-border); }
+.legend-item[data-priority="high"]::before { background:var(--urg-high); border-color:var(--urg-high-border); }
+.legend-item[data-priority="late"]::before { background:var(--urg-late); border-color:var(--urg-late-border); }
+
+/* ================================
+   9) Boutons de zoom / actions
+   ================================ */
+.zoom-buttons, .dayview-actions {
+  display:flex; gap:var(--space-2); margin-block:var(--space-4);
+}
+.zoom-buttons button, .dayview-actions button {
+  flex:1; min-width:0; padding:var(--space-2) var(--space-3); border-radius:var(--radius-sm);
+}
+
+/* ================================
+   10) DayView — badge & header
+   ================================ */
+.dayview-header-row {
+  display:flex; align-items:center; justify-content:flex-start;
+  margin-block:var(--space-2); gap:var(--space-3);
+}
+.day-badge {
+  display:inline-block; padding:10px 16px; border-radius:var(--radius-round);
+  background:var(--badge-bg); border:1px solid var(--badge-border); box-shadow:var(--shadow-sm);
+  font-size:clamp(var(--fs-14), 1.4vw, var(--fs-18)); font-weight:600;
+  text-transform:capitalize; letter-spacing:0.2px; color:var(--text);
+}
+.day-badge--today {
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--badge-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.day-badge--weekend { opacity:0.85; }
+
+/* Réactivité */
+@media (max-width: 700px) {
+  .dayview-actions { flex-direction: column; }
+  .dayview-actions button { width: 100%; }
+}
+
+/* ================================
+   11) Accessibilité & motion
+   ================================ */
+@media (prefers-reduced-motion: reduce) { .pgd__bar { transition: none; } }
+
+button:focus-visible,
+[role="button"]:focus-visible,
+.pgd__cell:focus-visible,
+.pgd__bar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 70%, transparent);
+  outline-offset: 2px;
+}
+
+/* ================================
+   12) Impression
+   ================================ */
+@media print {
+  :root { --bg:#fff; --surface:#fff; --text:#000; --border:#ccc; --gridline:#e5e5e5; }
+  body { background:#fff !important; }
+  .modal-overlay { display:none !important; }
+  .zoom-buttons, .dayview-actions, .urgency-legend { display:none !important; }
+  .pgd__bar { box-shadow:none !important; color:#000 !important; background:#fff !important; border-color:#bbb !important; }
+  .pgd__colheader, .pgd__rowheader { position:static !important; box-shadow:none !important; }
+}
+
+/* ================================
+   13) Divers & harmonisation
+   ================================ */
+.pgd__grid { display:grid; gap:var(--grid-gap); }
+
+.pgd__bar--accent {
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+  color: var(--text);
+}
+
+.pgd__cell[data-locked="true"] {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--surface) 70%, var(--gridline)),
+      color-mix(in srgb, var(--surface) 70%, var(--gridline)) 6px,
+      color-mix(in srgb, var(--surface) 50%, var(--gridline)) 6px,
+      color-mix(in srgb, var(--surface) 50%, var(--gridline)) 12px
+    );
+  opacity: 0.85;
+}

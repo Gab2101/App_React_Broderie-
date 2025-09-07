@@ -15,8 +15,16 @@ export const getColorFromId = (id) => {
     "#C8E6C9", "#B3E5FC", "#FFE0B2", "#F0F4C3", "#FFCDD2",
     "#D7CCC8", "#C5CAE9", "#E0F7FA", "#FFF3E0",
   ];
-  const index = parseInt(String(id), 36) % colors.length;
-  return colors[index];
+
+  const s = String(id ?? "");
+  // djb2
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) + s.charCodeAt(i); // h*33 + c
+  }
+  // >>> 0 pour obtenir un entier non signé (évite les négatifs)
+  const idx = (h >>> 0) % colors.length;
+  return colors[idx];
 };
 
 export const computeUrgency = (dateLivraison) => {

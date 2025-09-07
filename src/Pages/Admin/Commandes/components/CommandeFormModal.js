@@ -25,53 +25,42 @@ export default function CommandeFormModal({
   // tags
   articleTags = [],
   broderieTags = [],
-  // règles d’association (⚠️ ajoutées)
-  nettoyageRules = [],
-  // machines (cohérence)
+  // machines
   machines = [],
   // édition ?
   isEditing = false,
 }) {
-  // ---- Hooks (toujours en haut) ----
+  // ⚠️ Tous les hooks AVANT tout return conditionnel
   const [multiEnabled, setMultiEnabled] = useState(false);
 
-  // Article sélectionné = premier libellé de "types"
   const selectedArticleLabel = formData?.types?.[0] ?? null;
 
-  // Set des options autorisées pour l’article sélectionné
+  // Ensemble des options autorisées pour l’article sélectionné
+  // - si pas d’article : null (pas de filtre)
+  // - si mapping vide/introuvable : null (pas de filtre)
   const allowedSet = useMemo(() => {
     try {
-      if (!selectedArticleLabel) return null; // pas d’article => pas de filtre
-      return getAllowedBroderieForArticle(nettoyageRules, selectedArticleLabel); // Set(normalized labels)
-    } catch (e) {
-      console.warn("[CommandeFormModal] getAllowedBroderieForArticle error:", e);
+      if (!selectedArticleLabel) return null;
+      const set = getAllowedBroderieForArticle(broderieTags || [], selectedArticleLabel);
+      return set && set.size > 0 ? set : null;
+    } catch {
       return null;
     }
-  }, [nettoyageRules, selectedArticleLabel]);
+  }, [selectedArticleLabel, broderieTags]);
 
-  // Liste des tags broderie affichés (filtrés si article choisi)
+  // Liste affichée : si allowedSet est null → on montre tout
   const filteredBroderieTags = useMemo(() => {
     const list = Array.isArray(broderieTags) ? broderieTags : [];
-    if (!selectedArticleLabel) return list;        // avant choix d’article, on montre tout
-    if (!allowedSet) return list;                  // si pas de règles, ne filtre pas
+    if (!allowedSet) return list;
     return list.filter((tag) => allowedSet.has(normalizeOne(tag.label)));
-  }, [broderieTags, selectedArticleLabel, allowedSet]);
+  }, [broderieTags, allowedSet]);
 
-  // ---- Garde l’early return APRÈS les hooks (ESLint OK) ----
+  // ✅ maintenant on peut faire le return conditionnel
   if (!isOpen) return null;
-
-  // Sélection d’un article : comportement exclusif (un seul type)
-  const handleSelectArticle = (label) => {
-    // si déjà sélectionné, ne rien faire (ou forcer quand même)
-    if (formData?.types?.[0] === label && (formData?.types?.length || 0) === 1) return;
-
-    handleChange({ target: { name: "types", value: [label] } });
-    // Les options seront auto-remplies par le useEffect ci-dessus
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit({ flow: multiEnabled ? "multi" : "mono" });
+    onSubmit(multiEnabled ? { flow: "multi" } : { flow: "mono" });
   };
 
   return (
@@ -224,48 +213,38 @@ export default function CommandeFormModal({
             </select>
           </label>
 
-          {/* ----- TAGS : ARTICLES ----- */}
+          {/* ----- TAGS ----- */}
           <label>Types :</label>
           <div className="tags-container">
             {Array.isArray(articleTags) &&
-              articleTags.map((tag) => {
-                const active = formData.types?.[0] === tag.label && (formData.types?.length || 0) === 1;
-                return (
-                  <button
-                    key={tag.label}
-                    type="button"
-                    className={`tag ${active ? "active" : ""}`}
-                    onClick={() => handleSelectArticle(tag.label)}
-                  >
-                    {tag.label}
-                  </button>
-                );
-              })}
+              articleTags.map((tag) => (
+                <button
+                  key={tag.label}
+                  type="button"
+                  className={`tag ${formData.types.includes(tag.label) ? "active" : ""}`}
+                  onClick={() => toggleTag("types", tag.label)}
+                >
+                  {tag.label}
+                </button>
+              ))}
           </div>
 
-          {/* ----- TAGS : BRODERIE (filtrés) ----- */}
           <label>Options :</label>
-          <div className="tags-container" aria-disabled={!selectedArticleLabel}>
+          <div className="tags-container">
             {Array.isArray(filteredBroderieTags) &&
               filteredBroderieTags.map((tag) => (
                 <button
                   key={tag.id ?? tag.label}
                   type="button"
                   className={`tag ${formData.options.includes(tag.label) ? "active" : ""}`}
-                  disabled={!selectedArticleLabel}
                   onClick={() => toggleTag("options", tag.label)}
                 >
                   {tag.label}
                 </button>
               ))}
           </div>
-          {!selectedArticleLabel && (
-            <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
-              Sélectionnez d’abord un article pour voir/auto-sélectionner les options.
-            </div>
-          )}
 
-          {/* Multi-machines */}
+          {/* ✅ Multi-machines */}
           <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
@@ -273,15 +252,19 @@ export default function CommandeFormModal({
                 checked={multiEnabled}
                 onChange={(e) => setMultiEnabled(e.target.checked)}
               />
-              Faire avec plusieurs machines
+              Faire avec plusieurs machines : Indisponible pour le moment 
             </label>
           </div>
 
-          <button type="submit" className="btn-enregistrer">Enregistrer</button>
+          <button type="submit" className="btn-enregistrer">
+            Enregistrer
+          </button>
         </form>
 
         {saved && <div className="message-saved">✅ Enregistré</div>}
-        <button className="btn-fermer" onClick={onClose}>Fermer</button>
+        <button className="btn-fermer" onClick={onClose}>
+          Fermer
+        </button>
       </div>
     </div>
   );

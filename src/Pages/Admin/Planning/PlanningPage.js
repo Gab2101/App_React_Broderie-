@@ -1,7 +1,8 @@
 // src/Pages/Admin/Planning/PlanningPage.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../../../supabaseClient";
-import "./Planning.css";
+import "./PlanningPage.css";
+import { WORKDAY } from "../../../utils/time";
 
 import {
   configureSlots,
@@ -58,10 +59,10 @@ export function UrgencyLegend() {
 /** -------- Helper: normaliser machineId en tableau de strings -------- */
 function normalizeMachineIds(raw) {
   if (raw == null) return [];
-  if (Array.isArray(raw)) return raw.map(x => String(x).trim()).filter(Boolean);
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
   const s = String(raw).trim();
   if (!s) return [];
-  if (s.includes(",")) return s.split(",").map(x => x.trim()).filter(Boolean);
+  if (s.includes(",")) return s.split(",").map((x) => x.trim()).filter(Boolean);
   return [s];
 }
 
@@ -77,7 +78,9 @@ export default function PlanningPage() {
   // ---- états pour la VUE JOUR ----
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'day'
   const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date(); d.setHours(0,0,0,0); return d;
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   });
 
   const HOLIDAYS = useMemo(() => new Set([]), []);
@@ -94,71 +97,54 @@ export default function PlanningPage() {
     setModalCommande((cur) => (cur?.id === updated.id ? { ...cur, ...updated } : cur));
   }, []);
 
-  // Realtime update commandes
-  useEffect(() => {
-    const channel = supabase
-      .channel("realtime-commandes")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "commandes" },
-        (payload) => {
-          replaceCommandeLocal(payload.new);
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [replaceCommandeLocal]);
+  /** --- Étape 1: Raccourcir le planning quand une commande passe en “Terminée” --- */
+  const shortenPlanningForCommandeTerminee = useCallback(async (commandeId, actualEnd = new Date()) => {
+    const endIso = new Date(actualEnd).toISOString();
+    const nowMs = new Date(endIso).getTime();
 
-  // Raccourcir le planning lorsque statut Terminé
-  const shortenPlanningForCommandeTerminee = useCallback(
-    async (commandeId, actualEnd = new Date()) => {
-      const endIso = new Date(actualEnd).toISOString();
-      const nowMs = new Date(endIso).getTime();
+    const { data: rows, error } = await supabase
+      .from("planning")
+      .select("id, debut, fin, commandeId")
+      .eq("commandeId", commandeId);
 
-      const { data: rows, error } = await supabase
-        .from("planning")
-        .select("id, debut, fin, commandeId")
-        .eq("commandeId", commandeId);
+    if (error) {
+      console.error("❌ Erreur fetch planning by commandeId:", error);
+      return;
+    }
+    if (!rows || rows.length === 0) return;
 
-      if (error) {
-        console.error("❌ Erreur fetch planning by commandeId:", error);
-        return;
+    let current = null;
+    for (const r of rows) {
+      const s = new Date(r.debut).getTime();
+      const e = new Date(r.fin).getTime();
+      if (s <= nowMs && nowMs < e) {
+        current = r;
+        break;
       }
-      if (!rows || rows.length === 0) return;
+    }
 
-      let current = null;
-      for (const r of rows) {
-        const s = new Date(r.debut).getTime();
-        const e = new Date(r.fin).getTime();
-        if (s <= nowMs && nowMs < e) { current = r; break; }
-      }
+    const mutations = [];
+    if (current) {
+      mutations.push(supabase.from("planning").update({ fin: endIso }).eq("id", current.id));
+    }
+    const future = rows.filter((r) => {
+      const s = new Date(r.debut).getTime();
+      return s >= nowMs && (!current || r.id !== current.id);
+    });
+    if (future.length) {
+      mutations.push(supabase.from("planning").delete().in("id", future.map((f) => f.id)));
+    }
+    if (mutations.length) await Promise.all(mutations);
 
-      const mutations = [];
-      if (current) {
-        mutations.push(supabase.from("planning").update({ fin: endIso }).eq("id", current.id));
-      }
-      const future = rows.filter(r => {
-        const s = new Date(r.debut).getTime();
-        return s >= nowMs && (!current || r.id !== current.id);
-      });
-      if (future.length) {
-        mutations.push(supabase.from("planning").delete().in("id", future.map(f => f.id)));
-      }
-      if (mutations.length) await Promise.all(mutations);
+    setPlanning((prev) => {
+      const deletedIds = new Set(future.map((f) => f.id));
+      return prev
+        .filter((p) => !deletedIds.has(p.id))
+        .map((p) => (current && p.id === current.id ? { ...p, fin: endIso } : p));
+    });
+  }, []);
 
-      setPlanning(prev => {
-        const deletedIds = new Set(future.map(f => f.id));
-        return prev
-          .filter(p => !deletedIds.has(p.id))
-          .map(p => (current && p.id === current.id ? { ...p, fin: endIso } : p));
-      });
-    },
-    []
-  );
-
-  // Chargement + réajustement automatique
+  /** --- Chargement + réajustement automatique (reflow) --- */
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
@@ -201,7 +187,9 @@ export default function PlanningPage() {
 
         const enCours = enrichies.filter(({ c }) => c.statut === "En cours");
         const aCommencer = enrichies.filter(({ c }) => c.statut === "A commencer");
-        const autres = enrichies.filter(({ c }) => c.statut !== "En cours" && c.statut !== "A commencer");
+        const autres = enrichies.filter(
+          ({ c }) => c.statut !== "En cours" && c.statut !== "A commencer"
+        );
 
         let cursor;
         if (enCours.length > 0) {
@@ -226,7 +214,8 @@ export default function PlanningPage() {
             expectedHours:
               c.duree_totale_heures_arrondie ??
               c.duree_totale_heures ??
-              (c.duree_totale_heures_minutes ?? c.duree_minutes ?? 0) / 60 ?? 0,
+              (c.duree_totale_heures_minutes ?? c.duree_minutes ?? 0) / 60 ??
+              0,
           }))
           .sort(sortByPriority);
 
@@ -244,7 +233,10 @@ export default function PlanningPage() {
             plannedCells = workingHoursBetween(newDebut.toISOString(), newFin.toISOString(), workOpts);
           }
 
-          if (newDebut.getTime() !== debutActuel.getTime() || newFin.getTime() !== finActuel.getTime()) {
+          if (
+            newDebut.getTime() !== debutActuel.getTime() ||
+            newFin.getTime() !== finActuel.getTime()
+          ) {
             updates.push({ id: item.p.id, debut: newDebut.toISOString(), fin: newFin.toISOString() });
           }
 
@@ -269,6 +261,42 @@ export default function PlanningPage() {
     }
   }, [workOpts]);
 
+  /** --- Realtime update commandes (écoute statut → libération + reflow) --- */
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-commandes")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "commandes" },
+        (payload) => {
+          // 1) Met à jour le state local
+          replaceCommandeLocal(payload.new);
+
+          // 2) Détecter transition vers "Terminée"
+          const newStatus = String(payload?.new?.statut || "").toLowerCase();
+          const oldStatus = String(payload?.old?.statut || "").toLowerCase();
+
+          const becameTerminee =
+            newStatus === "terminée" || newStatus === "terminee"
+              ? (oldStatus && oldStatus !== "terminée" && oldStatus !== "terminee") || !oldStatus
+              : false;
+
+          if (becameTerminee) {
+            const actualEnd = payload?.new?.realEnd ? new Date(payload.new.realEnd) : new Date();
+            shortenPlanningForCommandeTerminee(payload.new.id, actualEnd)
+              .then(() => fetchAndReflow())
+              .catch((e) => console.error("Realtime terminé → ajustement échoué:", e));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [replaceCommandeLocal, fetchAndReflow, shortenPlanningForCommandeTerminee]);
+
+  /** --- Tick horaire auto (charge + reflow) --- */
   useEffect(() => {
     fetchAndReflow();
 
@@ -302,7 +330,10 @@ export default function PlanningPage() {
 
     for (const row of planning) {
       const cmd = commandeById.get(row.commandeId);
-      if (!cmd) { out.push(row); continue; }
+      if (!cmd) {
+        out.push(row);
+        continue;
+      }
 
       if (String(cmd.statut || "").toLowerCase() !== "terminée") {
         out.push(row);
@@ -337,8 +368,8 @@ export default function PlanningPage() {
       const dateLivraison =
         c.dateLivraison || c.deadline || c.date_livraison || c.date_limite || null;
 
-      const level = computeUrgency(dateLivraison);        // 1..5
-      const color = getUrgencyColor(level);               // hex (inclut noir si 5)
+      const level = computeUrgency(dateLivraison); // 1..5
+      const color = getUrgencyColor(level); // hex (inclut noir si 5)
       m.set(c.id, color);
     }
     return m;
@@ -393,24 +424,42 @@ export default function PlanningPage() {
   }, []);
 
   const nextDay = useCallback(() => {
-    setSelectedDate(prev => { const d = new Date(prev); d.setDate(d.getDate()+1); return d; });
+    setSelectedDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 1);
+      return d;
+    });
   }, []);
 
   const prevDay = useCallback(() => {
-    setSelectedDate(prev => { const d = new Date(prev); d.setDate(d.getDate()-1); return d; });
+    setSelectedDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 1);
+      return d;
+    });
   }, []);
 
   const backToTable = useCallback(() => setViewMode("table"), []);
 
   // Mapping des données pour la vue jour — DUPLICATION par machine
   const dayViewMachines = useMemo(
-    () => machines.map(m => ({ id: String(m.id), name: m.nom ?? m.name ?? `Machine ${m.id}` })),
+    () => machines.map((m) => ({ id: String(m.id), name: m.nom ?? m.name ?? `Machine ${m.id}` })),
     [machines]
   );
 
+  // ----- Mapping des données pour la vue jour — DUPLICATION par machine
   const dayViewOrders = useMemo(() => {
     const out = [];
     for (const p of filteredPlanning) {
+      // Aligne sur la même règle que la grille: début=floor, fin=ceil
+      const norm = normalizeSlotForGrid(
+        { debut: p.debut, fin: p.fin }
+        // Par défaut: { startRound: "floor", endRound: "ceil" }
+      );
+
+      const start = new Date(norm.gridStartMs);
+      const end = new Date(norm.gridEndMs);
+
       const c = commandeById.get(p.commandeId);
       const client = c?.client || c?.client_nom || c?.client_name || "";
       const color = c ? commandeColorMap.get(c.id) : undefined;
@@ -418,13 +467,13 @@ export default function PlanningPage() {
       const mids = normalizeMachineIds(p.machineId);
       for (const mid of mids) {
         out.push({
-          id: p.id,                 // id du slot planning
-          machineId: String(mid),   // IMPORTANT: clé identique à machines[].id (string)
-          start: new Date(p.debut),
-          end: new Date(p.fin),
-          title: client || `Commande ${p.commandeId}`, // client seul
+          id: p.id, // id du slot planning
+          machineId: String(mid), // clé identique à machines[].id (string)
+          start,
+          end,
+          title: client || `Commande ${p.commandeId}`,
           status: c?.statut || "",
-          color,                    // même couleur que le planning général
+          color,
         });
       }
     }
@@ -464,9 +513,12 @@ export default function PlanningPage() {
             date={selectedDate}
             machines={dayViewMachines}
             commandes={dayViewOrders}
-            // ⬇️ pas de onBack/onPrevDay/onNextDay pour éviter les doublons
+            workStart={WORKDAY.start}
+            workEnd={WORKDAY.end}
+            lunchStart={WORKDAY.lunchStart}
+            lunchEnd={WORKDAY.lunchEnd}
             onOpenCommande={(planningRowId) => {
-              const row = filteredPlanning.find(p => p.id === planningRowId);
+              const row = filteredPlanning.find((p) => p.id === planningRowId);
               if (!row) return;
               const c = commandeById.get(row.commandeId);
               if (c) openCommande(c);
@@ -486,25 +538,29 @@ export default function PlanningPage() {
         </>
       ) : (
         <>
-          <h2>Planning — Vue tableau</h2>
+          <h2>Planning — Vue Semaine</h2>
 
           {/* Légende toujours visible */}
           <UrgencyLegend />
 
           <div className="zoom-buttons">
             <button onClick={() => setStartDate(new Date())}>Aujourd’hui</button>
-            <button onClick={() => {
-              const prev = new Date(startDate);
-              prev.setDate(prev.getDate() - 14);
-              setStartDate(prev);
-            }}>
+            <button
+              onClick={() => {
+                const prev = new Date(startDate);
+                prev.setDate(prev.getDate() - 14);
+                setStartDate(prev);
+              }}
+            >
               ← 14 jours précédents
             </button>
-            <button onClick={() => {
-              const next = new Date(startDate);
-              next.setDate(next.getDate() + 14);
-              setStartDate(next);
-            }}>
+            <button
+              onClick={() => {
+                const next = new Date(startDate);
+                next.setDate(next.getDate() + 14);
+                setStartDate(next);
+              }}
+            >
               14 jours suivants →
             </button>
             <button onClick={() => goToDay(new Date())}>Voir aujourd’hui (vue jour)</button>
@@ -517,7 +573,7 @@ export default function PlanningPage() {
             commandeById={commandeById}
             onOpenCommande={openCommande}
             onDayColumnClick={goToDay}
-            commandeColorMap={commandeColorMap}  // ✅ couleurs corrigées
+            commandeColorMap={commandeColorMap} // ✅ couleurs corrigées
           />
 
           {modalCommande && (

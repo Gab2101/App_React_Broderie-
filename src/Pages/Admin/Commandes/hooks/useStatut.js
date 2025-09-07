@@ -2,7 +2,7 @@
 import { updateCommandeStatutWithAutoTimes, replaceCommandeInArray } from "../../../../utils/CommandesService";
 
 export default function useStatut({ commandes, setCommandes }) {
-  const STATUTS = ["A commencer", "En cours", "En pause", "Terminée", "Annulée"];
+  const STATUTS = ["A commencer", "En cours", "Terminée"];
 
   const handleChangeStatut = async (id, newStatut) => {
     const prevList = commandes;

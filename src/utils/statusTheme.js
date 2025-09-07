@@ -12,21 +12,13 @@ export const STATUS_THEME = {
     border: "#FFB74D",
     text: "#E65100",
   },
-  "En pause": {
-    bgSoft: "#F3E5F5",
-    border: "#CE93D8",
-    text: "#6A1B9A",
-  },
+ 
   "Terminée": {
     bgSoft: "#E8F5E9",
     border: "#81C784",
     text: "#1B5E20",
   },
-  "Annulée": {
-    bgSoft: "#FFEBEE",
-    border: "#B71C21",
-    text:  "#B71C21",
-  },
+  
   default: {
     bgSoft: "#ECEFF1",
     border: "#B0BEC5",

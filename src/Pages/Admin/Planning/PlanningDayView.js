@@ -7,15 +7,15 @@ export default function PlanningDayView({
   machines = [],
   commandes = [],
   onOpenCommande,
-  workStart = 8,
-  workEnd = 17,      // ⬅️ défaut 17h
-  lunchStart = 12,
-  lunchEnd = 13,
+  workStart,
+  workEnd,
+  lunchStart,
+  lunchEnd,
 }) {
-  // Helper: clé normalisée (évite string vs number)
+  // Helper: normalise les clés (évite string vs number)
   const keyOf = (v) => String(v);
 
-  // Jour local à minuit (évite le -2h)
+  // Jour local à minuit (évite décalages TZ)
   const day = useMemo(() => {
     const d = date ? new Date(date) : new Date();
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -47,7 +47,7 @@ export default function PlanningDayView({
     return d3;
   }, [day, lunchEnd]);
 
-  // En-tête horaires: on SAUTE midi (12–13 n’apparaît pas)
+  // En-tête horaires : on SAUTE la pause (12–13 n’apparaît pas)
   const slots = useMemo(() => {
     const arr = [];
     for (let h = workStart; h < workEnd; h++) {
@@ -71,7 +71,7 @@ export default function PlanningDayView({
     return minutesBeforeLunch;
   };
 
-  // ⬅️ garde-fou division par zéro
+  // Garde-fou division par zéro
   const pctFromOffset = (min) => (totalWorkingMinutes > 0 ? (min / totalWorkingMinutes) * 100 : 0);
 
   // Regroupe & tronque à la journée (local)
@@ -90,15 +90,25 @@ export default function PlanningDayView({
       list.push({ ...c, start: s, end: e });
       map.set(k, list);
     }
-    for (const L of map.values()) {
-      L.sort((a, b) => a.start - b.start);
-    }
+    for (const L of map.values()) L.sort((a, b) => a.start - b.start);
     return map;
   }, [commandes, startOfDay, endOfDay]);
 
-  // Coupe un intervalle par la pause → 1 ou 2 segments
+  /**
+   * Coupe un intervalle par la pause → 1, 2 segments, ou un "marqueur pause" si 100% dans la pause.
+   * On renvoie des tuples [s, e, kind?] avec kind === "LUNCH_MARKER" pour le cas particulier 12–13.
+   */
   const splitByLunch = (s, e) => {
+    // 100% dans la pause → renvoie un marqueur virtuel centré
+    if (s >= lunchStartDate && e <= lunchEndDate) {
+      const mid = new Date((lunchStartDate.getTime() + lunchEndDate.getTime()) / 2);
+      return [[mid, mid, "LUNCH_MARKER"]];
+    }
+
+    // Entièrement avant ou après la pause → segment unique
     if (e <= lunchStartDate || s >= lunchEndDate) return [[s, e]];
+
+    // Traverse la pause → deux segments
     const segs = [];
     if (s < lunchStartDate) segs.push([s, lunchStartDate]);
     if (e > lunchEndDate) segs.push([lunchEndDate, e]);
@@ -124,13 +134,13 @@ export default function PlanningDayView({
           <tbody>
             {machines.map((m) => {
               const machineName = m.name ?? m.nom ?? `Machine ${m.id}`;
-              const list = ordersByMachineForDay.get(keyOf(m.id)) || []; // ⬅️ clé normalisée
+              const list = ordersByMachineForDay.get(keyOf(m.id)) || []; // clé normalisée
               return (
                 <tr key={m.id}>
                   <td className="machine-col">{machineName}</td>
                   <td colSpan={slots.length} className="slot-cell">
                     <div className="timeline-row">
-                      {/* Marqueur visuel de la pause (ligne pointillée + libellé) */}
+                      {/* Marqueur visuel fixe de la pause (ligne pointillée + libellé) */}
                       <div
                         className="lunch-marker"
                         style={{ left: `${pctFromOffset(minutesBeforeLunch)}%` }}
@@ -141,10 +151,31 @@ export default function PlanningDayView({
 
                       {/* Commandes — blocs proportionnels, coupés à 12–13 */}
                       {list.map((o) =>
-                        splitByLunch(o.start, o.end).map(([s, e], i) => {
+                        splitByLunch(o.start, o.end).map(([s, e, kind], i) => {
+                          // Cas spécial : commande entièrement pendant la pause → petit trait cliquable
+                          if (kind === "LUNCH_MARKER") {
+                            const leftPct = pctFromOffset(minutesBeforeLunch);
+                            return (
+                              <div
+                                key={`${o.id}-marker-${i}`}
+                                className="order-block order-block--lunch"
+                                onClick={() => onOpenCommande?.(o.id)}
+                                style={{
+                                  left: `calc(${leftPct}% - 1px)`,
+                                  width: "2px",
+                                  minWidth: "2px",
+                                  border: "none",
+                                  background: o?.color || "currentColor",
+                                }}
+                                title={`${labelOf(o)}\n(12:00–13:00)`}
+                              />
+                            );
+                          }
+
                           const leftPct = pctFromOffset(toWorkingOffsetMin(s));
                           const rightPct = pctFromOffset(toWorkingOffsetMin(e));
-                          const widthPct = Math.max(0, rightPct - leftPct); // ⬅️ jamais négatif
+                          const widthPct = Math.max(0, rightPct - leftPct); // jamais négatif
+
                           return (
                             <div
                               key={`${o.id}-${i}`}
@@ -153,9 +184,17 @@ export default function PlanningDayView({
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
+                                // garde-fou : si width==0% (arrondi extrême), on garde 2px visibles
+                                minWidth: widthPct > 0 ? undefined : "2px",
                                 border: `2px solid ${o?.color || "#000"}`,
                               }}
-                              title={`${labelOf(o)}\n${o.start.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})} – ${o.end.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`}
+                              title={`${labelOf(o)}\n${o.start.toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })} – ${o.end.toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}`}
                             >
                               {labelOf(o)}
                             </div>
