@@ -7,19 +7,26 @@ import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRule
 import { clampPercentToStep5 } from "../utils/timeRealtime";
 import { getColorFromId, getUrgencyColor, computeUrgency } from "../../Planning/lib/priority";
 
+// Helpers d'affichage en Europe/Paris
+const parisDateTime = (d, opts = {}) =>
+  d ? new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...opts }) : null;
+
+const parisDate = (d) =>
+  d ? new Date(d).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : null;
+
 export default function CommandeCard({
   cmd,
   STATUTS,
   onChangeStatut,
   onEdit,
   onDelete,
-  machines,
-  articleTags,
-  nettoyageRules,
+  machines = [],
+  articleTags = [],
+  nettoyageRules = [],
 }) {
   // Couleurs: fond stable par ID + bordure = urgence
   const bg = getColorFromId(cmd.id);
-  const urgencyLevel = Number(cmd.urgence ?? computeUrgency(cmd.dateLivraison));
+  const urgencyLevel = Number(cmd?.urgence ?? computeUrgency(cmd?.dateLivraison));
   const borderColor = getUrgencyColor(urgencyLevel);
 
   // Verrouillage statut "Terminée"
@@ -29,31 +36,31 @@ export default function CommandeCard({
     if (next === "Terminée" && !isTerminee) {
       const ok = window.confirm(
         "Confirmer le passage au statut « Terminée » ?\n" +
-        "Ce statut sera verrouillé et ne pourra plus être modifié depuis cet écran."
+          "Ce statut sera verrouillé et ne pourra plus être modifié depuis cet écran."
       );
       if (!ok) return;
     }
     onChangeStatut(cmd.id, next);
   };
 
-  // Durées
+  // Durées (si manquantes, recalcul rapide)
   let b = cmd.duree_broderie_heures;
   let n = cmd.duree_nettoyage_heures;
   let t = cmd.duree_totale_heures;
 
   if (b == null || n == null || t == null) {
-    const etiquetteArticle = cmd.types?.[0] || null;
+    const etiquetteArticle = cmd?.types?.[0] || null;
     const nettoyageSec = computeNettoyageSecondsForOrder(
       etiquetteArticle,
-      cmd.options,
+      cmd?.options,
       nettoyageRules,
       articleTags
     );
 
-    const quantite = Number(cmd.quantite || 0);
-    const points = Number(cmd.points || 0);
-    const nbTetes = Number(machines.find((m) => m.nom === cmd.machineAssignee)?.nbTetes || 1);
-    const vitessePPM = Number(cmd.vitesseMoyenne || 680);
+    const quantite = Number(cmd?.quantite || 0);
+    const points = Number(cmd?.points || 0);
+    const nbTetes = Number(machines.find((m) => m.nom === cmd?.machineAssignee)?.nbTetes || 1);
+    const vitessePPM = Number(cmd?.vitesseMoyenne || 680);
 
     const calc = calculerDurees({
       quantite,
@@ -70,10 +77,14 @@ export default function CommandeCard({
 
   const theoriqueTotal = (Number(b) || 0) + (Number(n) || 0);
   const coefAffiche =
-    theoriqueTotal > 0 ? clampPercentToStep5(Math.round((Number(t || 0) / theoriqueTotal) * 100)) : null;
+    theoriqueTotal > 0
+      ? clampPercentToStep5(Math.round((Number(t || 0) / theoriqueTotal) * 100))
+      : null;
 
-  const debutLabel = cmd.started_at ? new Date(cmd.started_at).toLocaleString("fr-FR") : null;
-  const finLabel = cmd.finished_at ? new Date(cmd.finished_at).toLocaleString("fr-FR") : null;
+  // Affichages: TZ Europe/Paris
+  const debutLabel = parisDateTime(cmd?.started_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  const finLabel = parisDateTime(cmd?.finished_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  const livraisonLabel = parisDate(cmd?.dateLivraison);
 
   return (
     <div
@@ -100,7 +111,7 @@ export default function CommandeCard({
       <p><strong>Quantité :</strong> {cmd.quantite}</p>
       <p><strong>Points :</strong> {cmd.points}</p>
       <p><strong>Urgence :</strong> {cmd.urgence}</p>
-      <p><strong>Livraison :</strong> {cmd.dateLivraison}</p>
+      <p><strong>Livraison :</strong> {livraisonLabel || "—"}</p>
 
       <p style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <strong>Statut :</strong>{" "}
@@ -119,6 +130,7 @@ export default function CommandeCard({
             cursor: isTerminee ? "not-allowed" : "pointer",
           }}
           title={isTerminee ? "Statut verrouillé (Terminée)" : "Changer le statut"}
+          aria-label="Changer le statut de la commande"
         >
           {STATUTS.map((s) => (
             <option key={s} value={s}>{s}</option>
@@ -163,6 +175,7 @@ export default function CommandeCard({
           onClick={() => onDelete(cmd.id)}
           className="btn-fermer"
           style={{ borderRadius: 8 }}
+          title="Supprimer la commande"
         >
           Supprimer
         </button>

@@ -3,56 +3,51 @@
 /**
  * Projection Commandes -> Blocs horaires visibles (sans fantômes)
  * - Granularité : 60 minutes
- * - Règle "Terminée" : libération à l'heure pleine suivante
- *   * t_free = ceilToHour(realEnd || end || now)
+ * - Règle "Terminée" : libération à l'heure pleine suivante PARIS
+ *   * t_free = ceilHourWorkParis(finished_at || end || now)
  *   * visibleEnd = min(end, t_free)
- *   * Si t_free === end → le dernier slot reste affiché jusqu’à end (pas de "grignotage" en minutes)
  * - Option de résolution de collisions par machine (priorité)
  */
 
-import {
-  toDate,
-  floorToHour,
-  ceilToHour,
-  ONE_HOUR_MS,
-  WORKDAY,
-  isWorkHour,
-} from "../utils/time";
+import { toDate, WORKDAY, isWorkHour } from "../utils/time";
 
 /* =========================
- * Types de données attendus
- * =========================
- * Commande (exemple) :
- * {
- *   id: string|number,
- *   machineId: string|number,
- *   start: Date|string|number,      // début théorique (ou planifié)
- *   end: Date|string|number,        // fin théorique (ou recalculée)
- *   realEnd?: Date|string|number,   // horodatage de validation si "Terminée"
- *   statut: "A commencer" | "En cours" | "Terminée" | ...,
- *   priority?: number,              // optionnel (si tu as une logique de tri)
- *   ...autres champs
- * }
- *
- * Bloc horaire retourné :
- * {
- *   key: string,                    // clé stable pour le rendu
- *   commandeId: string|number,
- *   machineId: string|number,
- *   statut: string,
- *   slotStart: Date,
- *   slotEnd: Date,                  // = slotStart + 1h
- *   // optionnel : tu peux y remettre des infos utiles au hover/modal :
- *   start: Date,                    // début visible global de la commande
- *   end: Date,                      // fin visible globale de la commande
- *   meta: any                       // copie de champs utiles de la commande
- * }
- */
+ * Helpers Paris (locaux)
+ * ========================= */
+function floorToHourLocal(dLike) {
+  const d = new Date(dLike);
+  d.setMinutes(0, 0, 0);
+  return d;
+}
+function clampToWorkdayParis(dLike) {
+  const d = new Date(dLike);
+  const day0 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const setHM = (h, m = 0) =>
+    new Date(day0.getFullYear(), day0.getMonth(), day0.getDate(), h, m, 0, 0);
+
+  const t = d.getHours() + d.getMinutes() / 60;
+
+  if (t < WORKDAY.start) return setHM(WORKDAY.start);
+  if (t >= WORKDAY.lunchStart && t < WORKDAY.lunchEnd) return setHM(WORKDAY.lunchEnd);
+  if (t >= WORKDAY.end) return setHM(WORKDAY.end);
+  return d;
+}
+function ceilHourWorkParis(dLike) {
+  const d = new Date(dLike);
+  if (d.getMinutes() || d.getSeconds() || d.getMilliseconds()) {
+    d.setHours(d.getHours() + 1, 0, 0, 0);
+  } else {
+    d.setMilliseconds(0);
+  }
+  return clampToWorkdayParis(d);
+}
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 /** Utilitaire : itère heure par heure sur [start, end[ (end exclu) */
 function* hourSlotsBetween(startDate, endDate) {
-  let cur = floorToHour(startDate);
-  const end = ceilToHour(endDate);
+  let cur = floorToHourLocal(startDate);
+  const end = ceilHourWorkParis(endDate);
   while (cur < end) {
     const next = new Date(cur.getTime() + ONE_HOUR_MS);
     yield [cur, next];
@@ -60,7 +55,7 @@ function* hourSlotsBetween(startDate, endDate) {
   }
 }
 
-/** Applique la règle “libérer à l’heure pleine” pour une commande */
+/** Applique la règle “libérer à l’heure pleine (Paris)” pour une commande */
 function computeVisibleWindowForCommande(cmd, now = new Date()) {
   const start = toDate(cmd.start);
   const end = toDate(cmd.end);
@@ -69,22 +64,21 @@ function computeVisibleWindowForCommande(cmd, now = new Date()) {
   if (!(end instanceof Date) || isNaN(end)) return null;
   if (end <= start) return null; // rien à afficher
 
-  // Base visible
-  let visibleStart = floorToHour(start);
+  // Base visible (début arrondi à l'heure pleine inférieure)
+  let visibleStart = floorToHourLocal(start);
   let visibleEnd = end;
 
-  if (String(cmd.statut).toLowerCase() === "terminée") {
-    // Si realEnd existe, on s’en sert. Sinon on se rabat sur end (ou now en ultime recours)
-    const tRaw = cmd.realEnd ?? end ?? now;
-    const t = toDate(tRaw);
-    const t_free = ceilToHour(t);   // heure pleine suivante
-    // On ne montre rien après t_free
-    if (t_free < visibleEnd) {
-      visibleEnd = t_free;
+  // Statut "Terminée" → couper à la prochaine heure pleine Paris (pause/fin jour respectées)
+  if (String(cmd.statut).toLowerCase() === "terminée" || String(cmd.statut).toLowerCase() === "terminee") {
+    const tRaw = cmd.finished_at ?? end ?? now;
+    const tFree = ceilHourWorkParis(tRaw);
+    if (tFree < visibleEnd) {
+      visibleEnd = tFree;
     }
   }
 
-  // Si l’arrondi annule l’intervalle
+  // Clamp sécurité (si la commande dépasse la journée en cours, on laisse tel quel ;
+  // le filtrage 8–12/13–16 se fera plus bas si activé)
   if (visibleEnd <= visibleStart) return null;
 
   return { visibleStart, visibleEnd };
@@ -96,15 +90,15 @@ function buildBlocksForCommande(cmd, visibleStart, visibleEnd) {
   const res = [];
   for (const [slotStart, slotEnd] of hourSlotsBetween(visibleStart, visibleEnd)) {
     res.push({
-      key: `${cmd.id}|${+slotStart}|${+slotEnd}|${cmd.statut}|${cmd.realEnd ?? ""}`,
+      key: `${cmd.id}|${+slotStart}|${+slotEnd}|${cmd.statut}|${cmd.finished_at ?? ""}`,
       commandeId: cmd.id,
       machineId,
       statut: cmd.statut,
       slotStart,
-      slotEnd,
-      start: visibleStart,
+      slotEnd,               // = slotStart + 1h
+      start: visibleStart,   // fenêtre visible globale (pratique pour tooltip)
       end: visibleEnd,
-      meta: cmd, // pratique pour les tooltips/modals
+      meta: cmd,
     });
   }
   return res;
@@ -142,7 +136,7 @@ function resolveCollisions(blocks, comparator) {
     if (!existing) {
       map.set(key, b);
     } else {
-      // Garde le meilleur selon comparator
+      // Garde le "meilleur" selon comparator
       map.set(key, comparator(existing, b) <= 0 ? b : existing);
     }
   }
@@ -151,10 +145,6 @@ function resolveCollisions(blocks, comparator) {
 
 /**
  * Comparator par défaut (si tu as une logique de priorité, adapte ici).
- * Exemples de critères possibles :
- *  - statut: En cours > A commencer > Terminée (mais normalement Terminée ne devrait plus occuper)
- *  - deadline proche
- *  - cmd.priority (nombre inverse)
  */
 function defaultComparator(a, b) {
   const rank = (s) => {
@@ -179,15 +169,6 @@ function defaultComparator(a, b) {
 
 /**
  * API principale : calcule les blocs visibles à partir d’une liste de commandes.
- *
- * @param {Array} commandes - liste de commandes
- * @param {Object} options
- *   - now: Date pour les décisions “à l’instant T” (défaut: new Date())
- *   - onlyWorkHours: boolean -> filtrer hors 8–12 / 13–16
- *   - resolveByPriority: boolean -> activer la résolution de collisions
- *   - comparator: function(a,b) -> si tu veux une stratégie custom
- *
- * @returns {Array} blocks - blocs horaires propres
  */
 export function computeVisibleBlocks(commandes = [], options = {}) {
   const {
@@ -230,8 +211,7 @@ export function computeVisibleBlocks(commandes = [], options = {}) {
 }
 
 /**
- * Petit helper utile si tu veux la fenêtre visible brute (sans expansion en slots)
- * pour un affichage "barre unique par commande".
+ * Fenêtre visible brute par commande (sans expansion en slots).
  */
 export function computeVisibleWindowByCommande(commandes = [], now = new Date()) {
   const res = [];

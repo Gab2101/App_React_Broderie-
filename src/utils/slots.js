@@ -57,6 +57,15 @@ function isBusinessDayLocal(ms) {
 }
 
 function atTZ({Y,M,D,h=0,m=0,s=0}) {
+  // Normalise l’heure (peut arriver >23 si on a fait h+1 ailleurs)
+  if (h >= 24) {
+    const daysToAdd = Math.floor(h / 24);
+    h = h % 24;
+    // Avance le jour en tenant compte du calendrier
+    const base = Date.UTC(Y, M - 1, D) + daysToAdd * 24 * 3_600_000;
+    const np = tzParts(base);
+    Y = np.Y; M = np.M; D = np.D;
+  }
   const guess = Date.UTC(Y, M-1, D, h, m, s);
   const shown = tzParts(guess);
   if (shown.h !== h) return guess + (h - shown.h) * 3_600_000;
@@ -69,7 +78,8 @@ function floorToHourLocal(ms) {
 }
 function addOneHourLocal(ms) {
   const p = tzParts(ms);
-  return atTZ({...p, h:p.h+1, m:0, s:0});
+  // Laisse atTZ gérer l’overflow + la correction DST
+  return atTZ({ ...p, h: p.h + 1, m: 0, s: 0 });
 }
 
 function isWorkHourLocal(ms) {

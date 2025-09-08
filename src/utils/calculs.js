@@ -50,10 +50,11 @@ export function calculerDurees({
   };
 }
 
+const toMs = (v) => (typeof v === "number" ? v : new Date(v).getTime());
 /** Intervalle demi-ouvert [startHour, endHour[ en millisecondes alignées à l'heure */
 export const hoursSpanAligned = (startMs, endMs) => {
-  const startHour = floorToHourMs(startMs);   // 👈 import depuis utils/time
-  const endHour = ceilToHourMs(endMs);       // 👈 import depuis utils/time
+  const startHour = floorToHourMs(toMs(startMs));
+  const endHour = ceilToHourMs(toMs(endMs));
   const span = Math.max(0, endHour - startHour);
   return {
     startHour,

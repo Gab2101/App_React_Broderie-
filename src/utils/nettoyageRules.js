@@ -31,12 +31,15 @@ export async function fetchNettoyageRules() {
 
 /** Upsert en masse (clé composite article_label,broderie_label) */
 export async function upsertNettoyageRules(rows = []) {
-  const clean = rows.map((r) => ({
-    article_label: normalizeLabel(r.article_label),
-    broderie_label: normalizeLabel(r.broderie_label),
-    nettoyage_sec: Math.max(0, Math.round(Number(r.nettoyage_sec || 0))),
-    is_allowed: Boolean(r.is_allowed),
-  }));
+  const clean = rows.map((r) => {
+    const n = Number(r.nettoyage_sec);
+    return {
+      article_label: normalizeLabel(r.article_label),
+      broderie_label: normalizeLabel(r.broderie_label),
+      nettoyage_sec: Math.max(0, Math.round(Number.isFinite(n) ? n : 0)),
+      is_allowed: Boolean(r.is_allowed),
+    };
+  });
 
   const { data, error } = await supabase
     .from("nettoyage_rules")
@@ -82,9 +85,8 @@ export function computeNettoyageSecondsForOrder(
   });
 
   let total = 0;
-  const opts = Array.isArray(selectedOptions) ? selectedOptions : [];
-  opts.forEach((opt) => {
-    const key = normalizeLabel(opt);
+  const opts = (Array.isArray(selectedOptions) ? selectedOptions : []).map(normalizeLabel);
+  opts.forEach((key) => {
     if (times.has(key)) total += times.get(key);
   });
 

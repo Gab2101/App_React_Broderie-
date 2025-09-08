@@ -2,6 +2,12 @@
 import React, { useMemo } from "react";
 import "./PlanningDayView.css";
 
+const PARIS_TZ = "Europe/Paris";
+const parisMidnight = (dLike = new Date()) => {
+  const d = new Date(dLike);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+};
+
 export default function PlanningDayView({
   date,
   machines = [],
@@ -15,34 +21,31 @@ export default function PlanningDayView({
   // Helper: normalise les clés (évite string vs number)
   const keyOf = (v) => String(v);
 
-  // Jour local à minuit (évite décalages TZ)
-  const day = useMemo(() => {
-    const d = date ? new Date(date) : new Date();
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  }, [date]);
+  // Jour ancré à minuit Paris (évite glissements DST)
+  const day = useMemo(() => parisMidnight(date ?? new Date()), [date]);
 
-  // Bornes locales
+  // Bornes locales (Paris)
   const startOfDay = useMemo(() => {
-    const d0 = new Date(day);
+    const d0 = parisMidnight(day);
     d0.setHours(workStart, 0, 0, 0);
     return d0;
   }, [day, workStart]);
 
   const endOfDay = useMemo(() => {
-    const d1 = new Date(day);
+    const d1 = parisMidnight(day);
     d1.setHours(workEnd, 0, 0, 0);
     return d1;
   }, [day, workEnd]);
 
-  // Bornes pause (locales)
+  // Bornes pause (Paris)
   const lunchStartDate = useMemo(() => {
-    const d2 = new Date(day);
+    const d2 = parisMidnight(day);
     d2.setHours(lunchStart, 0, 0, 0);
     return d2;
   }, [day, lunchStart]);
 
   const lunchEndDate = useMemo(() => {
-    const d3 = new Date(day);
+    const d3 = parisMidnight(day);
     d3.setHours(lunchEnd, 0, 0, 0);
     return d3;
   }, [day, lunchEnd]);
@@ -74,7 +77,7 @@ export default function PlanningDayView({
   // Garde-fou division par zéro
   const pctFromOffset = (min) => (totalWorkingMinutes > 0 ? (min / totalWorkingMinutes) * 100 : 0);
 
-  // Regroupe & tronque à la journée (local)
+  // Regroupe & tronque à la journée (Paris)
   const ordersByMachineForDay = useMemo(() => {
     const map = new Map();
     for (const c of commandes || []) {
@@ -191,9 +194,11 @@ export default function PlanningDayView({
                               title={`${labelOf(o)}\n${o.start.toLocaleTimeString("fr-FR", {
                                 hour: "2-digit",
                                 minute: "2-digit",
+                                timeZone: PARIS_TZ,
                               })} – ${o.end.toLocaleTimeString("fr-FR", {
                                 hour: "2-digit",
                                 minute: "2-digit",
+                                timeZone: PARIS_TZ,
                               })}`}
                             >
                               {labelOf(o)}

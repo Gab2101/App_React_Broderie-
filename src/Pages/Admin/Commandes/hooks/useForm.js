@@ -6,10 +6,10 @@ export default function useForm() {
     id: null,
     numero: "",
     client: "",
-    quantite: "",
+    quantite: "",        // laissé vide pour les inputs contrôlés
     points: "",
     urgence: 3,
-    dateLivraison: "",
+    dateLivraison: "",   // "YYYY-MM-DD" (provenant d'un input date)
     types: [],
     options: [],
     vitesseMoyenne: "",
@@ -18,16 +18,37 @@ export default function useForm() {
   const [formData, setFormData] = useState(emptyForm);
   const [saved, setSaved] = useState(false);
 
+  // Force une date à minuit (00:00) du jour local (Europe/Paris côté app)
+  const parisAtMidnight = (dateLike) => {
+    const d = new Date(dateLike);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      // Coercition douce : si champ numérique, on stocke un nombre (ou "")
+      if (["quantite", "points", "vitesseMoyenne"].includes(name)) {
+        return { ...prev, [name]: value === "" ? "" : Number(value) };
+      }
+      if (name === "urgence") {
+        return { ...prev, urgence: value === "" ? "" : Number(value) };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleDateChange = (e) => {
-    const value = e.target.value;
-    const today = new Date();
-    const selectedDate = new Date(value);
+    const value = e.target.value; // "YYYY-MM-DD"
+    if (!value) {
+      setFormData((prev) => ({ ...prev, dateLivraison: "", urgence: 3 }));
+      return;
+    }
 
+    const selectedDate = parisAtMidnight(value);
+    const today = parisAtMidnight(new Date());
+
+    // Différence en jours calendaires (pas impactée par l'heure courante)
     const diffDays = Math.ceil((selectedDate - today) / (1000 * 60 * 60 * 24));
 
     let urgence = 1;
@@ -38,14 +59,14 @@ export default function useForm() {
 
     setFormData((prev) => ({
       ...prev,
-      dateLivraison: value,
+      dateLivraison: value, // on conserve le string "YYYY-MM-DD" pour l'input
       urgence,
     }));
   };
 
   const toggleTag = (type, tag) => {
     setFormData((prev) => {
-      const current = [...prev[type]];
+      const current = Array.isArray(prev[type]) ? [...prev[type]] : [];
       const index = current.indexOf(tag);
       if (index > -1) current.splice(index, 1);
       else current.push(tag);

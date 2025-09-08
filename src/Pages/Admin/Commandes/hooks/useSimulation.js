@@ -1,7 +1,7 @@
 // src/Pages/Admin/Commandes/hooks/useSimulation.js
 import { useMemo, useState } from "react";
-import { getNextFullHour, nextWorkStart, addWorkingHours } from "../../../../utils/time";
 import { calculerDurees } from "../../../../utils/calculs";
+import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
 import { toLabelArray } from "../utils/labels";
 import { roundMinutesTo5 } from "../utils/timeRealtime";
@@ -41,7 +41,9 @@ export default function useSimulation({
       const linkedIdNum = Number(linkedCommandeId);
       const { lastFinish } = getLinkedLastFinishAndMachineId(planning, linkedIdNum);
       if (startAfterLinked) {
-        debutMinOverride = lastFinish ? nextWorkStart(lastFinish) : getNextFullHour();
+        debutMinOverride = lastFinish
+        ? snapToNextWorkStart(lastFinish, DEFAULT_WORKDAY)
+        : roundUpToNextHourParis(new Date());
       }
       // si sameMachineAsLinked === true, la contrainte machine sera choisie en modale
     }
@@ -71,12 +73,12 @@ export default function useSimulation({
         .filter((p) => p.machineId === m.id && new Date(p.fin).getTime() >= now)
         .sort((a, b) => new Date(a.debut) - new Date(b.debut));
 
-      const nowDispo = getNextFullHour();
+      const nowDispo = roundUpToNextHourParis(new Date());
       const lastFin = planifies.length ? new Date(planifies[planifies.length - 1].fin) : null;
       const anchorBase = lastFin && lastFin > nowDispo ? lastFin : nowDispo;
       const anchor = debutMinOverride && debutMinOverride > anchorBase ? debutMinOverride : anchorBase;
 
-      const debut = nextWorkStart(anchor);
+      const debut = snapToNextWorkStart(anchor, DEFAULT_WORKDAY);
 
       // Nettoyage par article (secondes)
       const etiquetteArticle = formData.types?.[0] || null;
@@ -103,7 +105,11 @@ export default function useSimulation({
 
       // Pour positionner une fin "théorique", on peut arrondir à l'heure supérieure.
       const dureeTotaleHeuresArrondie = Math.ceil(dureeTotaleHeuresReelle);
-      const fin = addWorkingHours(debut, dureeTotaleHeuresArrondie);
+      const { end: fin } = addMinutesWithinWorkHours(
+        debut,
+        dureeTotaleHeuresArrondie * 60,
+        DEFAULT_WORKDAY
+      );
 
       scenariosLocaux.push({
         machine: m,

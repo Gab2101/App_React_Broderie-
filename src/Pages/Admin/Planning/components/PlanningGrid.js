@@ -3,15 +3,19 @@ import React, { useMemo } from "react";
 import { WORKDAY } from "../../../../utils/time";
 import { getColorFromId } from "../lib/priority";
 
+const PARIS_TZ = "Europe/Paris";
+
 function formatDayFR(d) {
   return d.toLocaleDateString("fr-FR", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
+    timeZone: PARIS_TZ,        // ✅ ancre affichage en Europe/Paris
   });
 }
 
 function dayBounds(d) {
+  // ✅ bornes locales (Paris via Date locale du navigateur)
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.start, 0, 0, 0);
   const lunchStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.lunchStart, 0, 0, 0);
   const lunchEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), WORKDAY.lunchEnd, 0, 0, 0);
@@ -32,18 +36,27 @@ function clampToDay(ms, day) {
 /** Segments (clampés jour) + coupure sur pause déjeuner, triés par début */
 function cellSegmentsForDay(slots, day) {
   const { lunchStart, lunchEnd } = dayBounds(day);
+  const lunchStartMs = lunchStart.getTime();
+  const lunchEndMs = lunchEnd.getTime();
+
   const out = [];
   for (const slot of slots) {
     if (!intersectsDay(slot, day)) continue;
+
     const s = clampToDay(slot.startMs, day);
     const e = clampToDay(slot.endMs, day);
     if (e <= s) continue;
 
-    // Coupe sur la pause si elle intersecte
-    if (s < lunchStart.getTime() && e > lunchStart.getTime()) {
-      out.push({ ...slot, segStart: s, segEnd: Math.min(e, lunchStart.getTime()) });
-      if (e > lunchEnd.getTime()) {
-        out.push({ ...slot, segStart: Math.max(lunchEnd.getTime(), s), segEnd: e });
+    // ✅ Cas 100% dans la pause → on ignore (pas de rendu dans 12–13)
+    if (s >= lunchStartMs && e <= lunchEndMs) {
+      continue;
+    }
+
+    // ✅ Coupe si traverse la pause (jamais de segment qui la chevauche)
+    if (s < lunchStartMs && e > lunchStartMs) {
+      out.push({ ...slot, segStart: s, segEnd: Math.min(e, lunchStartMs) });
+      if (e > lunchEndMs) {
+        out.push({ ...slot, segStart: Math.max(lunchEndMs, s), segEnd: e });
       }
     } else {
       out.push({ ...slot, segStart: s, segEnd: e });
@@ -62,7 +75,7 @@ function cellSegmentsForDay(slots, day) {
 function mergeContinuousSegments(segs, lunchStartMs, lunchEndMs) {
   if (!segs.length) return [];
 
-  const toleranceMs = 5 * 60 * 1000; // 5 minutes (suffisant pour micro-gaps)
+  const toleranceMs = 5 * 60 * 1000; // 5 min
 
   const sorted = [...segs].sort((a, b) => a.segStart - b.segStart);
   const merged = [];
@@ -70,14 +83,10 @@ function mergeContinuousSegments(segs, lunchStartMs, lunchEndMs) {
 
   for (let i = 1; i < sorted.length; i++) {
     const s = sorted[i];
-
     const sameCmd = s.commandeId === cur.commandeId;
-
-    // Est-ce que l'intervalle entre cur.fin et s.début correspond à un trou qui couvre la pause ?
     const gapCoversLunch = cur.segEnd <= lunchStartMs && s.segStart >= lunchEndMs;
 
     if (sameCmd && !gapCoversLunch && s.segStart <= cur.segEnd + toleranceMs) {
-      // Fusion: couvre chevauchement, contiguïté exacte, micro-gap
       cur.segEnd = Math.max(cur.segEnd, s.segEnd);
     } else {
       merged.push(cur);
@@ -102,7 +111,7 @@ export default function PlanningGrid({
     () => ({ gridTemplateColumns: `200px repeat(${dayColumns.length}, 1fr)` }),
     [dayColumns.length]
   );
-  const keyOf = (v) => String(v); // normalise les clés (string/number)
+  const keyOf = (v) => String(v);
 
   return (
     <div className="planning-grid-days" style={colStyle}>
@@ -125,9 +134,9 @@ export default function PlanningGrid({
       {/* lignes par machine */}
       {machines.map((m) => (
         <React.Fragment key={m.id}>
-          <div className="pgd__rowheader">{m.nom}</div>
+          <div className="pgd__rowheader">{m.nom ?? m.name ?? `Machine ${m.id}`}</div>
           {dayColumns.map((d, i) => {
-            const slots = planningByMachine.get(keyOf(m.id)) || []; // clé normalisée
+            const slots = planningByMachine.get(keyOf(m.id)) || [];
             const segs = cellSegmentsForDay(slots, d);
 
             const { start, lunchStart, lunchEnd } = dayBounds(d);
@@ -141,7 +150,7 @@ export default function PlanningGrid({
               <div
                 key={`${m.id}:${i}`}
                 className="pgd__cell"
-                onClick={() => onDayColumnClick?.(d)} // clic zone vide → vue jour
+                onClick={() => onDayColumnClick?.(d)}
                 title={onDayColumnClick ? "Cliquez pour voir la journée" : undefined}
                 style={{ cursor: onDayColumnClick ? "pointer" : undefined }}
               >
@@ -165,7 +174,7 @@ export default function PlanningGrid({
                         className="pgd__bar"
                         style={{
                           left: `${leftPct}%`,
-                          width: `${Math.max(0, widthPct)}%`, // jamais négatif
+                          width: `${Math.max(0, widthPct)}%`,
                           backgroundColor: fillColor,
                           boxShadow: `inset 0 0 0 4px ${urgencyColor}`, // bord = couleur d'urgence
                         }}

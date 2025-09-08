@@ -1,3 +1,5 @@
+// src/Pages/Admin/Planning/lib/priority.js
+
 export const getUrgencyColor = (level) => {
   const urgencyColors = {
     1: "#4caf50",
@@ -17,21 +19,27 @@ export const getColorFromId = (id) => {
   ];
 
   const s = String(id ?? "");
-  // djb2
+  // djb2 hash
   let h = 5381;
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) + h) + s.charCodeAt(i); // h*33 + c
   }
-  // >>> 0 pour obtenir un entier non signé (évite les négatifs)
-  const idx = (h >>> 0) % colors.length;
+  const idx = (h >>> 0) % colors.length; // >>> 0 = non signé
   return colors[idx];
 };
+// --- Helpers Paris ---
+function todayMidnightParis() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+}
 
 export const computeUrgency = (dateLivraison) => {
   if (!dateLivraison) return 1;
-  const today = new Date();
-  const livraison = new Date(dateLivraison);
+
+  const today = todayMidnightParis(); // minuit Paris
+  const livraison = new Date(dateLivraison); // Supabase ISO → Date locale
   const diffDays = Math.ceil((livraison - today) / (1000 * 60 * 60 * 24));
+
   if (diffDays < 2) return 5;
   if (diffDays < 5) return 4;
   if (diffDays < 10) return 3;
@@ -43,9 +51,11 @@ export const sortByPriority = (a, b) => {
   const au = !!a.urgent;
   const bu = !!b.urgent;
   if (au !== bu) return au ? -1 : 1;
+
   const da = a.deadline ? new Date(a.deadline).getTime() : Infinity;
   const db = b.deadline ? new Date(b.deadline).getTime() : Infinity;
   if (da !== db) return da - db;
+
   const ca = a.created_at ? new Date(a.created_at).getTime() : Infinity;
   const cb = b.created_at ? new Date(b.created_at).getTime() : Infinity;
   return ca - cb;

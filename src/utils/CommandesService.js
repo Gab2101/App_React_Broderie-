@@ -1,24 +1,20 @@
+// utils/CommandesService.js
 import { supabase } from "../supabaseClient";
 
-/**
- * Calcule la durée réelle (en minutes, arrondie au supérieur)
- * entre deux timestamptz.
- */
-const minutesBetween = (startISO, endISO) => {
-  const start = new Date(startISO);
-  const end = new Date(endISO);
-  const ms = end.getTime() - start.getTime();
+/** Diff minutes (arrondi au supérieur) entre deux ISO/timestamptz */
+export const minutesBetween = (startISO, endISO) => {
+  const s = new Date(startISO).getTime();
+  const e = new Date(endISO).getTime();
+  const ms = e - s;
   if (!Number.isFinite(ms) || ms <= 0) return 0;
   return Math.ceil(ms / 60000);
 };
 
-/**
- * Récupère l'état courant d'une commande (pour préserver started_at, etc.)
- */
+/** Récupère les champs nécessaires pour préserver l’existant */
 const fetchCommandeCore = async (id) => {
   const { data, error } = await supabase
     .from("commandes")
-    .select("id, statut, started_at, finished_at, broderie_minutes_reel")
+    .select("id, statut, started_at, finished_at, finished_at, broderie_minutes_reel")
     .eq("id", id)
     .single();
   if (error) throw error;
@@ -26,45 +22,57 @@ const fetchCommandeCore = async (id) => {
 };
 
 /**
- * Met à jour le statut avec gestion AUTOMATIQUE et SÛRE de:
- *  - started_at (pose si on passe en "En cours" et qu'il est vide)
- *  - finished_at (pose si on passe en "Terminée")
- *  - broderie_minutes_reel (calculée au passage en "Terminée" si started_at existe)
+ * Met à jour le statut d'une commande avec gestion AUTOMATIQUE des horodatages.
  *
- * IMPORTANT:
- *  - On NE touche JAMAIS à started_at s'il existe déjà (pas d'effacement).
- *  - On écrit started_at / finished_at en UTC (timestamptz) via toISOString().
+ * Règles:
+ * - On écrit toujours en UTC avec .toISOString() (timestamptz OK).
+ * - "En cours" : pose started_at si absent. (ne l’écrase jamais s’il existe)
+ * - "Terminée" : pose finished_at si absent ET fixe finished_at (si colonne présente).
+ *                calcule broderie_minutes_reel si started_at existe.
+ * - Autres statuts : ne touche pas aux timestamps.
  *
- * Usage côté UI (inchangé) :
- *   await updateCommandeStatut(commande.id, "En cours");
- *   await updateCommandeStatut(commande.id, "Terminée");
+ * Options:
+ * - allowResume (false) : si true et nextStatut === "En cours" alors on peut "reprendre"
+ *   en annulant finished_at/realEnd (si tu as ce cas d’usage).
  */
-export async function updateCommandeStatut(id, nextStatut) {
+export async function updateCommandeStatut(id, nextStatut, { allowResume = false } = {}) {
   if (id == null) throw new Error("id manquant");
+  nextStatut = String(nextStatut || "").trim();
 
-  // Lire l'état courant pour préserver les timestamps existants
+  const VALID = ["A commencer", "En cours", "Terminée", "Terminee"];
+  if (!VALID.includes(nextStatut)) throw new Error("Statut invalide");
+
   const current = await fetchCommandeCore(id);
-
   const now = new Date();
+  const nowISO = now.toISOString();
+
   const patch = { statut: nextStatut };
 
   if (nextStatut === "En cours") {
-    // Démarrage: ne poser started_at que s'il est vide
+    // Démarrage : ne pas écraser s’il existe déjà
     if (!current?.started_at) {
-      patch.started_at = now.toISOString(); // timestamptz → OK en UTC
+      patch.started_at = nowISO;
     }
-    // On ne modifie pas finished_at ici (si tu veux "reprendre" on peut le remettre à NULL)
-    // patch.finished_at = null;
-  } else if (nextStatut === "Terminée") {
-    // Clôture: poser finished_at (même si déjà présent, on le remet à now)
-    patch.finished_at = now.toISOString();
-
-    // Calculer les minutes réelles si un démarrage existe
-    if (current?.started_at) {
-      patch.broderie_minutes_reel = minutesBetween(current.started_at, patch.finished_at);
+    // Reprise éventuelle : on “dé-clôture”
+    if (allowResume) {
+      patch.finished_at = null;
+      // finished_at est optionnel en DB → si la colonne n’existe pas, Supabase ignorera
+      patch.finished_at = null;
     }
   }
-  // Autres statuts: on ne touche à rien d'autre.
+
+  if (nextStatut === "Terminée" || nextStatut === "Terminee") {
+    // Ne PAS écraser un finished_at déjà posé (conserve la vérité)
+    const endedAtISO = current?.finished_at ?? nowISO;
+
+    patch.finished_at = endedAtISO;
+    // Si ta table a une colonne finished_at (utilisée par PlanningPage), on la renseigne aussi
+    patch.finished_at = endedAtISO;
+
+    if (current?.started_at) {
+      patch.broderie_minutes_reel = minutesBetween(current.started_at, endedAtISO);
+    }
+  }
 
   const { data, error } = await supabase
     .from("commandes")
@@ -77,13 +85,10 @@ export async function updateCommandeStatut(id, nextStatut) {
   return data;
 }
 
-/**
- * Version rétrocompatible si certains appels te passent l'objet commande complet.
- * Elle délègue à updateCommandeStatut(id, statut) pour garder une logique unique.
- */
-export async function updateCommandeStatutWithAutoTimes(commande, nextStatut) {
+/** Variante rétro-compatible si on reçoit parfois l’objet commande entier */
+export async function updateCommandeStatutWithAutoTimes(commande, nextStatut, opts) {
   if (!commande?.id) throw new Error("Commande invalide");
-  return updateCommandeStatut(commande.id, nextStatut);
+  return updateCommandeStatut(commande.id, nextStatut, opts);
 }
 
 /** Remplace une commande dans un tableau (égalité d'id robuste) */

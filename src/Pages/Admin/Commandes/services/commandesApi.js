@@ -1,7 +1,7 @@
 // src/Pages/Admin/Commandes/services/commandesApi.js
 import { supabase } from "../../../../supabaseClient";
 import { toLabelArray } from "../utils/labels";
-import { getNextFullHour, nextWorkStart, addWorkingHours } from "../../../../utils/time";
+import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
 import { calculerDurees } from "../../../../utils/calculs";
 import {
   computeNettoyageSecondsForOrder,
@@ -11,6 +11,14 @@ import {
   getMachineByName,
 } from "../utils/linked";
 import { roundMinutesTo5 } from "../utils/timeRealtime";
+
+// Dates sûres -> ISO UTC
+const toUTCISOStringSafe = (v) => {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  const t = d.getTime();
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+  };
 
 // CREATE commande + planning (logique de confirmCreation)
 export async function createCommandeAndPlanning({
@@ -36,7 +44,7 @@ export async function createCommandeAndPlanning({
   let debutMinOverride = null;
   if (isLinked && linkedCommandeId && startAfterLinked) {
     const { lastFinish } = getLinkedLastFinishAndMachineId(planning, Number(linkedCommandeId));
-    if (lastFinish) debutMinOverride = nextWorkStart(lastFinish);
+    if (lastFinish) debutMinOverride = snapToNextWorkStart(lastFinish, DEFAULT_WORKDAY);
   }
 
   if (isLinked && sameMachineAsLinked && linkedCommandeId) {
@@ -91,12 +99,12 @@ export async function createCommandeAndPlanning({
     .filter((p) => p.machineId === machine.id && new Date(p.fin).getTime() >= now)
     .sort((a, b) => new Date(a.debut) - new Date(b.debut));
 
-  const nowDispo = getNextFullHour();
+  const nowDispo = roundUpToNextHourParis(new Date());
   const lastFin = planifies.length ? new Date(planifies[planifies.length - 1].fin) : null;
   const anchorBase = lastFin && lastFin > nowDispo ? lastFin : nowDispo;
   const anchor = debutMinOverride && debutMinOverride > anchorBase ? debutMinOverride : anchorBase;
-  const debut = nextWorkStart(anchor);
-  const fin = addWorkingHours(debut, minutesReellesLocal / 60);
+  const debut = snapToNextWorkStart(anchor, DEFAULT_WORKDAY);
+  const { end: fin } = addMinutesWithinWorkHours(debut, minutesReellesLocal, DEFAULT_WORKDAY);
 
   const { id, ...formSansId } = formData;
 
@@ -105,6 +113,8 @@ export async function createCommandeAndPlanning({
 
   const payload = {
     ...formSansId,
+    // normalisation UTC si des champs date existent côté commande
+    dateLivraison: toUTCISOStringSafe(formSansId.dateLivraison),
     machineAssignee: machine.nom,
     vitesseMoyenne: vitesseBase,
     duree_broderie_heures: dureeBroderieHeures,

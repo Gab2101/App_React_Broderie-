@@ -1,8 +1,15 @@
-// src/Pages/Admin/Commandes/components/MachineAndTimeConfirmModal.jsx
+// src/Pages/Admin/Commandes/components/MachineAndTimeConfirmModal.js
 import React, { useMemo } from "react";
 import { convertHoursToHHMM } from "../../../../utils/time";
 import { roundMinutesTo5, clampPercentToStep5, computeProvisionalEnd } from "../utils/timeRealtime";
 import { toLabelArray } from "../utils/labels";
+
+// Helper affichage Europe/Paris
+const parisFormat = (d, options = {}) =>
+  new Date(d).toLocaleString("fr-FR", {
+    timeZone: "Europe/Paris",
+    ...options,
+  });
 
 export default function MachineAndTimeConfirmModal({
   isOpen,
@@ -66,7 +73,7 @@ export default function MachineAndTimeConfirmModal({
       extra_percent,                       // coef - 100
       planned_start,                       // timestamptz | null
       planned_end,                         // timestamptz | null
-      status: 'A commencer',
+      status: "A commencer",
     };
 
     onConfirm({
@@ -75,7 +82,7 @@ export default function MachineAndTimeConfirmModal({
       monoUnitsUsed: monoUnits,
       minutesReellesAppliquees: duration_calc_minutes, // pour cohérence d’affichage en amont
       assignation,                                     // ⬅️ à insérer dans commandes_assignations
-      flow: 'mono',
+      flow: "mono",
     });
   };
 
@@ -144,7 +151,10 @@ export default function MachineAndTimeConfirmModal({
             <p style={{ marginTop: 6 }}>
               <strong>Fin estimée avec % :</strong>{" "}
               {currentScenario
-                ? new Date(computeProvisionalEnd(currentScenario.debut, minutesReellesAppliquees || 0)).toLocaleString("fr-FR")
+                ? parisFormat(
+                    computeProvisionalEnd(currentScenario.debut, minutesReellesAppliquees || 0),
+                    { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }
+                  )
                 : "—"}
             </p>
           </div>
@@ -167,7 +177,9 @@ export default function MachineAndTimeConfirmModal({
               const adjustedTheo = optionIsMono ? Math.round(baseMinutesTheo / Math.max(1, Number(monoUnitsUsed || 1))) : baseMinutesTheo;
               const minReelForOption = roundMinutesTo5(Math.round((adjustedTheo * (confirmCoef || 100)) / 100));
               const finAvecCoef = sc ? computeProvisionalEnd(sc.debut, minReelForOption) : null;
-              const finLabel = finAvecCoef ? ` — fin estimée ${new Date(finAvecCoef).toLocaleString("fr-FR")}` : "";
+              const finLabel = finAvecCoef
+                ? ` — fin estimée ${parisFormat(finAvecCoef, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                : "";
               return (
                 <option key={m.id} value={m.id}>
                   {m.nom}{finLabel}

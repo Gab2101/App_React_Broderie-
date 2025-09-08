@@ -1,5 +1,6 @@
 // src/Pages/Admin/Commandes/hooks/useStatut.js
 import { updateCommandeStatutWithAutoTimes, replaceCommandeInArray } from "../../../../utils/CommandesService";
+import { roundUpToNextHourParis } from "../utils/workhours";
 
 export default function useStatut({ commandes, setCommandes }) {
   const STATUTS = ["A commencer", "En cours", "Terminée"];
@@ -9,10 +10,25 @@ export default function useStatut({ commandes, setCommandes }) {
     const current = commandes.find((c) => String(c.id) === String(id));
     if (!current) return;
 
+    // ✅ Confirmation: uniquement si on passe de "A commencer" -> "En cours"
+    if (current.statut === "A commencer" && newStatut === "En cours") {
+      const ok = window.confirm(
+        "Êtes-vous sûr de démarrer cette commande ?\n" +
+        "Passer de 'A commencer' à 'En cours' n’est pas modifiable."
+      );
+      if (!ok) return; // on annule si l’utilisateur refuse
+    }
+
     const optimistic = { ...current, statut: newStatut };
-    const nowISO = new Date().toISOString();
-    if (newStatut === "En cours" && !current.started_at) optimistic.started_at = nowISO;
-    if (newStatut === "Terminée" && !current.finished_at) optimistic.finished_at = nowISO;
+
+    // Règle: arrondi à l'heure supérieure Paris, stocké en UTC ISO
+    const nowRoundedISO = roundUpToNextHourParis(new Date()).toISOString();
+    if (newStatut === "En cours" && !current.started_at) {
+      optimistic.started_at = nowRoundedISO;
+    }
+    if (newStatut === "Terminée" && !current.finished_at) {
+      optimistic.finished_at = nowRoundedISO;
+    }
 
     setCommandes((prev) => replaceCommandeInArray(prev, optimistic));
 

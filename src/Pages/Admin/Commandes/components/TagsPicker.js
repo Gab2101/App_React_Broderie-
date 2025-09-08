@@ -1,44 +1,71 @@
 // src/Pages/Admin/Commandes/components/TagsPicker.jsx
-import React from "react";
+import React, { memo, useMemo } from "react";
 
 /**
  * TagsPicker
- * @param {Object[]} items - Liste des tags à afficher. Chaque item doit avoir au moins { label, id? }.
- * @param {string[]} selected - Liste des labels sélectionnés.
- * @param {(label: string) => void} onToggle - Callback quand on clique un tag.
+ * @param {Object[]} items - Liste des tags: { label: string, id?: string|number }.
+ * @param {string[]|Set<string>} selected - Liste/Set des labels sélectionnés.
+ * @param {(label: string) => void} onToggle - Callback au clic.
  * @param {string} className - Classes CSS optionnelles pour le conteneur.
  * @param {("button"|"pill")} variant - Style visuel ("button" par défaut).
+ * @param {boolean} disabled - Désactive tous les boutons.
+ * @param {boolean} readOnly - Visuel actif mais sans interaction.
  */
-export default function TagsPicker({
+
+const norm = (s) =>
+  (typeof s === "string" ? s : String(s ?? "")).trim().toLowerCase();
+
+const toSelectedSet = (sel) => {
+  if (sel instanceof Set) return new Set(Array.from(sel).map(norm));
+  if (Array.isArray(sel)) return new Set(sel.map(norm));
+  return new Set();
+};
+
+const slugify = (s) => norm(s).replace(/\s+/g, "-");
+
+function TagsPicker({
   items = [],
   selected = [],
-  onToggle,
+  onToggle = () => {},
   className = "",
   variant = "button",
+  disabled = false,
+  readOnly = false,
 }) {
+  const selectedSet = useMemo(() => toSelectedSet(selected), [selected]);
+  const canInteract = !(disabled || readOnly);
+
   return (
-    <div className={`tags-container ${className}`}>
+    <div className={`tags-container${className ? " " + className : ""}`}>
       {Array.isArray(items) &&
-        items.map((tag) => {
-          const key = tag.id ?? tag.label;
-          const isActive = selected.includes(tag.label);
-          const base =
-            variant === "pill"
-              ? "tag-pill"
-              : "tag";
+        items.map((tag, idx) => {
+          const label = tag?.label ?? "";
+          const key = tag?.id ?? `tag-${slugify(label)}-${idx}`;
+          const isActive = selectedSet.has(norm(label));
+          const base = variant === "pill" ? "tag-pill" : "tag";
 
           return (
             <button
               key={key}
               type="button"
               className={`${base} ${isActive ? "active" : ""}`}
-              onClick={() => onToggle(tag.label)}
-              title={tag.label}
+              onClick={() => {
+                if (!canInteract) return;
+                onToggle(label);
+              }}
+              title={label}
+              aria-pressed={isActive}
+              aria-label={label}
+              disabled={disabled}
+              data-selected={isActive ? "true" : "false"}
+              data-variant={variant}
             >
-              {tag.label}
+              {label}
             </button>
           );
         })}
     </div>
   );
 }
+
+export default memo(TagsPicker);

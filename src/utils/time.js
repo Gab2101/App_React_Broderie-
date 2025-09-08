@@ -7,8 +7,11 @@ export const toDate = (v) => {
   if (v instanceof Date) return new Date(v.getTime());
   if (typeof v === "number") return new Date(v); // timestamp ms
   if (typeof v === "string") {
-    const s = v.trim().replace(" ", "T"); // supporte "YYYY-MM-DD HH:mm:ss"
-    return new Date(s);
+    const s = v.trim();
+    if (!s) return new Date(NaN);
+    // supporte "YYYY-MM-DD HH:mm:ss"
+    const isoish = s.includes("T") ? s : s.replace(" ", "T");
+    return new Date(isoish);
   }
   return new Date(); // fallback
 };
@@ -258,7 +261,7 @@ export function getNextFullHour(minHour = WORKDAY.start, opts = {}) {
   let res = nextWorkStart(nextHour, opts);
 
   // Optionnel : si on veut imposer une heure mini sur le même jour ouvré
-  if (res.getHours() < minHour && isBusinessDay(res)) {
+  if (res.getHours() < minHour && isBusinessDay(res, opts.holidays || new Set())) {
     res.setHours(minHour, 0, 0, 0);
     if (!isWorkHour(res)) {
       // Si minHour tombe hors tranche (ex: 12), ré-appliquer les règles

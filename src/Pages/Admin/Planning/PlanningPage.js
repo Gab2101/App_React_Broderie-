@@ -9,7 +9,6 @@ import {
   nextWorkStart,
   addWorkingHours,
   isBusinessDay,
-  ceilToHour,
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 
@@ -56,6 +55,37 @@ export function UrgencyLegend() {
   );
 }
 
+/** -------- Utils Paris (affichage local, DB en UTC via ISO) -------- */
+const PARIS_TZ = "Europe/Paris";
+function parisNow() {
+  return new Date();
+}
+function parisMidnight(dLike = new Date()) {
+  const d = new Date(dLike);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+function clampToWorkdayParis(d) {
+  const x = new Date(d);
+  const day0 = parisMidnight(x);
+  const t = x.getHours() + x.getMinutes() / 60;
+  const setHM = (h, m = 0) =>
+    new Date(day0.getFullYear(), day0.getMonth(), day0.getDate(), h, m, 0, 0);
+
+  if (t < WORKDAY.start) return setHM(WORKDAY.start);
+  if (t >= WORKDAY.lunchStart && t < WORKDAY.lunchEnd) return setHM(WORKDAY.lunchEnd);
+  if (t >= WORKDAY.end) return setHM(WORKDAY.end);
+  return x;
+}
+function ceilHourWorkParis(d) {
+  const r = new Date(d);
+  if (r.getMinutes() || r.getSeconds() || r.getMilliseconds()) {
+    r.setHours(r.getHours() + 1, 0, 0, 0);
+  } else {
+    r.setMilliseconds(0);
+  }
+  return clampToWorkdayParis(r);
+}
+
 /** -------- Helper: normaliser machineId en tableau de strings -------- */
 function normalizeMachineIds(raw) {
   if (raw == null) return [];
@@ -69,7 +99,7 @@ function normalizeMachineIds(raw) {
 export default function PlanningPage() {
   console.log("[Planning] render", { time: new Date().toISOString() });
 
-  const [startDate, setStartDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(() => parisMidnight());
   const [machines, setMachines] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [planning, setPlanning] = useState([]);
@@ -77,11 +107,7 @@ export default function PlanningPage() {
 
   // ---- états pour la VUE JOUR ----
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'day'
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [selectedDate, setSelectedDate] = useState(() => parisMidnight());
 
   const HOLIDAYS = useMemo(() => new Set([]), []);
   const workOpts = useMemo(() => ({ skipNonBusiness: true, holidays: HOLIDAYS }), [HOLIDAYS]);
@@ -99,8 +125,10 @@ export default function PlanningPage() {
 
   /** --- Étape 1: Raccourcir le planning quand une commande passe en “Terminée” --- */
   const shortenPlanningForCommandeTerminee = useCallback(async (commandeId, actualEnd = new Date()) => {
-    const endIso = new Date(actualEnd).toISOString();
-    const nowMs = new Date(endIso).getTime();
+    // Arrondi Paris + clamp pause/fin jour
+    const roundedEnd = ceilHourWorkParis(actualEnd ?? new Date());
+    const endIso = roundedEnd.toISOString();
+    const nowMs = roundedEnd.getTime();
 
     const { data: rows, error } = await supabase
       .from("planning")
@@ -164,12 +192,10 @@ export default function PlanningPage() {
       setCommandes(commandesData);
       setPlanning(planningData);
 
-      // Auto-étendre 'En cours' d'1h et replanifier 'A commencer'
-      const now = new Date();
-      const nextHour = new Date(now);
-      nextHour.setMinutes(0, 0, 0);
-      nextHour.setHours(now.getHours() + 1);
-      const startAnchor = nextWorkStart(nextHour, workOpts);
+      // Auto-ajuster 'En cours' à maintenant arrondi (Paris) et replanifier 'A commencer'
+      const now = parisNow();
+      const nextHourParis = ceilHourWorkParis(now);
+      const startAnchor = nextWorkStart(nextHourParis, workOpts);
 
       const planningParMachine = planningData.reduce((acc, ligne) => {
         (acc[ligne.machineId] ||= []).push(ligne);
@@ -195,11 +221,12 @@ export default function PlanningPage() {
         if (enCours.length > 0) {
           const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
           const finActuel = new Date(current.p.fin);
-          const nouvelleFin = addWorkingHours(finActuel, 1, workOpts);
-          if (nouvelleFin.getTime() !== finActuel.getTime()) {
-            updates.push({ id: current.p.id, fin: nouvelleFin.toISOString() });
+          let target = ceilHourWorkParis(now);
+          if (target.getTime() < finActuel.getTime()) target = finActuel; // ne pas reculer
+          if (target.getTime() !== finActuel.getTime()) {
+            updates.push({ id: current.p.id, fin: target.toISOString() });
           }
-          cursor = nouvelleFin;
+          cursor = target;
         } else {
           cursor = new Date(startAnchor);
         }
@@ -282,7 +309,7 @@ export default function PlanningPage() {
               : false;
 
           if (becameTerminee) {
-            const actualEnd = payload?.new?.realEnd ? new Date(payload.new.realEnd) : new Date();
+            const actualEnd = payload?.new?.finished_at ? new Date(payload.new.finished_at) : new Date();
             shortenPlanningForCommandeTerminee(payload.new.id, actualEnd)
               .then(() => fetchAndReflow())
               .catch((e) => console.error("Realtime terminé → ajustement échoué:", e));
@@ -300,7 +327,7 @@ export default function PlanningPage() {
   useEffect(() => {
     fetchAndReflow();
 
-    const now = new Date();
+    const now = parisNow();
     const msToNextHour =
       (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
 
@@ -340,8 +367,8 @@ export default function PlanningPage() {
         continue;
       }
 
-      const tRaw = cmd.realEnd || row.fin || new Date();
-      const tFree = ceilToHour(tRaw);
+      const tRaw = cmd.finished_at || row.fin || new Date();
+      const tFree = ceilHourWorkParis(tRaw);
 
       const dStart = new Date(row.debut);
       const dEnd = new Date(row.fin);
@@ -400,15 +427,15 @@ export default function PlanningPage() {
   const dayColumns = useMemo(() => {
     const cols = [];
     let added = 0;
-    let d = new Date(startDate);
+    let d = parisMidnight(startDate);
     while (added < 14) {
       if (!isBusinessDay(d, HOLIDAYS)) {
-        d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0);
+        d = parisMidnight(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
         continue;
       }
       cols.push(new Date(d));
       added++;
-      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0);
+      d = parisMidnight(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
     }
     return cols;
   }, [startDate, HOLIDAYS]);
@@ -418,14 +445,13 @@ export default function PlanningPage() {
 
   const goToDay = useCallback((d) => {
     if (!d) d = new Date();
-    const dateOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-    setSelectedDate(dateOnly);
+    setSelectedDate(parisMidnight(d));
     setViewMode("day");
   }, []);
 
   const nextDay = useCallback(() => {
     setSelectedDate((prev) => {
-      const d = new Date(prev);
+      const d = parisMidnight(prev);
       d.setDate(d.getDate() + 1);
       return d;
     });
@@ -433,7 +459,7 @@ export default function PlanningPage() {
 
   const prevDay = useCallback(() => {
     setSelectedDate((prev) => {
-      const d = new Date(prev);
+      const d = parisMidnight(prev);
       d.setDate(d.getDate() - 1);
       return d;
     });
@@ -498,6 +524,7 @@ export default function PlanningPage() {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
+                timeZone: PARIS_TZ,
               })}
             </div>
           </div>
@@ -544,10 +571,10 @@ export default function PlanningPage() {
           <UrgencyLegend />
 
           <div className="zoom-buttons">
-            <button onClick={() => setStartDate(new Date())}>Aujourd’hui</button>
+            <button onClick={() => setStartDate(parisMidnight())}>Aujourd’hui</button>
             <button
               onClick={() => {
-                const prev = new Date(startDate);
+                const prev = parisMidnight(startDate);
                 prev.setDate(prev.getDate() - 14);
                 setStartDate(prev);
               }}
@@ -556,7 +583,7 @@ export default function PlanningPage() {
             </button>
             <button
               onClick={() => {
-                const next = new Date(startDate);
+                const next = parisMidnight(startDate);
                 next.setDate(next.getDate() + 14);
                 setStartDate(next);
               }}

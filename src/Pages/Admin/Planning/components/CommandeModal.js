@@ -1,4 +1,7 @@
+// src/Pages/Admin/Planning/components/CommandeModal.jsx
 import React from "react";
+
+const PARIS_TZ = "Europe/Paris";
 
 export default function CommandeModal({
   commande,
@@ -6,8 +9,7 @@ export default function CommandeModal({
   onOptimisticReplace,
   onTermineeShortenPlanning,
   updateCommandeStatut,
-  // ⬇️ Optionnel: passe la liste autorisée depuis le parent si besoin
-  allowedStatuts = ["A commencer", "En cours", "Terminée"], 
+  allowedStatuts = ["A commencer", "En cours", "Terminée"],
 }) {
   const [statut, setStatut] = React.useState(commande?.statut ?? "A commencer");
   const [saving, setSaving] = React.useState(false);
@@ -20,7 +22,7 @@ export default function CommandeModal({
   const handleSave = async () => {
     if (!commande?.id) return;
 
-    // ⬇️ rien à faire si aucun changement
+    // Rien à faire si aucun changement
     if ((commande.statut ?? "A commencer") === statut) {
       onClose?.();
       return;
@@ -36,6 +38,7 @@ export default function CommandeModal({
       const saved = await updateCommandeStatut(commande.id, statut);
       onOptimisticReplace?.(saved);
 
+      // Si "Terminée" → coupe à l'heure pleine suivante côté planning (Paris)
       if (statut === "Terminée") {
         await onTermineeShortenPlanning?.(commande.id, new Date());
       }
@@ -53,7 +56,7 @@ export default function CommandeModal({
   return (
     <div
       className="modal-overlay"
-      onClick={!saving ? onClose : undefined}        
+      onClick={!saving ? onClose : undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby={`cmd-title-${commande.id}`}
@@ -64,7 +67,9 @@ export default function CommandeModal({
         <p>
           <strong>Date de livraison :</strong>{" "}
           {commande.dateLivraison
-            ? new Date(commande.dateLivraison).toLocaleDateString("fr-FR")
+            ? new Date(commande.dateLivraison).toLocaleDateString("fr-FR", {
+                timeZone: PARIS_TZ,
+              })
             : "—"}
         </p>
 

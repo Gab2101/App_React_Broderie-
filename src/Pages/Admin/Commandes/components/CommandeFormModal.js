@@ -2,6 +2,8 @@
 import React, { useMemo, useState } from "react";
 import { getAllowedBroderieForArticle, normalizeOne } from "../../../../utils/nettoyageRules";
 
+const slugify = (s) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+
 export default function CommandeFormModal({
   isOpen,
   onClose,
@@ -33,11 +35,21 @@ export default function CommandeFormModal({
   // ⚠️ Tous les hooks AVANT tout return conditionnel
   const [multiEnabled, setMultiEnabled] = useState(false);
 
-  const selectedArticleLabel = formData?.types?.[0] ?? null;
+  // Sécuriser les champs de form pour éviter "uncontrolled/controlled"
+  const numero = formData?.numero ?? "";
+  const client = formData?.client ?? "";
+  const quantite = formData?.quantite ?? "";
+  const points = formData?.points ?? "";
+  const vitesseMoyenne = formData?.vitesseMoyenne ?? "";
+  const dateLivraison = formData?.dateLivraison ?? "";
+  const urgence = formData?.urgence ?? 3;
+
+  const selectedTypes = Array.isArray(formData?.types) ? formData.types : [];
+  const selectedOptions = Array.isArray(formData?.options) ? formData.options : [];
+
+  const selectedArticleLabel = selectedTypes?.[0] ?? null;
 
   // Ensemble des options autorisées pour l’article sélectionné
-  // - si pas d’article : null (pas de filtre)
-  // - si mapping vide/introuvable : null (pas de filtre)
   const allowedSet = useMemo(() => {
     try {
       if (!selectedArticleLabel) return null;
@@ -74,7 +86,7 @@ export default function CommandeFormModal({
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
                 type="checkbox"
-                checked={isLinked}
+                checked={!!isLinked}
                 onChange={(e) => {
                   const val = e.target.checked;
                   setIsLinked(val);
@@ -101,7 +113,7 @@ export default function CommandeFormModal({
                     <option value="">-- choisir --</option>
                     {Array.isArray(linkableCommandes) &&
                       linkableCommandes
-                        .filter((c) => !formData.id || c.id !== formData.id)
+                        .filter((c) => !formData?.id || c.id !== formData.id)
                         .map((c) => (
                           <option key={c.id} value={c.id}>
                             #{c.numero} — {c.client} ({c.statut})
@@ -113,7 +125,7 @@ export default function CommandeFormModal({
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
-                    checked={sameMachineAsLinked}
+                    checked={!!sameMachineAsLinked}
                     onChange={(e) => setSameMachineAsLinked(e.target.checked)}
                     disabled={!linkedCommandeId}
                   />
@@ -123,7 +135,7 @@ export default function CommandeFormModal({
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
-                    checked={startAfterLinked}
+                    checked={!!startAfterLinked}
                     onChange={(e) => setStartAfterLinked(e.target.checked)}
                     disabled={!linkedCommandeId}
                   />
@@ -139,7 +151,7 @@ export default function CommandeFormModal({
             <input
               type="text"
               name="numero"
-              value={formData.numero}
+              value={numero}
               onChange={handleChange}
               required
             />
@@ -150,7 +162,7 @@ export default function CommandeFormModal({
             <input
               type="text"
               name="client"
-              value={formData.client}
+              value={client}
               onChange={handleChange}
               required
             />
@@ -161,7 +173,7 @@ export default function CommandeFormModal({
             <input
               type="number"
               name="quantite"
-              value={formData.quantite}
+              value={quantite}
               onChange={handleChange}
               min="1"
               required
@@ -173,7 +185,7 @@ export default function CommandeFormModal({
             <input
               type="number"
               name="points"
-              value={formData.points}
+              value={points}
               onChange={handleChange}
               min="1"
               required
@@ -185,7 +197,7 @@ export default function CommandeFormModal({
             <input
               type="number"
               name="vitesseMoyenne"
-              value={formData.vitesseMoyenne}
+              value={vitesseMoyenne}
               onChange={handleChange}
               placeholder="680"
               min="1"
@@ -197,14 +209,15 @@ export default function CommandeFormModal({
             <input
               type="date"
               name="dateLivraison"
-              value={formData.dateLivraison}
+              value={dateLivraison}
               onChange={handleDateChange}
+              aria-label="Date de livraison (JJ/MM/AAAA)"
             />
           </label>
 
           <label>
             Urgence :
-            <select name="urgence" value={formData.urgence} onChange={handleChange}>
+            <select name="urgence" value={urgence} onChange={handleChange}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
                   {n}
@@ -217,31 +230,43 @@ export default function CommandeFormModal({
           <label>Types :</label>
           <div className="tags-container">
             {Array.isArray(articleTags) &&
-              articleTags.map((tag) => (
-                <button
-                  key={tag.label}
-                  type="button"
-                  className={`tag ${formData.types.includes(tag.label) ? "active" : ""}`}
-                  onClick={() => toggleTag("types", tag.label)}
-                >
-                  {tag.label}
-                </button>
-              ))}
+              articleTags.map((tag, idx) => {
+                const isActive = selectedTypes.includes(tag.label);
+                const key = tag.id ?? `article-${slugify(tag.label)}-${idx}`;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`tag ${isActive ? "active" : ""}`}
+                    onClick={() => toggleTag("types", tag.label)}
+                    aria-pressed={isActive}
+                    title={tag.label}
+                  >
+                    {tag.label}
+                  </button>
+                );
+              })}
           </div>
 
           <label>Options :</label>
           <div className="tags-container">
             {Array.isArray(filteredBroderieTags) &&
-              filteredBroderieTags.map((tag) => (
-                <button
-                  key={tag.id ?? tag.label}
-                  type="button"
-                  className={`tag ${formData.options.includes(tag.label) ? "active" : ""}`}
-                  onClick={() => toggleTag("options", tag.label)}
-                >
-                  {tag.label}
-                </button>
-              ))}
+              filteredBroderieTags.map((tag, idx) => {
+                const isActive = selectedOptions.includes(tag.label);
+                const key = tag.id ?? `option-${slugify(tag.label)}-${idx}`;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`tag ${isActive ? "active" : ""}`}
+                    onClick={() => toggleTag("options", tag.label)}
+                    aria-pressed={isActive}
+                    title={tag.label}
+                  >
+                    {tag.label}
+                  </button>
+                );
+              })}
           </div>
 
           {/* ✅ Multi-machines */}
@@ -252,7 +277,7 @@ export default function CommandeFormModal({
                 checked={multiEnabled}
                 onChange={(e) => setMultiEnabled(e.target.checked)}
               />
-              Faire avec plusieurs machines : Indisponible pour le moment 
+              Faire avec plusieurs machines : Indisponible pour le moment
             </label>
           </div>
 

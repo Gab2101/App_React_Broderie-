@@ -1,4 +1,9 @@
+// src/Pages/Admin/Planning/lib/grid.js
 import { parseISOAny } from "./parse";
+
+function isValidDate(d) {
+  return d instanceof Date && !Number.isNaN(d.getTime());
+}
 
 export function floorToHourMs(d) {
   const x = new Date(d);
@@ -18,29 +23,31 @@ export function ceilToHourMs(d) {
 
 /**
  * Aligne un slot sur des heures pleines pour la GRILLE.
- * Par défaut: début=floor, fin=ceil (élargit pour recouvrir la case).
- * Permet de passer startRound/endRound = 'floor' | 'ceil' si besoin.
+ * Par défaut: début = floor, fin = ceil (recouvre la case).
+ * startRound/endRound ∈ 'floor' | 'ceil'
  */
 export function normalizeSlotForGrid(
   slot,
   { startRound = "floor", endRound = "ceil" } = {}
 ) {
-  const s = parseISOAny(slot.debut);
-  const e = parseISOAny(slot.fin);
+  const sDate = parseISOAny(slot.debut);
+  const eDate = parseISOAny(slot.fin);
 
-  const sMs = s instanceof Date && !isNaN(s) ? s : new Date(slot.debut);
-  const eMs = e instanceof Date && !isNaN(e) ? e : new Date(slot.fin);
+  if (!isValidDate(sDate) || !isValidDate(eDate)) {
+    return { ...slot, gridStartMs: null, gridEndMs: null };
+  }
 
   const startFn = startRound === "ceil" ? ceilToHourMs : floorToHourMs;
-  const endFn = endRound === "floor" ? floorToHourMs : ceilToHourMs;
+  const endFn   = endRound   === "floor" ? floorToHourMs : ceilToHourMs;
 
-  const gs = startFn(sMs);
-  const ge = endFn(eMs);
+  const gs = startFn(sDate);
+  const ge = endFn(eDate);
 
   if (!Number.isFinite(gs) || !Number.isFinite(ge)) {
     return { ...slot, gridStartMs: null, gridEndMs: null };
   }
-  // (facultatif) éviter un end < start après arrondi
+
+  // Sécurité : ne jamais retourner end < start après arrondi
   const safeGe = Math.max(ge, gs);
 
   return { ...slot, gridStartMs: gs, gridEndMs: safeGe };

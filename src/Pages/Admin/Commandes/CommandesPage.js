@@ -157,8 +157,9 @@ export default function CommandesPage() {
           meta: config.meta || null,
           plannedStartISO:
             config.plannedStartISO ||
-            form.formData?.date_debut_planning ||
-            new Date().toISOString(),
+            (form.formData?.date_debut_planning
+              ? toUTCISOString(parseLocalDatetime(form.formData.date_debut_planning))
+              : toUTCISOString(snapToNextWorkStart(new Date(), DEFAULT_WORKDAY))),
         });
 
         setIsFormOpen(false);
@@ -210,8 +211,8 @@ export default function CommandesPage() {
 
         return {
           ...r,
-          planned_start_iso_utc: toUTCISOString(baseLocal),
-          planned_end_iso_utc: toUTCISOString(end),
+          planned_start_iso_utc: toUTCISOString(baseLocal), // UTC stable
+          planned_end_iso_utc: toUTCISOString(end),         // idem
         };
       });
 

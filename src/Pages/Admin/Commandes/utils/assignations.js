@@ -1,21 +1,28 @@
 // src/Pages/Admin/Commandes/services/assignationsApi.js
 import { supabase } from "../../../../supabaseClient";
 
-/**
- * Crée une commande + ses assignations (multi-machine).
- *
- * @param {Object} params
- * @param {Object} params.formData - données du formulaire (numero, client, quantite, points, vitesseMoyenne, dateLivraison, urgence, types, options, ... + liens)
- * @param {Array}  params.perMachine - [{ machineId, quantity, durationTheoreticalMinutes, durationCalcMinutes?, planned_start?, planned_end? }, ...]
- * @param {Object} [params.meta] - métadonnées facultatives (non stockées ici)
- * @param {string} [params.plannedStartISO] - fallback "global" si un item n’a pas de planned_start
- *
- * @returns {Promise<{ errorCmd: any, errorAssign: any, commandeId?: number, assignationIds?: number[] }>}
- */
+/* ===== Helpers locaux sûrs ===== */
+const toUTCISOStringSafe = (v) => {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  const t = d.getTime();
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+};
+const toPosInt = (v, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : def;
+};
+const toNonNegInt = (v, def = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : def;
+};
+const toArray = (v) => (Array.isArray(v) ? v : []);
+
+// Crée une commande + ses assignations (multi-machine).
 export async function createCommandeWithAssignations({
   formData,
   perMachine,
-  meta = null,
+  meta = null,          // non utilisé/stocker ici, conservé pour compat
   plannedStartISO = null,
 }) {
   // -------- Validation rapide --------
@@ -29,20 +36,23 @@ export async function createCommandeWithAssignations({
         Number(r.durationTheoreticalMinutes) >= 0)
   );
   if (valid.length === 0) {
-    return { errorCmd: null, errorAssign: new Error("Aucune assignation valide." ) };
+    return { errorCmd: null, errorAssign: new Error("Aucune assignation valide.") };
   }
 
   // -------- 1) INSERT commande --------
   const payloadCommande = {
     numero: formData.numero ?? null,
     client: formData.client ?? null,
-    quantite: formData.quantite ? Number(formData.quantite) : 0,
-    points: formData.points ? Number(formData.points) : 0,
-    vitesseMoyenne: formData.vitesseMoyenne ? Number(formData.vitesseMoyenne) : null,
-    dateLivraison: formData.dateLivraison || null,
-    urgence: formData.urgence ? Number(formData.urgence) : 3,
-    types: Array.isArray(formData.types) ? formData.types : [],
-    options: Array.isArray(formData.options) ? formData.options : [],
+    quantite: toPosInt(formData.quantite, 0),
+    points: toNonNegInt(formData.points, 0),
+    vitesseMoyenne: Number.isFinite(Number(formData.vitesseMoyenne))
+      ? Number(formData.vitesseMoyenne)
+      : null,
+    // IMPORTANT: toujours stocker en UTC (timestamptz)
+    dateLivraison: toUTCISOStringSafe(formData.dateLivraison),
+    urgence: Number.isFinite(Number(formData.urgence)) ? Number(formData.urgence) : 3,
+    types: toArray(formData.types),
+    options: toArray(formData.options),
     statut: "A commencer",
     multi_machine: true, // important pour distinguer les flux
     // champs de liaison éventuels
@@ -64,37 +74,41 @@ export async function createCommandeWithAssignations({
   const commandeId = cmdInserted.id;
 
   // -------- 2) Construire les assignations --------
-  // Helper pour enlever les clés undefined (évite les erreurs si la colonne n’existe pas)
   const cleanRow = (obj) =>
     Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 
   const rows = valid.map((r) => {
-    const qty = Number(r.quantity || 0);
+    const qty = toPosInt(r.quantity, 0);
 
     // Choix de la durée : on privilégie la durée "calculée" si fournie, sinon théorique
-    const durCalc = Number.isFinite(r.durationCalcMinutes)
-      ? Math.max(0, Math.round(Number(r.durationCalcMinutes)))
+    const durCalc = Number.isFinite(Number(r.durationCalcMinutes))
+      ? toNonNegInt(r.durationCalcMinutes)
       : undefined;
 
-    const durTheo = Number.isFinite(r.durationTheoreticalMinutes)
-      ? Math.max(0, Math.round(Number(r.durationTheoreticalMinutes)))
+    const durTheo = Number.isFinite(Number(r.durationTheoreticalMinutes))
+      ? toNonNegInt(r.durationTheoreticalMinutes)
       : 0;
 
-    const duration_minutes = durCalc ?? durTheo; // pour la colonne "duration_minutes" existante
+    const duration_minutes = durCalc ?? durTheo; // colonne existante
 
-    // Dates (on honore les dates par ligne si fournies, sinon fallback commun)
-    const planned_start = r.planned_start ?? plannedStartISO ?? null;
-    const planned_end = r.planned_end ?? null;
+    // Dates (UTC strict). On honore la date par ligne si fournie, sinon fallback commun
+    const planned_start =
+      toUTCISOStringSafe(r.planned_start) ||
+      toUTCISOStringSafe(plannedStartISO) ||
+      null;
+
+    const planned_end = toUTCISOStringSafe(r.planned_end);
 
     const base = {
       commande_id: commandeId,
-      machine_id: r.machineId,
+      // Si machine_id est un entier, on le normalise ; si c'est UUID/texte, on garde tel quel
+      machine_id: toPosInt(r.machineId, null) || r.machineId,
       qty,
       status: "A commencer",
       planned_start,
       planned_end,
-      duration_minutes,           // <-- colonne existante dans ta table
-      // duration_calc_minutes: durCalc, // <-- décommente si ta table possède cette colonne
+      duration_minutes,
+      // duration_calc_minutes: durCalc, // décommente si la colonne existe
     };
 
     return cleanRow(base);
