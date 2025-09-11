@@ -14,7 +14,7 @@ function MachinesForm({
   const isValid = useMemo(() => {
     const nameOk = String(formData?.nom ?? "").trim().length > 0;
     const headsOk =
-      formData?.nbTetes !== "" &&
+      formData?.nbTetes === "" || // autorise vide → sera NULL
       !Number.isNaN(parseInt(formData?.nbTetes, 10));
     return nameOk && headsOk;
   }, [formData]);
@@ -36,7 +36,7 @@ function MachinesForm({
           onChange={onChange}
           required
           autoFocus
-          placeholder="Ex. TMBP‑S1501C #1"
+          placeholder="Ex. TMBP-S1501C #1"
         />
       </label>
 
@@ -58,6 +58,19 @@ function MachinesForm({
         </select>
       </label>
 
+      {/* Groupe machines (label libre) */}
+      <div className="field">
+        <label>Groupe (label)</label>
+        <input
+          type="text"
+          name="group_label"
+          value={formData.group_label || ""}
+          onChange={onChange}
+          placeholder="Rose / Verte Orange / Verte grise / Verte"
+        />
+      </div>
+
+      {/* Étiquettes */}
       <label>Étiquettes :</label>
 
       {/* Groupe Articles */}
@@ -128,6 +141,7 @@ MachinesForm.propTypes = {
     nom: PropTypes.string,
     nbTetes: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     etiquettes: PropTypes.arrayOf(PropTypes.string),
+    group_label: PropTypes.string,            // ✅ ajouté
   }).isRequired,
   articleTags: PropTypes.array,
   broderieTags: PropTypes.array,

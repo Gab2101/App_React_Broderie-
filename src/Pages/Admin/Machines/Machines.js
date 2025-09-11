@@ -8,8 +8,6 @@ import { supabase } from "../../../supabaseClient";
 import MachinesCard from "./MachinesCard";
 import MachinesForm from "./MachinesForm";
 
-
-
 /* =========================
    Helpers
 ========================= */
@@ -30,7 +28,20 @@ const safeParseEtiquettes = (raw) => {
 const uniq = (arr) => Array.from(new Set((arr || []).filter(Boolean)));
 
 const sortByName = (arr) =>
-  [...arr].sort((a, b) => String(a?.nom ?? "").localeCompare(String(b?.nom ?? ""), "fr", { sensitivity: "base" }));
+  [...arr].sort((a, b) =>
+    String(a?.nom ?? "").localeCompare(String(b?.nom ?? ""), "fr", { sensitivity: "base" })
+  );
+
+// --- Groupes (ordre d’affichage + helpers) ---
+const GROUP_ORDER = ["Rose", "Verte Orange", "Verte grise", "Verte", "Autres"];
+
+function getGroupLabel(m) {
+  return m.group_label || "Autres";
+}
+function groupSortIndex(label) {
+  const i = GROUP_ORDER.indexOf(label);
+  return i === -1 ? 999 : i;
+}
 
 export default function Machines() {
   const { articleTags, broderieTags } = useContext(EtiquettesContext);
@@ -46,7 +57,7 @@ export default function Machines() {
   const [showModalForm, setShowModalForm] = useState(false);
   const [machineDetails, setMachineDetails] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ nom: "", nbTetes: "", etiquettes: [] });
+  const [formData, setFormData] = useState({ nom: "", nbTetes: "", etiquettes: [], group_label: "" });
 
   /* =========================
      Load machines + normalize
@@ -55,7 +66,7 @@ export default function Machines() {
     setLoading(true);
     const { data, error } = await supabase
       .from("machines")
-      .select("id, nom, nbTetes, etiquettes")
+      .select("id, nom, nbTetes, etiquettes, group_label")
       .order("nom", { ascending: true });
 
     if (error) {
@@ -116,7 +127,7 @@ export default function Machines() {
      Form helpers
   ========================= */
   const openCreate = useCallback(() => {
-    setFormData({ nom: "", nbTetes: "", etiquettes: [] });
+    setFormData({ nom: "", nbTetes: "", etiquettes: [], group_label: "" });
     setShowModalForm(true);
     setMachineDetails(null);
     setIsEditing(false);
@@ -128,6 +139,7 @@ export default function Machines() {
       nom: m.nom ?? "",
       nbTetes: m.nbTetes ?? "",
       etiquettes: Array.isArray(m.etiquettes) ? m.etiquettes : [],
+      group_label: m.group_label ?? ""
     });
     setIsEditing(false);
   }, []);
@@ -156,7 +168,6 @@ export default function Machines() {
         const next = new Set(prev.etiquettes || []);
         if (next.has(label)) next.delete(label);
         else next.add(label);
-        // on ne garde que les tags valides
         const cleaned = uniq([...next]).filter((t) => validTagSet.has(t));
         return { ...prev, etiquettes: cleaned };
       });
@@ -174,6 +185,7 @@ export default function Machines() {
         nom: String(formData.nom ?? "").trim(),
         nbTetes: formData.nbTetes === "" ? null : parseInt(formData.nbTetes, 10),
         etiquettes: uniq(formData.etiquettes).filter((t) => validTagSet.has(t)),
+        group_label: (formData.group_label || "").trim() || null,
       };
 
       // Optimistic insert (temp id)
@@ -181,12 +193,15 @@ export default function Machines() {
       const optimisticRow = { id: tempId, ...payload };
       setMachines((prev) => sortByName([...prev, optimisticRow]));
 
-      const { data, error } = await supabase.from("machines").insert([payload]).select().single();
+      const { data, error } = await supabase
+        .from("machines")
+        .insert([payload])
+        .select("id, nom, nbTetes, etiquettes, group_label")
+        .single();
 
       if (error) {
         console.error("Erreur ajout machine :", error);
-        // rollback
-        setMachines((prev) => prev.filter((m) => m.id !== tempId));
+        setMachines((prev) => prev.filter((m) => m.id !== tempId)); // rollback
         return;
       }
 
@@ -196,7 +211,7 @@ export default function Machines() {
         return sortByName([...withoutTemp, { ...data, etiquettes: etiq }]);
       });
 
-      setFormData({ nom: "", nbTetes: "", etiquettes: [] });
+      setFormData({ nom: "", nbTetes: "", etiquettes: [], group_label: "" });
       setShowModalForm(false);
     },
     [formData, validTagSet]
@@ -211,26 +226,24 @@ export default function Machines() {
         nom: String(formData.nom ?? "").trim(),
         nbTetes: formData.nbTetes === "" ? null : parseInt(formData.nbTetes, 10),
         etiquettes: uniq(formData.etiquettes).filter((t) => validTagSet.has(t)),
+        group_label: (formData.group_label || "").trim() || null, // ✅ inclure la couleur/groupe
       };
 
       // Optimistic update
       setMachines((prev) =>
-        sortByName(
-          prev.map((m) => (m.id === machineDetails.id ? { ...m, ...payload } : m))
-        )
+        sortByName(prev.map((m) => (m.id === machineDetails.id ? { ...m, ...payload } : m)))
       );
 
       const { data, error } = await supabase
         .from("machines")
         .update(payload)
         .eq("id", machineDetails.id)
-        .select()
+        .select("id, nom, nbTetes, etiquettes, group_label")
         .single();
 
       if (error) {
         console.error("Erreur modification machine :", error);
-        // recharge prudente
-        await loadMachines();
+        await loadMachines(); // recharge prudente
         return;
       }
 
@@ -266,6 +279,35 @@ export default function Machines() {
   );
 
   /* =========================
+     Groupement (mémo)
+  ========================= */
+  const grouped = useMemo(() => {
+    const list = machines || [];
+    const by = new Map();
+
+    for (const m of list) {
+      const label = getGroupLabel(m);
+      if (!by.has(label)) by.set(label, []);
+      by.get(label).push(m);
+    }
+
+    // tri interne par nom (identique à aujourd’hui)
+    for (const [, arr] of by) {
+      arr.sort((a, b) =>
+        String(a?.nom ?? "").localeCompare(String(b?.nom ?? ""), "fr", { sensitivity: "base" })
+      );
+    }
+
+    // tri des sections : ordre défini puis alpha
+    return [...by.entries()].sort((a, b) => {
+      const ia = groupSortIndex(a[0]);
+      const ib = groupSortIndex(b[0]);
+      if (ia !== ib) return ia - ib;
+      return a[0].localeCompare(b[0], "fr");
+    });
+  }, [machines]);
+
+  /* =========================
      UI
   ========================= */
   return (
@@ -277,17 +319,50 @@ export default function Machines() {
 
       {/* Liste des machines */}
       <div className="liste-machines">
-        {machines.map((machine) => (
-          <MachinesCard
-            key={machine.id}
-            machine={machine}
-            articleTags={articleTags}
-            broderieTags={broderieTags}
-            onClick={openDetails}
-          />
-        ))}
-        {!loading && machines.length === 0 && (
-          <div className="empty-state">Aucune machine enregistrée.</div>
+        {/* Fallback : si aucune machine n’a de group_label, on garde l’affichage à plat */}
+        {!(machines || []).some((m) => m.group_label) ? (
+          <>
+            {machines.map((machine) => (
+              <MachinesCard
+                key={machine.id}
+                machine={machine}
+                articleTags={articleTags}
+                broderieTags={broderieTags}
+                onClick={openDetails}
+              />
+            ))}
+            {!loading && machines.length === 0 && (
+              <div className="empty-state">Aucune machine enregistrée.</div>
+            )}
+          </>
+        ) : (
+          // Affichage par sections (groupes)
+          <>
+            {grouped.map(([label, items]) => (
+              <section key={label} className="machines-group" data-group={label}>
+                {/* Barre couleur (gérée en CSS, y compris bi-ton) */}
+                <div className="machines-group__colorbar" />
+
+                <header className="machines-group__header">
+                  <h3 className="machines-group__title">
+                    {label} <small>({items.length})</small>
+                  </h3>
+                </header>
+
+                <div className="machines-group__grid">
+                  {items.map((machine) => (
+                    <MachinesCard
+                      key={machine.id}
+                      machine={machine}
+                      articleTags={articleTags}
+                      broderieTags={broderieTags}
+                      onClick={openDetails}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </>
         )}
       </div>
 
@@ -317,30 +392,37 @@ export default function Machines() {
               <>
                 <h2>{machineDetails.nom}</h2>
                 <p>
-                  <strong>Nombre de têtes :</strong>{" "}
-                  {machineDetails.nbTetes ?? <em>—</em>}
+                  <strong>Nombre de têtes :</strong> {machineDetails.nbTetes ?? <em>—</em>}
                 </p>
 
                 {(machineDetails.etiquettes || []).length > 0 && (
                   <>
                     <details className="dropdown" open>
-                      <p><strong>Articles :</strong></p>
+                      <p>
+                        <strong>Articles :</strong>
+                      </p>
                       <div className="tag-list">
                         {(machineDetails.etiquettes || [])
                           .filter((t) => (articleTags || []).some((a) => a.label === t))
                           .map((t, i) => (
-                            <span key={`art-${i}`} className="tag readonly">{t}</span>
+                            <span key={`art-${i}`} className="tag readonly">
+                              {t}
+                            </span>
                           ))}
                       </div>
                     </details>
 
                     <details className="dropdown">
-                      <p><strong>Options de broderie :</strong></p>
+                      <p>
+                        <strong>Options de broderie :</strong>
+                      </p>
                       <div className="tag-list">
                         {(machineDetails.etiquettes || [])
                           .filter((t) => (broderieTags || []).some((b) => b.label === t))
                           .map((t, i) => (
-                            <span key={`brd-${i}`} className="tag readonly">{t}</span>
+                            <span key={`brd-${i}`} className="tag readonly">
+                              {t}
+                            </span>
                           ))}
                       </div>
                     </details>
@@ -348,9 +430,15 @@ export default function Machines() {
                 )}
 
                 <div className="btn-zone">
-                  <button onClick={() => setIsEditing(true)} className="btn-enregistrer">Modifier</button>
-                  <button onClick={() => handleDelete(machineDetails.id)} className="btn-fermer">Supprimer</button>
-                  <button onClick={closeModal} className="btn-fermer">Fermer</button>
+                  <button onClick={() => setIsEditing(true)} className="btn-enregistrer">
+                    Modifier
+                  </button>
+                  <button onClick={() => handleDelete(machineDetails.id)} className="btn-fermer">
+                    Supprimer
+                  </button>
+                  <button onClick={closeModal} className="btn-fermer">
+                    Fermer
+                  </button>
                 </div>
               </>
             ) : (

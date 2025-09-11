@@ -34,8 +34,6 @@ export default function Parametres() {
 
   // Helpers
   const sanitizeLabel = useCallback((v) => String(v ?? "").trim(), []);
-  const normalize = useCallback((s) => String(s ?? "").trim().toLowerCase(), []);
-
   const sortByLabel = useCallback(
     (a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }),
     []
@@ -114,17 +112,17 @@ export default function Parametres() {
   // Article tags CRUD (optimistic) + cascade rules delete
   // ────────────────────────────────
   const addArticleTag = useCallback(
-    async (label, nettoyage) => {
+    async (label) => {
       const clean = sanitizeLabel(label);
       if (!clean) return { ok: false, reason: "Label vide" };
       if (hasDuplicateLabel(articleTags, clean)) return { ok: false, reason: "Doublon" };
 
-      const optimistic = { id: `tmp-${Date.now()}`, label: clean, nettoyage: Number(nettoyage) || 0 };
+      const optimistic = { id: `tmp-${Date.now()}`, label: clean };
       setArticleTags((prev) => [...prev, optimistic].sort(sortByLabel));
 
       const { data, error } = await supabase
         .from("articleTags")
-        .insert([{ label: clean, nettoyage: optimistic.nettoyage }])
+        .insert([{ label: clean }])
         .select()
         .single();
 
@@ -143,13 +141,13 @@ export default function Parametres() {
   );
 
   const updateArticleTag = useCallback(
-    async (id, label, nettoyage) => {
+    async (id, label) => {
       const clean = sanitizeLabel(label);
       if (!clean) return { ok: false, reason: "Label vide" };
       if (hasDuplicateLabel(articleTags, clean, id)) return { ok: false, reason: "Doublon" };
 
       const prev = articleTags.find((t) => t.id === id);
-      const patch = { label: clean, nettoyage: Number(nettoyage) || 0 };
+      const patch = { label: clean };
       setArticleTags((prevList) => prevList.map((t) => (t.id === id ? { ...t, ...patch } : t)).sort(sortByLabel));
 
       const { error } = await supabase.from("articleTags").update(patch).eq("id", id);
@@ -171,40 +169,35 @@ export default function Parametres() {
       const tag = snapshot.find((t) => t.id === id);
       if (!tag) return { ok: false, reason: "Introuvable" };
 
-      // Supprime TOUTES les variantes de casse de ce label (Ceinture/ceinture/CEINTURE…)
-      const norm = normalize(tag.label);
-      const toRemove = snapshot.filter((t) => normalize(t.label) === norm);
-      const toRemoveIds = toRemove.map((t) => t.id);
+      // Supprimer toutes les variantes de casse du même label (optionnel)
+      const norm = (s) => String(s ?? "").trim().toLowerCase();
+      const toRemoveIds = snapshot
+        .filter((t) => norm(t.label) === norm(tag.label))
+        .map((t) => t.id);
 
       // Optimistic UI
       setArticleTags((list) => list.filter((t) => !toRemoveIds.includes(t.id)));
 
-      // Suppression DB (toutes les variantes)
-      const { error } = await supabase.from("articleTags").delete().in("id", toRemoveIds);
-
-      if (error) {
-        console.error("❌ Erreur suppression articleTag:", error.message);
-        // rollback
-        setArticleTags(snapshot);
-        alert("Suppression refusée : " + error.message);
-        return { ok: false, reason: error.message };
-      }
-
-      // Best-effort : supprimer aussi les règles associées à l’article
       try {
-        await supabase
-          .from("nettoyage_rules")
-          .delete()
-          .ilike("article_label", tag.label); // supprime les règles qui matchent (insensible à la casse via ILIKE)
-      } catch (e) {
-        console.warn("⚠️ Règles non supprimées (non bloquant) :", e?.message);
-      }
+        // 1) Supprimer d’abord les règles liées
+        //    - par ID (si la colonne existe dans ton schéma)
+        await supabase.from("nettoyage_rules").delete().in("article_id", toRemoveIds);
+        //    - par label (compat si article_label existe encore)
+        await supabase.from("nettoyage_rules").delete().ilike("article_label", tag.label);
 
-      // Re-sync dur avec le serveur (évite les incohérences)
-      await fetchTags();
-      return { ok: true };
+        // 2) Supprimer les tags articles
+        const { error } = await supabase.from("articleTags").delete().in("id", toRemoveIds);
+        if (error) throw error;
+
+        return { ok: true };
+      } catch (e) {
+        console.error("[DELETE articleTags] failed:", e);
+        setArticleTags(snapshot); // rollback visuel
+        setError(e?.message ?? "Suppression échouée");
+        return { ok: false, reason: e?.message ?? "Suppression échouée" };
+      }
     },
-    [articleTags, fetchTags, normalize]
+    [articleTags]
   );
 
   // ────────────────────────────────

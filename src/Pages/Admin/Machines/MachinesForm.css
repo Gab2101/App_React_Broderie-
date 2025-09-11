@@ -112,3 +112,18 @@
 @media (prefers-reduced-motion: reduce) {
   .formulaire-machine .tag { transition: none; }
 }
+.machines-group__colorbar {
+  height: 8px;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: 12px;
+}
+
+/* Exemple pour un groupe simple */
+.machines-group[data-group="Rose"] .machines-group__colorbar {
+  background: #FF5CA8;
+}
+
+/* Exemple pour un groupe bi-ton (Verte grise) */
+.machines-group[data-group="Verte grise"] .machines-group__colorbar {
+  background: linear-gradient(to right, #4CAF50 50%, #9E9E9E 50%);
+}
