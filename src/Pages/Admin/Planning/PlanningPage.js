@@ -21,15 +21,15 @@ import { normalizeSlotForGrid } from "./lib/grid";
 import { workingHoursBetween } from "./lib/workingHours";
 import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority";
 
-console.log("[Planning] module loaded (refactor + inversion jours/machines + vue jour)");
+console.log("[Planning] module loaded (machines en lignes + regroupement par group_label)");
 
-/** ---------- Légende d’urgence (s’appuie sur tes couleurs 1→5) ---------- **/
+/** ---------- Légende d’urgence ---------- **/
 export function UrgencyLegend() {
   const labels = {
     1: "Faible (≥ 15 jours)",
-    2: "Moyenne (10–14 jours)",
-    3: "Élevée (5–9 jours)",
-    4: "Critique (2–4 jours)",
+    2: "Moyenne (10_14 jours)",
+    3: "Élevée (5_9 jours)",
+    4: "Critique (2_4 jours)",
     5: "Urgence maximale (< 2 jours ou dépassée)",
   };
 
@@ -55,11 +55,9 @@ export function UrgencyLegend() {
   );
 }
 
-/** -------- Utils Paris (affichage local, DB en UTC via ISO) -------- */
+/** -------- Utils Paris -------- */
 const PARIS_TZ = "Europe/Paris";
-function parisNow() {
-  return new Date();
-}
+const parisNow = () => new Date();
 function parisMidnight(dLike = new Date()) {
   const d = new Date(dLike);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -86,7 +84,7 @@ function ceilHourWorkParis(d) {
   return clampToWorkdayParis(r);
 }
 
-/** -------- Helper: normaliser machineId en tableau de strings -------- */
+/** -------- normaliser machineId en tableau de strings -------- */
 function normalizeMachineIds(raw) {
   if (raw == null) return [];
   if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
@@ -96,16 +94,50 @@ function normalizeMachineIds(raw) {
   return [s];
 }
 
-export default function PlanningPage() {
-  console.log("[Planning] render", { time: new Date().toISOString() });
+/** -------- Grouper les machines par group_label (ordre alpha FR) -------- */
+function groupMachinesByLabel(machines) {
+  const map = new Map();
+  for (const m of machines) {
+    const label = m.group_label ?? "Sans groupe";
+    if (!map.has(label)) map.set(label, { label, machines: [] });
+    map.get(label).machines.push(m);
+  }
 
+  const groups = Array.from(map.values()).sort((a, b) =>
+    a.label.localeCompare(b.label, "fr", { sensitivity: "base" })
+  );
+
+  groups.forEach((g) => {
+    g.machines.sort((a, b) => {
+      const an = (a.nom ?? a.name ?? "").toString();
+      const bn = (b.nom ?? b.name ?? "").toString();
+      const byName = an.localeCompare(bn, "fr", { sensitivity: "base" });
+      if (byName !== 0) return byName;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  });
+
+  const flat = groups.flatMap((g) => g.machines);
+
+  // indices des dernières lignes de groupe, pour le séparateur horizontal
+  const breaks = [];
+  let cursor = 0;
+  for (const g of groups) {
+    cursor += g.machines.length;
+    breaks.push(cursor - 1);
+  }
+
+  return { groups, flat, breaks };
+}
+
+export default function PlanningPage() {
   const [startDate, setStartDate] = useState(() => parisMidnight());
   const [machines, setMachines] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [planning, setPlanning] = useState([]);
   const [modalCommande, setModalCommande] = useState(null);
 
-  // ---- états pour la VUE JOUR ----
+  // Vue jour
   const [viewMode, setViewMode] = useState("table"); // 'table' | 'day'
   const [selectedDate, setSelectedDate] = useState(() => parisMidnight());
 
@@ -123,9 +155,8 @@ export default function PlanningPage() {
     setModalCommande((cur) => (cur?.id === updated.id ? { ...cur, ...updated } : cur));
   }, []);
 
-  /** --- Étape 1: Raccourcir le planning quand une commande passe en “Terminée” --- */
+  /** --- Raccourcir quand “Terminée” --- */
   const shortenPlanningForCommandeTerminee = useCallback(async (commandeId, actualEnd = new Date()) => {
-    // Arrondi Paris + clamp pause/fin jour
     const roundedEnd = ceilHourWorkParis(actualEnd ?? new Date());
     const endIso = roundedEnd.toISOString();
     const nowMs = roundedEnd.getTime();
@@ -139,7 +170,7 @@ export default function PlanningPage() {
       console.error("❌ Erreur fetch planning by commandeId:", error);
       return;
     }
-    if (!rows || rows.length === 0) return;
+    if (!rows?.length) return;
 
     let current = null;
     for (const r of rows) {
@@ -172,14 +203,15 @@ export default function PlanningPage() {
     });
   }, []);
 
-  /** --- Chargement + réajustement automatique (reflow) --- */
+  /** --- Chargement + reflow --- */
   const fetchAndReflow = useCallback(async () => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
 
     try {
       const [mRes, cRes, pRes] = await Promise.all([
-        supabase.from("machines").select("id, nom"),
+        // champs confirmés par tes exemples
+        supabase.from("machines").select("id, nom, group_label"),
         supabase.from("commandes").select("*"),
         supabase.from("planning").select("*"),
       ]);
@@ -192,7 +224,7 @@ export default function PlanningPage() {
       setCommandes(commandesData);
       setPlanning(planningData);
 
-      // Auto-ajuster 'En cours' à maintenant arrondi (Paris) et replanifier 'A commencer'
+      // Ajuste 'En cours' / replanifie 'A commencer'
       const now = parisNow();
       const nextHourParis = ceilHourWorkParis(now);
       const startAnchor = nextWorkStart(nextHourParis, workOpts);
@@ -222,7 +254,7 @@ export default function PlanningPage() {
           const current = enCours.sort((A, B) => new Date(B.p.debut) - new Date(A.p.debut))[0];
           const finActuel = new Date(current.p.fin);
           let target = ceilHourWorkParis(now);
-          if (target.getTime() < finActuel.getTime()) target = finActuel; // ne pas reculer
+          if (target.getTime() < finActuel.getTime()) target = finActuel;
           if (target.getTime() !== finActuel.getTime()) {
             updates.push({ id: current.p.id, fin: target.toISOString() });
           }
@@ -288,7 +320,7 @@ export default function PlanningPage() {
     }
   }, [workOpts]);
 
-  /** --- Realtime update commandes (écoute statut → libération + reflow) --- */
+  /** --- Realtime commandes --- */
   useEffect(() => {
     const channel = supabase
       .channel("realtime-commandes")
@@ -296,10 +328,8 @@ export default function PlanningPage() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "commandes" },
         (payload) => {
-          // 1) Met à jour le state local
           replaceCommandeLocal(payload.new);
 
-          // 2) Détecter transition vers "Terminée"
           const newStatus = String(payload?.new?.statut || "").toLowerCase();
           const oldStatus = String(payload?.old?.statut || "").toLowerCase();
 
@@ -323,7 +353,7 @@ export default function PlanningPage() {
     };
   }, [replaceCommandeLocal, fetchAndReflow, shortenPlanningForCommandeTerminee]);
 
-  /** --- Tick horaire auto (charge + reflow) --- */
+  /** --- Tick horaire auto --- */
   useEffect(() => {
     fetchAndReflow();
 
@@ -350,7 +380,7 @@ export default function PlanningPage() {
     return m;
   }, [commandes]);
 
-  // 🔸 FILTRAGE UI anti-phantoms : libération à l’heure pleine pour commandes "Terminée"
+  // Anti-phantoms : libération heure pleine pour "Terminée"
   const filteredPlanning = useMemo(() => {
     if (!planning?.length) return [];
     const out = [];
@@ -373,36 +403,31 @@ export default function PlanningPage() {
       const dStart = new Date(row.debut);
       const dEnd = new Date(row.fin);
 
-      if (dStart >= tFree) {
-        continue;
-      }
-
+      if (dStart >= tFree) continue;
       if (dStart < tFree && dEnd > tFree) {
         out.push({ ...row, fin: tFree.toISOString() });
         continue;
       }
-
       out.push(row);
     }
 
     return out;
   }, [planning, commandeById]);
 
-  /** ✅ Couleur d’urgence UNIQUE par commande */
+  // Couleur d’urgence par commande
   const commandeColorMap = useMemo(() => {
     const m = new Map();
     for (const c of commandes) {
       const dateLivraison =
         c.dateLivraison || c.deadline || c.date_livraison || c.date_limite || null;
-
-      const level = computeUrgency(dateLivraison); // 1..5
-      const color = getUrgencyColor(level); // hex (inclut noir si 5)
+      const level = computeUrgency(dateLivraison);
+      const color = getUrgencyColor(level);
       m.set(c.id, color);
     }
     return m;
   }, [commandes]);
 
-  /** ✅ Planning regroupé par machine — DUPLICATION par machine (multi-machines) */
+  // Planning par machine (clé = UUID string)
   const planningByMachine = useMemo(() => {
     const acc = new Map();
     for (const p of filteredPlanning) {
@@ -413,7 +438,7 @@ export default function PlanningPage() {
       };
       const entry = normalizeSlotForGrid(entryBase);
 
-      const mids = normalizeMachineIds(p.machineId);
+      const mids = normalizeMachineIds(p.machineId); // UUIDs string
       for (const mid of mids) {
         if (!acc.has(mid)) acc.set(mid, []);
         acc.get(mid).push({ ...entry, machineId: mid });
@@ -423,7 +448,7 @@ export default function PlanningPage() {
     return acc;
   }, [filteredPlanning]);
 
-  // Colonnes = 14 jours ouvrés
+  // 14 jours ouvrés
   const dayColumns = useMemo(() => {
     const cols = [];
     let added = 0;
@@ -440,15 +465,18 @@ export default function PlanningPage() {
     return cols;
   }, [startDate, HOLIDAYS]);
 
+  // Regroupement machines pour l'affichage (machines en LIGNES)
+  const { groups: machineGroups, flat: groupedMachines, breaks: groupBreakIndices } = useMemo(() => {
+    return groupMachinesByLabel(machines || []);
+  }, [machines]);
+
   // ----- Actions vue/controls -----
   const openCommande = useCallback((commande) => setModalCommande(commande), []);
-
   const goToDay = useCallback((d) => {
     if (!d) d = new Date();
     setSelectedDate(parisMidnight(d));
     setViewMode("day");
   }, []);
-
   const nextDay = useCallback(() => {
     setSelectedDate((prev) => {
       const d = parisMidnight(prev);
@@ -456,7 +484,6 @@ export default function PlanningPage() {
       return d;
     });
   }, []);
-
   const prevDay = useCallback(() => {
     setSelectedDate((prev) => {
       const d = parisMidnight(prev);
@@ -464,37 +491,27 @@ export default function PlanningPage() {
       return d;
     });
   }, []);
-
   const backToTable = useCallback(() => setViewMode("table"), []);
 
-  // Mapping des données pour la vue jour — DUPLICATION par machine
+  // Vue jour
   const dayViewMachines = useMemo(
     () => machines.map((m) => ({ id: String(m.id), name: m.nom ?? m.name ?? `Machine ${m.id}` })),
     [machines]
   );
-
-  // ----- Mapping des données pour la vue jour — DUPLICATION par machine
   const dayViewOrders = useMemo(() => {
     const out = [];
     for (const p of filteredPlanning) {
-      // Aligne sur la même règle que la grille: début=floor, fin=ceil
-      const norm = normalizeSlotForGrid(
-        { debut: p.debut, fin: p.fin }
-        // Par défaut: { startRound: "floor", endRound: "ceil" }
-      );
-
+      const norm = normalizeSlotForGrid({ debut: p.debut, fin: p.fin });
       const start = new Date(norm.gridStartMs);
       const end = new Date(norm.gridEndMs);
-
       const c = commandeById.get(p.commandeId);
       const client = c?.client || c?.client_nom || c?.client_name || "";
       const color = c ? commandeColorMap.get(c.id) : undefined;
-
       const mids = normalizeMachineIds(p.machineId);
       for (const mid of mids) {
         out.push({
-          id: p.id, // id du slot planning
-          machineId: String(mid), // clé identique à machines[].id (string)
+          id: p.id,
+          machineId: String(mid),
           start,
           end,
           title: client || `Commande ${p.commandeId}`,
@@ -512,11 +529,7 @@ export default function PlanningPage() {
       {viewMode === "day" ? (
         <>
           <h2>Planning — Vue jour</h2>
-
-          {/* Légende en haut */}
           <UrgencyLegend />
-
-          {/* Badge de date */}
           <div className="dayview-header-row">
             <div className="day-badge">
               {new Date(selectedDate).toLocaleDateString("fr-FR", {
@@ -528,8 +541,6 @@ export default function PlanningPage() {
               })}
             </div>
           </div>
-
-          {/* Actions étirées */}
           <div className="dayview-actions">
             <button onClick={backToTable}>Retour au tableau</button>
             <button onClick={prevDay}>Jour précédent</button>
@@ -566,8 +577,6 @@ export default function PlanningPage() {
       ) : (
         <>
           <h2>Planning — Vue Semaine</h2>
-
-          {/* Légende toujours visible */}
           <UrgencyLegend />
 
           <div className="zoom-buttons">
@@ -594,13 +603,17 @@ export default function PlanningPage() {
           </div>
 
           <PlanningGrid
-            machines={machines}
+            machines={groupedMachines}               
             dayColumns={dayColumns}
-            planningByMachine={planningByMachine}
+            planningByMachine={planningByMachine}     
             commandeById={commandeById}
             onOpenCommande={openCommande}
             onDayColumnClick={goToDay}
-            commandeColorMap={commandeColorMap} // ✅ couleurs corrigées
+            commandeColorMap={commandeColorMap}
+            groupMeta={{
+              groups: machineGroups.map(g => ({ label: g.label, size: g.machines.length })),
+              breaks: groupBreakIndices,               // indices des DERNIÈRES lignes de chaque groupe
+            }}
           />
 
           {modalCommande && (

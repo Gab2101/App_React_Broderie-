@@ -196,7 +196,7 @@
 }
 
 /* États sémantiques via data-attributes — spécificité abaissée */
-.pgd__bar:where([data-status="a-commencer"]) { /* style neutre si besoin */ }
+
 .pgd__bar:where([data-status="en-cours"]) { border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); }
 .pgd__bar:where([data-status="terminee"]) { opacity: 0.75; }
 
@@ -335,4 +335,14 @@ button:focus-visible,
       color-mix(in srgb, var(--surface) 50%, var(--gridline)) 12px
     );
   opacity: 0.85;
+}
+/* Ligne de séparation entre groupes (s'étend sur toutes les colonnes du grid) */
+.pgd__groupsep {
+  height: var(--group-row-gap, 12px); /* 8–16px selon préférence */
+  pointer-events: none;
+}
+
+/* optionnel: un léger trait si tu veux matérialiser le groupe */
+.pgd__groupsep {
+  border-bottom: 1px solid rgba(0,0,0,0.08);
 }

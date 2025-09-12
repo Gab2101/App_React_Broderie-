@@ -27,7 +27,7 @@ export function workingHoursBetween(
   let count = 0;
 
   while (cur < end) {
-    // Filtre jours ouvrés (si demandé) + heure de travail (08–12 / 13–16 via isWorkHour)
+    // Filtre jours ouvrés (si demandé) + heure de travail (07–12 / 13–16 via isWorkHour)
     if ((!skipNonBusiness || isBusinessDay(cur, holidays)) && isWorkHour(cur)) {
       count += 1;
     }

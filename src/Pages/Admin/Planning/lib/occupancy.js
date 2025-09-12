@@ -78,7 +78,7 @@ function computeVisibleWindowForCommande(cmd, now = new Date()) {
   }
 
   // Clamp sécurité (si la commande dépasse la journée en cours, on laisse tel quel ;
-  // le filtrage 8–12/13–16 se fera plus bas si activé)
+  // le filtrage 7–12/13–16 se fera plus bas si activé)
   if (visibleEnd <= visibleStart) return null;
 
   return { visibleStart, visibleEnd };

@@ -2,7 +2,7 @@
 
 // --- Config journée ouvrée Paris ---
 export const DEFAULT_WORKDAY = {
-  startHour: 8,
+  startHour: 7,
   lunchStart: 12,
   lunchEnd: 13,
   endHour: 16,
@@ -127,7 +127,7 @@ export function snapToNextWorkStart(date, cfg = DEFAULT_WORKDAY) {
   return d;
 }
 
-// Ajoute des minutes en respectant 08–12 / 13–16 (multi-jours)
+// Ajoute des minutes en respectant 07–12 / 13–16 (multi-jours)
 export function addMinutesWithinWorkHours(start, minutes, cfg = DEFAULT_WORKDAY) {
   let remaining = Math.max(0, Number(minutes) || 0);
   let cursor = snapToNextWorkStart(start, cfg);

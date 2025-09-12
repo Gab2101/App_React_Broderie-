@@ -13,7 +13,7 @@ export const computeProvisionalEnd = (debut, minutesAppliquees) => {
   if (!start || !Number.isFinite(minutes) || minutes <= 0) return null;
   // Aligne le départ sur une fenêtre ouvrée Paris (gère 12–13, 16:00, week-ends)
   const aligned = snapToNextWorkStart(start, DEFAULT_WORKDAY);
-  // Ajoute en respectant 08–12 / 13–16 et coupure multi-jours
+  // Ajoute en respectant 07–12 / 13–16 et coupure multi-jours
   const { end } = addMinutesWithinWorkHours(aligned, minutes, DEFAULT_WORKDAY);
   return end;
 }
