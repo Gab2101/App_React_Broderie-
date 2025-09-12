@@ -5,12 +5,23 @@ import NettoyageRulesEditor from "./NettoyageRulesEditor";
 import { supabase } from "../../../supabaseClient";
 import "./Parametres.css";
 
+/** Normalisation robuste pour comparer/assainir les labels */
+function normLabel(s = "") {
+  return String(s ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // accents
+    .toLowerCase()
+    .replace(/\s+/g, " ")   // espaces multiples -> 1 espace
+    .replace(/[-_]/g, "-")  // unifie tirets
+    .trim();
+}
+const sanitizeLabel = (v) => String(v ?? "").trim();
+
 /**
  * Parametres
  * — Centralise le chargement/MAJ des tags Article & Broderie
  * — Ajoute l’éditeur des règles de nettoyage (article × zone)
- * — Realtime sur nettoyage_rules pour MAJ du compteur
- * — Suppression en cascade des règles liées aux tags supprimés (optionnelle)
+ * — Realtime sur tags & nettoyage_rules
+ * — Suppression en cascade (optionnelle) des règles liées aux tags supprimés
  */
 export default function Parametres() {
   const [articleTags, setArticleTags] = useState([]);
@@ -20,40 +31,35 @@ export default function Parametres() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // 🔒 Hot-fix : empêcher tout submit involontaire dans la page
+  // 🔒 Empêcher tout submit involontaire dans la page
   useEffect(() => {
     const onSubmit = (e) => {
       const root = document.querySelector(".parametres-page");
-      if (root && root.contains(e.target)) {
-        e.preventDefault(); // annule navigation/reload
-      }
+      if (root && root.contains(e.target)) e.preventDefault();
     };
-    document.addEventListener("submit", onSubmit, true); // capture
+    document.addEventListener("submit", onSubmit, true);
     return () => document.removeEventListener("submit", onSubmit, true);
   }, []);
 
-  // Helpers
-  const sanitizeLabel = useCallback((v) => String(v ?? "").trim(), []);
   const sortByLabel = useCallback(
     (a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }),
     []
   );
 
-  const hasDuplicateLabel = useCallback(
-    (list, label, idToIgnore = null) => {
-      const L = sanitizeLabel(label).toLowerCase();
-      return list.some((t) => t.label?.trim().toLowerCase() === L && t.id !== idToIgnore);
-    },
-    [sanitizeLabel]
-  );
+  const hasDuplicateLabel = useCallback((list, label, idToIgnore = null) => {
+    const L = normLabel(label);
+    return list.some((t) => normLabel(t.label) === L && t.id !== idToIgnore);
+  }, []);
 
   const stateCounts = useMemo(
     () => ({ articles: articleTags.length, broderies: broderieTags.length, rules: rulesCount }),
     [articleTags.length, broderieTags.length, rulesCount]
   );
 
-  // Compteur des règles (count-only)
-  const refreshRulesCount = useCallback(async () => {
+  // ────────────────────────────────
+  // Fetchers
+  // ────────────────────────────────
+  const refetchRulesCount = useCallback(async () => {
     try {
       const { count, error: err } = await supabase
         .from("nettoyage_rules")
@@ -65,51 +71,63 @@ export default function Parametres() {
     }
   }, []);
 
-  // Fetch tags en parallèle + compteur des règles
-  const fetchTags = useCallback(async () => {
+  const refetchArticleTags = useCallback(async () => {
+    const res = await supabase.from("articleTags").select("*").order("label", { ascending: true });
+    if (res.error) throw new Error(`articleTags: ${res.error.message}`);
+    setArticleTags((res.data ?? []).sort(sortByLabel));
+  }, [sortByLabel]);
+
+  const refetchBroderieTags = useCallback(async () => {
+    const res = await supabase.from("broderieTags").select("*").order("label", { ascending: true });
+    if (res.error) throw new Error(`broderieTags: ${res.error.message}`);
+    setBroderieTags((res.data ?? []).sort(sortByLabel));
+  }, [sortByLabel]);
+
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [art, bro] = await Promise.all([
-        supabase.from("articleTags").select("*").order("label", { ascending: true }),
-        supabase.from("broderieTags").select("*").order("label", { ascending: true }),
-      ]);
-
-      if (art.error) throw new Error(`articleTags: ${art.error.message}`);
-      if (bro.error) throw new Error(`broderieTags: ${bro.error.message}`);
-
-      setArticleTags((art.data ?? []).sort(sortByLabel));
-      setBroderieTags((bro.data ?? []).sort(sortByLabel));
+      await Promise.all([refetchArticleTags(), refetchBroderieTags(), refetchRulesCount()]);
     } catch (e) {
       console.error(e);
-      setError(e.message || "Erreur inattendue lors du chargement des tags.");
+      setError(e.message || "Erreur inattendue lors du chargement des paramètres.");
     } finally {
       setLoading(false);
     }
-
-    // toujours rafraîchir le compteur des règles
-    refreshRulesCount();
-  }, [sortByLabel, refreshRulesCount]);
+  }, [refetchArticleTags, refetchBroderieTags, refetchRulesCount]);
 
   useEffect(() => {
-    fetchTags();
-  }, [fetchTags]);
-
-  // Realtime sur nettoyage_rules pour garder le compteur à jour
-  useEffect(() => {
-    const ch = supabase
-      .channel("realtime-nettoyage-rules")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "nettoyage_rules" },
-        () => refreshRulesCount()
-      )
-      .subscribe();
-    return () => supabase.removeChannel(ch);
-  }, [refreshRulesCount]);
+    fetchAll();
+  }, [fetchAll]);
 
   // ────────────────────────────────
-  // Article tags CRUD (optimistic) + cascade rules delete
+  // Realtime sur tags & règles
+  // ────────────────────────────────
+  useEffect(() => {
+    const chA = supabase
+      .channel("rt-article-tags")
+      .on("postgres_changes", { event: "*", schema: "public", table: "articleTags" }, () => refetchArticleTags())
+      .subscribe();
+
+    const chB = supabase
+      .channel("rt-broderie-tags")
+      .on("postgres_changes", { event: "*", schema: "public", table: "broderieTags" }, () => refetchBroderieTags())
+      .subscribe();
+
+    const chR = supabase
+      .channel("rt-nettoyage-rules")
+      .on("postgres_changes", { event: "*", schema: "public", table: "nettoyage_rules" }, () => refetchRulesCount())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(chA);
+      supabase.removeChannel(chB);
+      supabase.removeChannel(chR);
+    };
+  }, [refetchArticleTags, refetchBroderieTags, refetchRulesCount]);
+
+  // ────────────────────────────────
+  // CRUD Article tags (optimistic)
   // ────────────────────────────────
   const addArticleTag = useCallback(
     async (label) => {
@@ -117,14 +135,12 @@ export default function Parametres() {
       if (!clean) return { ok: false, reason: "Label vide" };
       if (hasDuplicateLabel(articleTags, clean)) return { ok: false, reason: "Doublon" };
 
+      // UI optimiste
       const optimistic = { id: `tmp-${Date.now()}`, label: clean };
       setArticleTags((prev) => [...prev, optimistic].sort(sortByLabel));
 
-      const { data, error } = await supabase
-        .from("articleTags")
-        .insert([{ label: clean }])
-        .select()
-        .single();
+      // Insert
+      const { data, error } = await supabase.from("articleTags").insert([{ label: clean }]).select().single();
 
       if (error) {
         console.error("❌ Erreur ajout articleTag:", error.message);
@@ -133,11 +149,11 @@ export default function Parametres() {
         return { ok: false, reason: error.message };
       }
 
-      // replace temp with real
+      // remplace le temp par la vraie ligne
       setArticleTags((prev) => prev.map((t) => (t.id === optimistic.id ? data : t)).sort(sortByLabel));
       return { ok: true };
     },
-    [articleTags, hasDuplicateLabel, sanitizeLabel, sortByLabel]
+    [articleTags, hasDuplicateLabel, sortByLabel]
   );
 
   const updateArticleTag = useCallback(
@@ -146,46 +162,44 @@ export default function Parametres() {
       if (!clean) return { ok: false, reason: "Label vide" };
       if (hasDuplicateLabel(articleTags, clean, id)) return { ok: false, reason: "Doublon" };
 
-      const prev = articleTags.find((t) => t.id === id);
+      const prevRow = articleTags.find((t) => t.id === id);
       const patch = { label: clean };
-      setArticleTags((prevList) => prevList.map((t) => (t.id === id ? { ...t, ...patch } : t)).sort(sortByLabel));
+
+      // Optimistic
+      setArticleTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)).sort(sortByLabel));
 
       const { error } = await supabase.from("articleTags").update(patch).eq("id", id);
       if (error) {
         console.error("❌ Erreur MAJ articleTag:", error.message);
         // rollback
-        setArticleTags((prevList) => prevList.map((t) => (t.id === id ? prev : t)).sort(sortByLabel));
+        setArticleTags((prev) => prev.map((t) => (t.id === id ? prevRow : t)).sort(sortByLabel));
         return { ok: false, reason: error.message };
       }
       return { ok: true };
     },
-    [articleTags, hasDuplicateLabel, sanitizeLabel, sortByLabel]
+    [articleTags, hasDuplicateLabel, sortByLabel]
   );
 
   const deleteArticleTag = useCallback(
     async (id) => {
-      // snapshot pour rollback
       const snapshot = articleTags;
       const tag = snapshot.find((t) => t.id === id);
       if (!tag) return { ok: false, reason: "Introuvable" };
 
-      // Supprimer toutes les variantes de casse du même label (optionnel)
-      const norm = (s) => String(s ?? "").trim().toLowerCase();
-      const toRemoveIds = snapshot
-        .filter((t) => norm(t.label) === norm(tag.label))
-        .map((t) => t.id);
+      // Option : supprimer toutes les variantes de casse du même label
+      const targetNorm = normLabel(tag.label);
+      const toRemoveIds = snapshot.filter((t) => normLabel(t.label) === targetNorm).map((t) => t.id);
 
-      // Optimistic UI
+      // Optimistic removal
       setArticleTags((list) => list.filter((t) => !toRemoveIds.includes(t.id)));
 
       try {
-        // 1) Supprimer d’abord les règles liées
-        //    - par ID (si la colonne existe dans ton schéma)
-        await supabase.from("nettoyage_rules").delete().in("article_id", toRemoveIds);
-        //    - par label (compat si article_label existe encore)
+        // 1) Cascade côté règles (compat : par label si pas d'ID)
         await supabase.from("nettoyage_rules").delete().ilike("article_label", tag.label);
+        await supabase.from("nettoyage_rules").delete().in("article_id", toRemoveIds).catch(() => null);
+        await refetchRulesCount();
 
-        // 2) Supprimer les tags articles
+        // 2) Supprimer les tags
         const { error } = await supabase.from("articleTags").delete().in("id", toRemoveIds);
         if (error) throw error;
 
@@ -197,11 +211,11 @@ export default function Parametres() {
         return { ok: false, reason: e?.message ?? "Suppression échouée" };
       }
     },
-    [articleTags]
+    [articleTags, refetchRulesCount]
   );
 
   // ────────────────────────────────
-  // Broderie tags CRUD (optimistic) + cascade rules delete
+  // CRUD Broderie tags (optimistic)
   // ────────────────────────────────
   const addBroderieTag = useCallback(
     async (label) => {
@@ -223,7 +237,7 @@ export default function Parametres() {
       setBroderieTags((prev) => prev.map((t) => (t.id === optimistic.id ? data : t)).sort(sortByLabel));
       return { ok: true };
     },
-    [broderieTags, hasDuplicateLabel, sanitizeLabel, sortByLabel]
+    [broderieTags, hasDuplicateLabel, sortByLabel]
   );
 
   const updateBroderieTag = useCallback(
@@ -232,48 +246,39 @@ export default function Parametres() {
       if (!clean) return { ok: false, reason: "Label vide" };
       if (hasDuplicateLabel(broderieTags, clean, id)) return { ok: false, reason: "Doublon" };
 
-      const prev = broderieTags.find((t) => t.id === id);
-      setBroderieTags((prevList) =>
-        prevList.map((t) => (t.id === id ? { ...t, label: clean } : t)).sort(sortByLabel)
-      );
+      const prevRow = broderieTags.find((t) => t.id === id);
+
+      setBroderieTags((prev) => prev.map((t) => (t.id === id ? { ...t, label: clean } : t)).sort(sortByLabel));
 
       const { error } = await supabase.from("broderieTags").update({ label: clean }).eq("id", id);
       if (error) {
         console.error("❌ Erreur MAJ broderieTag:", error.message);
-        setBroderieTags((prevList) => prevList.map((t) => (t.id === id ? prev : t)).sort(sortByLabel));
+        setBroderieTags((prev) => prev.map((t) => (t.id === id ? prevRow : t)).sort(sortByLabel));
         return { ok: false, reason: error.message };
       }
       return { ok: true };
     },
-    [broderieTags, hasDuplicateLabel, sanitizeLabel, sortByLabel]
+    [broderieTags, hasDuplicateLabel, sortByLabel]
   );
 
   const deleteBroderieTag = useCallback(
     async (id) => {
-      const prev = broderieTags;
-      const tag = prev.find((t) => t.id === id);
+      const snapshot = broderieTags;
+      const tag = snapshot.find((t) => t.id === id);
       if (!tag) return { ok: false, reason: "Introuvable" };
 
-      let cascade = false;
-      if (
-        window.confirm(
-          `Supprimer la broderie "${tag.label}" ?\n\nAstuce : cliquez sur "OK" pour supprimer aussi toutes les règles de nettoyage liées à cette zone. Cliquez sur "Annuler" pour ne supprimer que le tag.`
-        )
-      ) {
-        cascade = true;
-      }
+      const cascade = window.confirm(
+        `Supprimer la zone de broderie "${tag.label}" ?\n\nOK = supprimer aussi toutes les règles liées.\nAnnuler = supprimer uniquement le tag.`
+      );
 
-      // optimistic removal du tag
+      // Optimistic removal
       setBroderieTags((list) => list.filter((t) => t.id !== id));
 
       try {
         if (cascade) {
-          const { error: errRules } = await supabase
-            .from("nettoyage_rules")
-            .delete()
-            .ilike("broderie_label", tag.label);
-          if (errRules) throw errRules;
-          refreshRulesCount();
+          await supabase.from("nettoyage_rules").delete().ilike("broderie_label", tag.label);
+          await supabase.from("nettoyage_rules").delete().eq("broderie_id", id).catch(() => null);
+          await refetchRulesCount();
         }
 
         const { error } = await supabase.from("broderieTags").delete().eq("id", id);
@@ -282,12 +287,11 @@ export default function Parametres() {
         return { ok: true };
       } catch (e) {
         console.error("❌ Erreur suppression broderieTag:", e.message || e);
-        // rollback
-        setBroderieTags(prev);
+        setBroderieTags(snapshot); // rollback
         return { ok: false, reason: e.message || "Erreur suppression" };
       }
     },
-    [broderieTags, refreshRulesCount]
+    [broderieTags, refetchRulesCount]
   );
 
   // ────────────────────────────────
@@ -296,11 +300,11 @@ export default function Parametres() {
   return (
     <div className="parametres-page">
       <header className="parametres-header">
-        <h2>Réglage Etiquettes & Nettoyage</h2>
+        <h2>Réglage Étiquettes & Nettoyage</h2>
         <div className="parametres-counters">
-          <span>Articles: {stateCounts.articles}</span>
-          <span>Broderie: {stateCounts.broderies}</span>
-          <span>Règles nettoyage: {stateCounts.rules}</span>
+          <span>Articles : {stateCounts.articles}</span>
+          <span>Broderie : {stateCounts.broderies}</span>
+          <span>Règles nettoyage : {stateCounts.rules}</span>
         </div>
       </header>
 
@@ -311,7 +315,7 @@ export default function Parametres() {
       )}
 
       {loading ? (
-        <div className="parametres-loading" aria-busy="true">Chargement des tags…</div>
+        <div className="parametres-loading" aria-busy="true">Chargement des paramètres…</div>
       ) : (
         <>
           <div className="tags-sections">
@@ -329,18 +333,18 @@ export default function Parametres() {
             />
           </div>
 
-          {/* Éditeur des règles de nettoyage */}
           <section className="nettoyage-section">
             <h3>Règles de nettoyage par article & zone</h3>
             <p className="muted">
-              Associez des <strong>zones réalisables</strong> pour chaque article, et indiquez le <strong>temps de
-              nettoyage</strong> (en secondes). Ces règles seront utilisées pour le calcul précis dans la création/simulation de commandes.
+              Associez les <strong>zones réalisables</strong> pour chaque article, et indiquez le
+              <strong> temps de nettoyage</strong> (en secondes). Ces règles servent au calcul temps & faisabilité.
             </p>
 
+            {/* On garde l’API existante du composant */}
             <NettoyageRulesEditor
               articleTags={articleTags}
               broderieTags={broderieTags}
-              onMutate={refreshRulesCount}
+              onMutate={refetchRulesCount}
             />
           </section>
         </>

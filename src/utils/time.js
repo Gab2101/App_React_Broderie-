@@ -31,7 +31,7 @@ export function addHours(dateLike, hours) {
 export const ONE_HOUR_MS = 60 * 60 * 1000;
 
 export const WORKDAY = {
-  start: 8,       // début journée
+  start: 7,       // début journée
   lunchStart: 12, // début pause
   lunchEnd: 13,   // fin pause
   end: 16,        // fin journée (exclu)

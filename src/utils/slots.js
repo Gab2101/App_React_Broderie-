@@ -1,6 +1,6 @@
 // src/utils/slots.js
 const TZ = 'Europe/Paris';
-const DAY_START_H = 8;
+const DAY_START_H = 7;
 const LUNCH_START_H = 12;
 const LUNCH_END_H = 13;
 const DAY_END_H = 16;

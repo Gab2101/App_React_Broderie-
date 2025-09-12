@@ -20,7 +20,7 @@ export default function useSimulation({
   const [machineAssignee, setMachineAssignee] = useState(null);
 
   // Coef final appliqué à la toute fin (ex: 350 => x3.5 du temps)
-  const [confirmCoef, setConfirmCoef] = useState(350);
+  const [confirmCoef, setConfirmCoef] = useState(200);
 
   // Nombre de mono utilisées en parallèle (1..n) quand la machine a nbTetes = 1
   const [monoUnitsUsed, setMonoUnitsUsed] = useState(1);
@@ -131,7 +131,7 @@ export default function useSimulation({
     setScenarios(scenariosLocaux);
     setSelectedScenario(meilleur);
     setMachineAssignee(meilleur.machine.id);
-    setConfirmCoef(350);
+    setConfirmCoef(200);
     setMonoUnitsUsed(1); // reset quand on relance une simulation
   };
 

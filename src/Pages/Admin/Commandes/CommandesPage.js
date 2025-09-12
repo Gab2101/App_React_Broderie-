@@ -151,7 +151,7 @@ export default function CommandesPage() {
 
     sim.setSelectedScenario(null);
     sim.setMachineAssignee(null);
-    sim.setConfirmCoef(350);
+    sim.setConfirmCoef(200);
     sim.setMonoUnitsUsed(1);
 
     setIsConfirmOpen(false);
@@ -182,7 +182,7 @@ export default function CommandesPage() {
     form.setSaved(false);
     sim.setSelectedScenario(null);
     sim.setMachineAssignee(null);
-    sim.setConfirmCoef(350);
+    sim.setConfirmCoef(200);
     sim.setMonoUnitsUsed(Number(cmd.mono_units_used || 1));
 
     setIsFormOpen(true);
@@ -365,7 +365,7 @@ export default function CommandesPage() {
 
     sim.setSelectedScenario(null);
     sim.setMachineAssignee(null);
-    sim.setConfirmCoef(350);
+    sim.setConfirmCoef(200);
     sim.setMonoUnitsUsed(1);
 
     setIsConfirmOpen(false);

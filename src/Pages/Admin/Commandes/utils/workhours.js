@@ -98,13 +98,13 @@ export function dayBoundsParisUTC(dateLike) {
   return { startUTC, endUTC };
 }
 
-// ===== Planning : 08:00–12:00 / 13:00–16:00 =====
+// ===== Planning : 07:00–12:00 / 13:00–16:00 =====
 
 // Aligne sur prochaine fenêtre ouvrée (gère week-end + pause)
 export function snapToNextWorkStart(date, cfg = DEFAULT_WORKDAY) {
   let d = new Date(date);
 
-  // saute week-ends vers lundi 08:00
+  // saute week-ends vers lundi 07:00
   while (isWeekend(d, cfg)) {
     d = parisAt(new Date(d.setDate(d.getDate() + 1)), cfg.startHour, 0);
   }
@@ -116,7 +116,7 @@ export function snapToNextWorkStart(date, cfg = DEFAULT_WORKDAY) {
 
   if (d < start) return start;
   if (d >= end) {
-    // prochain jour ouvré 08:00
+    // prochain jour ouvré 07:00
     let n = new Date(d);
     do { n.setDate(n.getDate() + 1); } while (isWeekend(n, cfg));
     return parisAt(n, cfg.startHour, 0);
@@ -145,11 +145,11 @@ export function addMinutesWithinWorkHours(start, minutes, cfg = DEFAULT_WORKDAY)
     const slice = Math.min(remaining, Math.max(0, (nextBreak - cursor) / 60000));
 
     if (slice <= 0) {
-      // Avance à reprise (pause) ou au prochain jour 08:00
+      // Avance à reprise (pause) ou au prochain jour 07:00
       if (cursor >= lunchStart && cursor < lunchEnd) {
         cursor = lunchEnd;
       } else {
-        // prochain jour ouvré 08:00
+        // prochain jour ouvré 07:00
         let n = new Date(cursor);
         do { n.setDate(n.getDate() + 1); } while (isWeekend(n, cfg));
         cursor = parisAt(n, cfg.startHour, 0);

@@ -1,6 +1,5 @@
 /* ==========================================================================
-   Planning Grid — CSS réécrit & organisé (spécificité corrigée)
-   - Les variantes data-* utilisent :where(...) pour rester à (0,1,0)
+   Planning Grid — CSS nettoyé (doublons supprimés)
    ========================================================================== */
 
 /* ------------------------------
@@ -137,42 +136,30 @@
 .u-scrollbars-minimal::-webkit-scrollbar { height:8px; width:8px; }
 .u-scrollbars-minimal::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:var(--radius-sm); }
 
-/* ================================
-   5) Planning Grid — Structure
-   ================================ */
-.planning-grid-days { display:grid; gap:var(--grid-gap); background:var(--bg); color:var(--text); }
-
+/* ==========================================================================
+   5) Classes .pgd__ (compat)
+   ========================================================================== */
 .pgd__corner { height: var(--row-height); }
-
 .pgd__colheader {
   font-weight:600; text-align:center; height:var(--row-height);
   display:flex; align-items:center; justify-content:center;
   background:var(--surface-muted); border:1px solid var(--border);
   position:sticky; top:0; z-index:var(--z-sticky);
 }
-
 .pgd__rowheader {
   display:flex; align-items:center;
   padding-inline:var(--space-2); padding-block:calc(var(--space-2) - 2px);
   background:var(--bg-muted); border:1px solid var(--border);
   white-space:nowrap; position:sticky; left:0; z-index:var(--z-sticky);
 }
-
 .pgd__cell {
   position:relative; height:var(--row-height);
   border:1px solid var(--border); background:var(--surface); overflow:hidden;
 }
-
-/* .pgd__cell:nth-child(2n) { background: color-mix(in srgb, var(--surface) 96%, var(--gridline)); } */
-
 .pgd__cell .cell__dash {
   color:var(--text-subtle); font-size:var(--fs-12);
   display:flex; align-items:center; justify-content:center; height:100%;
 }
-
-/* ================================
-   6) Barres (commandes) + états
-   ================================ */
 .pgd__bar {
   position:absolute; inset-block:var(--bar-inset); inset-inline:var(--bar-inset);
   border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center;
@@ -184,62 +171,106 @@
               background-color var(--dur-fast) var(--easing),
               border-color var(--dur-fast) var(--easing);
 }
-
-/* Hover/active */
 .pgd__bar:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
 .pgd__bar:active { transform: translateY(0); }
-
-/* Focus clavier */
 .pgd__bar:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--brand) 70%, transparent);
   outline-offset: 2px;
 }
-
-/* États sémantiques via data-attributes — spécificité abaissée */
-
 .pgd__bar:where([data-status="en-cours"]) { border-color: color-mix(in srgb, var(--brand) 45%, var(--border)); }
 .pgd__bar:where([data-status="terminee"]) { opacity: 0.75; }
-
-/* Priorités (fond + bordure) — spécificité abaissée */
 .pgd__bar:where([data-priority="low"])  { background: var(--urg-low);  border-color: var(--urg-low-border); }
 .pgd__bar:where([data-priority="med"])  { background: var(--urg-med);  border-color: var(--urg-med-border); }
 .pgd__bar:where([data-priority="high"]) { background: var(--urg-high); border-color: var(--urg-high-border); }
 .pgd__bar:where([data-priority="late"]) { background: var(--urg-late); border-color: var(--urg-late-border); }
-
-/* Conflits & verrouillage — spécificité abaissée */
 .pgd__bar:where([data-conflict="true"]) {
   border-style: dashed;
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--brand) 40%, transparent);
 }
 .pgd__bar:where([data-locked="true"]) { opacity: 0.6; cursor: not-allowed; }
-
-/* Indicateur “maintenant” */
-.pgd__nowline {
-  position:absolute; inset-block:0; width:2px; background:var(--brand); z-index:var(--z-sticky);
-}
+.pgd__nowline { position:absolute; inset-block:0; width:2px; background:var(--brand); z-index:var(--z-sticky); }
 .pgd__nowline::after {
   content:""; position:absolute; inset-inline-start:-6px; inset-block-start:0;
   width:14px; height:14px; border-radius:var(--radius-round); background:var(--brand);
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 20%, transparent);
 }
 
-/* ================================
-   7) Modal minimal (normalisé)
-   ================================ */
-.modal-overlay {
-  position:fixed; inset:0; background:rgba(0,0,0,0.2);
-  display:flex; align-items:center; justify-content:center;
-  z-index:var(--z-modal); padding:var(--space-3);
-}
-.modal-content {
-  background:var(--surface); color:var(--text); padding:var(--space-4);
-  border-radius:var(--radius-md); width:420px; max-width:90vw;
-  border:1px solid var(--border); box-shadow:var(--shadow-md);
+/* ==========================================================================
+   6) Grille Planning (.pg-*) — VERSION UNIQUE
+   ========================================================================== */
+.pg-root {
+  /* autorise le scroll horizontal si le zoom est forcé */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-/* ================================
-   8) Légende d’urgence
-   ================================ */
+.pg-header {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  background: var(--bg); border-bottom: 1px solid var(--border-strong);
+}
+.pg-left-header {
+  padding: 8px 10px;
+  font-weight: 700;
+  border-right: 1px solid var(--border);
+}
+
+
+.pg-col-header {
+  padding: 8px 10px;
+  font-weight: 600;
+  user-select: none;
+  cursor: pointer;
+  border-right: 1px solid var(--gridline);
+}
+
+
+
+/* Colonne gauche (noms machines) */
+.pg-left-col {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+.pg-left-cell {
+  display: flex; align-items: center;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+/* Colonne droite (grille + overlay) */
+.pg-right-col { overflow: hidden; }
+.pg-right-row { border-bottom: 1px solid var(--border); }
+
+
+.pg-grid-day {
+  border-right: 1px solid var(--gridline);
+  background-color: var(--surface);
+}
+
+/* Overlay & blocks */
+.pg-overlay { pointer-events: none; }
+.pg-block {
+  pointer-events: auto;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  /* Texte blanc centré dans les commandes */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+}
+.pg-block-label { font-weight: 700; }
+
+/* Séparateur de groupe (unique) */
+.pg-group-sep { opacity: .9; }
+
+/* ==========================================================================
+   7) Légende d’urgence & actions
+   ========================================================================== */
 .urgency-legend {
   margin-top:var(--space-3); display:flex; gap:var(--space-4);
   flex-wrap:wrap; font-size:var(--fs-13, 0.8125rem); color:var(--text-muted);
@@ -254,19 +285,14 @@
 .legend-item[data-priority="high"]::before { background:var(--urg-high); border-color:var(--urg-high-border); }
 .legend-item[data-priority="late"]::before { background:var(--urg-late); border-color:var(--urg-late-border); }
 
-/* ================================
-   9) Boutons de zoom / actions
-   ================================ */
-.zoom-buttons, .dayview-actions {
-  display:flex; gap:var(--space-2); margin-block:var(--space-4);
-}
+.zoom-buttons, .dayview-actions { display:flex; gap:var(--space-2); margin-block:var(--space-4); }
 .zoom-buttons button, .dayview-actions button {
   flex:1; min-width:0; padding:var(--space-2) var(--space-3); border-radius:var(--radius-sm);
 }
 
-/* ================================
-   10) DayView — badge & header
-   ================================ */
+/* ==========================================================================
+   8) DayView — badge & header
+   ========================================================================== */
 .dayview-header-row {
   display:flex; align-items:center; justify-content:flex-start;
   margin-block:var(--space-2); gap:var(--space-3);
@@ -283,15 +309,14 @@
 }
 .day-badge--weekend { opacity:0.85; }
 
-/* Réactivité */
 @media (max-width: 700px) {
   .dayview-actions { flex-direction: column; }
   .dayview-actions button { width: 100%; }
 }
 
-/* ================================
-   11) Accessibilité & motion
-   ================================ */
+/* ==========================================================================
+   9) Accessibilité & motion
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) { .pgd__bar { transition: none; } }
 
 button:focus-visible,
@@ -302,9 +327,9 @@ button:focus-visible,
   outline-offset: 2px;
 }
 
-/* ================================
-   12) Impression
-   ================================ */
+/* ==========================================================================
+   10) Impression
+   ========================================================================== */
 @media print {
   :root { --bg:#fff; --surface:#fff; --text:#000; --border:#ccc; --gridline:#e5e5e5; }
   body { background:#fff !important; }
@@ -312,37 +337,4 @@ button:focus-visible,
   .zoom-buttons, .dayview-actions, .urgency-legend { display:none !important; }
   .pgd__bar { box-shadow:none !important; color:#000 !important; background:#fff !important; border-color:#bbb !important; }
   .pgd__colheader, .pgd__rowheader { position:static !important; box-shadow:none !important; }
-}
-
-/* ================================
-   13) Divers & harmonisation
-   ================================ */
-.pgd__grid { display:grid; gap:var(--grid-gap); }
-
-.pgd__bar--accent {
-  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
-  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
-  color: var(--text);
-}
-
-.pgd__cell[data-locked="true"] {
-  background:
-    repeating-linear-gradient(
-      -45deg,
-      color-mix(in srgb, var(--surface) 70%, var(--gridline)),
-      color-mix(in srgb, var(--surface) 70%, var(--gridline)) 6px,
-      color-mix(in srgb, var(--surface) 50%, var(--gridline)) 6px,
-      color-mix(in srgb, var(--surface) 50%, var(--gridline)) 12px
-    );
-  opacity: 0.85;
-}
-/* Ligne de séparation entre groupes (s'étend sur toutes les colonnes du grid) */
-.pgd__groupsep {
-  height: var(--group-row-gap, 12px); /* 8–16px selon préférence */
-  pointer-events: none;
-}
-
-/* optionnel: un léger trait si tu veux matérialiser le groupe */
-.pgd__groupsep {
-  border-bottom: 1px solid rgba(0,0,0,0.08);
 }

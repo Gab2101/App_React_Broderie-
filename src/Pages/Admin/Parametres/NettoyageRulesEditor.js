@@ -6,22 +6,34 @@ import {
   upsertNettoyageRules,
 } from "../../../utils/nettoyageRules";
 
-// --------- Helpers
-function normalizeTag(v) {
-  if (v == null) return "";
-  if (typeof v === "string") return v.trim().toLowerCase();
-  if (typeof v === "object") {
-    const cand = v.label ?? v.name ?? v.value ?? (typeof v.toString === "function" ? v.toString() : null);
-    return cand ? String(cand).trim().toLowerCase() : "";
-  }
-  return String(v).trim().toLowerCase();
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+function normLabel(raw = "") {
+  const s =
+    typeof raw === "object"
+      ? raw?.label ??
+        raw?.name ??
+        raw?.value ??
+        (typeof raw?.toString === "function" ? raw.toString() : "")
+      : raw;
+
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // retire accents
+    .toLowerCase()
+    .replace(/\s+/g, " ") // compresse espaces
+    .replace(/[-_]/g, "-") // unifie tirets
+    .trim();
 }
+
 function makeKey(a, b) {
-  return `${normalizeTag(a)}|${normalizeTag(b)}`;
+  return `${normLabel(a)}|${normLabel(b)}`;
 }
+
 function matchesQuery(label, q) {
-  const L = (label ?? "").toString().toLowerCase();
-  const Q = (q ?? "").toString().toLowerCase().trim();
+  const L = String(label ?? "").toLowerCase();
+  const Q = String(q ?? "").toLowerCase().trim();
   if (!Q) return true;
   return L.includes(Q);
 }
@@ -33,6 +45,7 @@ function matchesQuery(label, q) {
  * - Recherche 2: filtre les ZONES (tags broderie) dans chaque article
  * - Éditions inline + sauvegarde en lot (dirty map)
  * - Boutons "Tout autoriser / Tout interdire" par article
+ * - Normalisation + recanonisation des labels pour éviter les mismatches
  * - Conserve votre logique de contexte/props existante
  */
 export default function NettoyageRulesEditor(props) {
@@ -57,6 +70,26 @@ export default function NettoyageRulesEditor(props) {
     return [];
   }, [propBroderieTags, ctxBroderieTags]);
 
+  // Maps "norm -> label canonique" (issus des tables de tags)
+  const articleCanonMap = React.useMemo(
+    () => new Map(articleTags.map((a) => [normLabel(a.label), a.label])),
+    [articleTags]
+  );
+  const broderieCanonMap = React.useMemo(
+    () => new Map(broderieTags.map((b) => [normLabel(b.label), b.label])),
+    [broderieTags]
+  );
+
+  const canonArticleLabel = React.useCallback(
+    (label) => articleCanonMap.get(normLabel(label)) ?? label,
+    [articleCanonMap]
+  );
+  const canonBroderieLabel = React.useCallback(
+    (label) => broderieCanonMap.get(normLabel(label)) ?? label,
+    [broderieCanonMap]
+  );
+
+  // State
   const [rules, setRules] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
@@ -65,15 +98,17 @@ export default function NettoyageRulesEditor(props) {
   const [dirty, setDirty] = React.useState(new Map());
   const [openArticles, setOpenArticles] = React.useState(() => new Set());
 
-  // NEW — double recherche
+  // Double recherche
   const [articleQuery, setArticleQuery] = React.useState("");
   const [zoneQuery, setZoneQuery] = React.useState("");
 
+  // Fetch
   const reload = React.useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const data = await fetchNettoyageRules();
+      // On garde tel quel : recanonisation faite à la volée par getRow/setRow
       setRules(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
@@ -96,46 +131,59 @@ export default function NettoyageRulesEditor(props) {
     return m;
   }, [rules]);
 
-  // Récupère la ligne existante ou brouillon
+  // Récupère la ligne existante (canonisée) ou brouillon
   const getRow = React.useCallback(
     (articleLabel, broderieLabel) => {
+      const A = canonArticleLabel(articleLabel);
+      const B = canonBroderieLabel(broderieLabel);
       return (
-        index.get(makeKey(articleLabel, broderieLabel)) ?? {
-          article_label: articleLabel,
-          broderie_label: broderieLabel,
+        index.get(makeKey(A, B)) ?? {
+          article_label: A,
+          broderie_label: B,
           nettoyage_sec: 0,
           is_allowed: false,
         }
       );
     },
-    [index]
+    [index, canonArticleLabel, canonBroderieLabel]
   );
 
-  // Met à jour une ligne (en mémoire) et marque comme dirty
-  const setRow = React.useCallback((row) => {
-    setRules((prev) => {
-      const next = [...prev];
-      const i = next.findIndex(
-        (x) =>
-          normalizeTag(x.article_label) === normalizeTag(row.article_label) &&
-          normalizeTag(x.broderie_label) === normalizeTag(row.broderie_label)
-      );
+  // Met à jour une ligne (en mémoire) et marque comme dirty (canonisée)
+  const setRow = React.useCallback(
+    (row) => {
+      const safe = {
+        ...row,
+        article_label: canonArticleLabel(row.article_label),
+        broderie_label: canonBroderieLabel(row.broderie_label),
+      };
 
-    if (i >= 0) next[i] = row; else next.push(row);
-      return next;
-    });
-    setDirty((prev) => {
-      const next = new Map(prev);
-      next.set(makeKey(row.article_label, row.broderie_label), row);
-      return next;
-    });
-  }, []);
+      setRules((prev) => {
+        const next = [...prev];
+        const i = next.findIndex(
+          (x) =>
+            normLabel(x.article_label) === normLabel(safe.article_label) &&
+            normLabel(x.broderie_label) === normLabel(safe.broderie_label)
+        );
+        if (i >= 0) next[i] = safe;
+        else next.push(safe);
+        return next;
+      });
+
+      setDirty((prev) => {
+        const next = new Map(prev);
+        next.set(makeKey(safe.article_label, safe.broderie_label), safe);
+        return next;
+      });
+    },
+    [canonArticleLabel, canonBroderieLabel]
+  );
 
   // Tout autoriser/interdire pour un article donné
   const bulkToggleForArticle = React.useCallback(
     (articleLabel, allowed) => {
+      const A = canonArticleLabel(articleLabel);
       const updates = broderieTags.map((b) => {
-        const row = getRow(articleLabel, b.label);
+        const row = getRow(A, b.label);
         return { ...row, is_allowed: !!allowed };
       });
 
@@ -151,14 +199,21 @@ export default function NettoyageRulesEditor(props) {
         return next;
       });
     },
-    [broderieTags, getRow]
+    [broderieTags, getRow, canonArticleLabel]
   );
 
+  // Save
   const handleSave = React.useCallback(async () => {
     if (dirty.size === 0) return;
     setSaving(true);
     try {
-      await upsertNettoyageRules(Array.from(dirty.values()));
+      // sécurise les labels juste avant l’upsert
+      const payload = Array.from(dirty.values()).map((r) => ({
+        ...r,
+        article_label: canonArticleLabel(r.article_label),
+        broderie_label: canonBroderieLabel(r.broderie_label),
+      }));
+      await upsertNettoyageRules(payload);
       setDirty(new Map());
       await reload(); // récupère ids/état canonique depuis la DB
       onMutate && onMutate();
@@ -168,13 +223,14 @@ export default function NettoyageRulesEditor(props) {
     } finally {
       setSaving(false);
     }
-  }, [dirty, reload, onMutate]);
+  }, [dirty, reload, onMutate, canonArticleLabel, canonBroderieLabel]);
 
   // Gestion ouverture/fermeture natif <details>
   const toggleOpen = React.useCallback((label, isOpen) => {
     setOpenArticles((prev) => {
       const next = new Set(prev);
-      if (isOpen) next.add(label); else next.delete(label);
+      if (isOpen) next.add(label);
+      else next.delete(label);
       return next;
     });
   }, []);
@@ -189,13 +245,22 @@ export default function NettoyageRulesEditor(props) {
 
   return (
     <div>
-      <h3 style={{ marginBottom: 6 }}>Temps de nettoyage par article & zone</h3>
+      <h3 style={{ marginBottom: 6 }}>Temps de nettoyage par article &amp; zone</h3>
       <p style={{ opacity: 0.8, marginTop: 0 }}>
-        Utilisez les champs ci-dessous pour filtrer les <strong>articles</strong> et les <strong>zones</strong> indépendamment.
+        Utilisez les champs ci-dessous pour filtrer les <strong>articles</strong> et les{" "}
+        <strong>zones</strong> indépendamment.
       </p>
 
       {/* Barre de recherche double */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center", marginBottom: 10 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr auto",
+          gap: 8,
+          alignItems: "center",
+          marginBottom: 10,
+        }}
+      >
         <input
           type="search"
           placeholder="Rechercher un article..."
@@ -210,18 +275,31 @@ export default function NettoyageRulesEditor(props) {
           onChange={(e) => setZoneQuery(e.target.value)}
           aria-label="Rechercher une zone"
         />
-        <button type="button" onClick={() => { setArticleQuery(""); setZoneQuery(""); }} title="Effacer les recherches">
+        <button
+          type="button"
+          onClick={() => {
+            setArticleQuery("");
+            setZoneQuery("");
+          }}
+          title="Effacer les recherches"
+        >
           Réinitialiser
         </button>
       </div>
 
       <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-        {hasArticleFilter && <span style={{ marginRight: 10 }}>Articles filtrés: {filteredArticles.length}/{articleTags.length}</span>}
+        {hasArticleFilter && (
+          <span style={{ marginRight: 10 }}>
+            Articles filtrés: {filteredArticles.length}/{articleTags.length}
+          </span>
+        )}
         {hasZoneFilter && <span>Filtre zones actif</span>}
       </div>
 
       {error && (
-        <div role="alert" style={{ color: "#b00020", margin: "8px 0" }}>⚠️ {error}</div>
+        <div role="alert" style={{ color: "#b00020", margin: "8px 0" }}>
+          ⚠️ {error}
+        </div>
       )}
 
       {loading ? (
@@ -256,18 +334,26 @@ export default function NettoyageRulesEditor(props) {
                     borderBottom: isOpen ? "1px solid #eee" : "none",
                   }}
                 >
-                  <span><strong>Article :</strong> {articleLabel}</span>
+                  <span>
+                    <strong>Article :</strong> {articleLabel}
+                  </span>
                   <span style={{ display: "inline-flex", gap: 8 }}>
                     <button
                       type="button"
-                      onClick={(e) => { e.preventDefault(); bulkToggleForArticle(articleLabel, true); }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        bulkToggleForArticle(articleLabel, true);
+                      }}
                       title="Autoriser toutes les zones pour cet article"
                     >
                       Tout autoriser
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => { e.preventDefault(); bulkToggleForArticle(articleLabel, false); }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        bulkToggleForArticle(articleLabel, false);
+                      }}
                       title="Interdire toutes les zones pour cet article"
                     >
                       Tout interdire
@@ -290,9 +376,19 @@ export default function NettoyageRulesEditor(props) {
                         .map((b) => {
                           const row = getRow(articleLabel, b.label);
                           const compositeKey = row.id ?? makeKey(articleLabel, b.label);
+                          const unknown =
+                            !articleCanonMap.has(normLabel(articleLabel)) ||
+                            !broderieCanonMap.has(normLabel(b.label));
                           return (
                             <tr key={compositeKey}>
-                              <td style={{ padding: "6px 8px" }}>{b.label}</td>
+                              <td style={{ padding: "6px 8px" }}>
+                                {b.label}
+                                {unknown && (
+                                  <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                                    ⚠️ tag non référencé
+                                  </span>
+                                )}
+                              </td>
                               <td style={{ textAlign: "center" }}>
                                 <input
                                   type="checkbox"
@@ -306,7 +402,12 @@ export default function NettoyageRulesEditor(props) {
                                   min={0}
                                   step={5}
                                   value={row.nettoyage_sec ?? 0}
-                                  onChange={(e) => setRow({ ...row, nettoyage_sec: Math.max(0, Number(e.target.value || 0)) })}
+                                  onChange={(e) =>
+                                    setRow({
+                                      ...row,
+                                      nettoyage_sec: Math.max(0, Number(e.target.value || 0)),
+                                    })
+                                  }
                                   style={{ width: 120 }}
                                   disabled={!row.is_allowed}
                                   aria-label={`Temps nettoyage pour ${b.label}`}
@@ -325,7 +426,15 @@ export default function NettoyageRulesEditor(props) {
         </div>
       )}
 
-      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <button onClick={handleSave} disabled={saving || dirty.size === 0}>
           {saving ? "Enregistrement..." : `Enregistrer ${dirty.size > 0 ? `(${dirty.size})` : ""}`}
         </button>

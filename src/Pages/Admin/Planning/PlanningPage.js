@@ -16,20 +16,20 @@ import CommandeModal from "./components/CommandeModal";
 import PlanningGrid from "./components/PlanningGrid";
 import PlanningDayView from "./PlanningDayView";
 
-import { parseISOAny } from "./lib/parse";
+
 import { normalizeSlotForGrid } from "./lib/grid";
 import { workingHoursBetween } from "./lib/workingHours";
 import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority";
 
-console.log("[Planning] module loaded (machines en lignes + regroupement par group_label)");
+console.log("[Planning] regenerated (gros blocs par commande, non découpés par jour)");
 
 /** ---------- Légende d’urgence ---------- **/
 export function UrgencyLegend() {
   const labels = {
     1: "Faible (≥ 15 jours)",
-    2: "Moyenne (10_14 jours)",
-    3: "Élevée (5_9 jours)",
-    4: "Critique (2_4 jours)",
+    2: "Moyenne (10–14 jours)",
+    3: "Élevée (5–9 jours)",
+    4: "Critique (2–4 jours)",
     5: "Urgence maximale (< 2 jours ou dépassée)",
   };
 
@@ -210,7 +210,6 @@ export default function PlanningPage() {
 
     try {
       const [mRes, cRes, pRes] = await Promise.all([
-        // champs confirmés par tes exemples
         supabase.from("machines").select("id, nom, group_label"),
         supabase.from("commandes").select("*"),
         supabase.from("planning").select("*"),
@@ -426,29 +425,9 @@ export default function PlanningPage() {
     }
     return m;
   }, [commandes]);
+  
 
-  // Planning par machine (clé = UUID string)
-  const planningByMachine = useMemo(() => {
-    const acc = new Map();
-    for (const p of filteredPlanning) {
-      const entryBase = {
-        ...p,
-        startMs: parseISOAny(p.debut).getTime(),
-        endMs: parseISOAny(p.fin).getTime(),
-      };
-      const entry = normalizeSlotForGrid(entryBase);
-
-      const mids = normalizeMachineIds(p.machineId); // UUIDs string
-      for (const mid of mids) {
-        if (!acc.has(mid)) acc.set(mid, []);
-        acc.get(mid).push({ ...entry, machineId: mid });
-      }
-    }
-    for (const arr of acc.values()) arr.sort((a, b) => a.gridStartMs - b.gridStartMs);
-    return acc;
-  }, [filteredPlanning]);
-
-  // 14 jours ouvrés
+  // 14 jours ouvrés visibles
   const dayColumns = useMemo(() => {
     const cols = [];
     let added = 0;
@@ -469,6 +448,75 @@ export default function PlanningPage() {
   const { groups: machineGroups, flat: groupedMachines, breaks: groupBreakIndices } = useMemo(() => {
     return groupMachinesByLabel(machines || []);
   }, [machines]);
+
+  // --------- Construction des "gros blocs" continus par (machineId, commandeId) ----------
+  const continuousBlocksByMachine = useMemo(() => {
+    const map = new Map(); // machineId -> Array<block>
+    // Index pour label + couleur
+    const getLabel = (c) =>
+      c?.numero ?? c?.num_commande ?? c?.reference ?? c?.ref ?? c?.id;
+
+    // 1) Rassembler toutes les tranches par (machineId, commandeId)
+    const buckets = new Map(); // key: `${mid}::${cid}` -> { mid, cid, start: Date, end: Date }
+    for (const row of filteredPlanning) {
+  
+      const mids = normalizeMachineIds(row.machineId);
+      const start = new Date(row.debut);
+      const end = new Date(row.fin);
+      for (const mid of mids) {
+        const key = `${mid}::${row.commandeId}`;
+        const b = buckets.get(key);
+        if (!b) {
+          buckets.set(key, {
+            mid,
+            cid: row.commandeId,
+            start,
+            end,
+          });
+        } else {
+          if (start < b.start) b.start = start;
+          if (end > b.end) b.end = end;
+        }
+      }
+    }
+
+    // 2) Transformer en blocks par machine
+    for (const { mid, cid, start, end } of buckets.values()) {
+      if (!map.has(mid)) map.set(mid, []);
+      const com = commandeById.get(cid);
+      map.get(mid).push({
+        machineId: mid,
+        commandeId: cid,
+        start,
+        end,
+        numero: getLabel(com),
+        color: com ? (commandeColorMap.get(com.id) || undefined) : undefined,
+        statut: com?.statut ?? "",
+        client: com?.client || com?.client_nom || com?.client_name || "",
+      });
+    }
+
+    // 3) Tri par début croissant
+    for (const arr of map.values()) {
+      arr.sort((a, b) => a.start - b.start);
+    }
+    return map;
+  }, [filteredPlanning, commandeById, commandeColorMap]);
+
+  // --------- Fenêtre visible (heures ouvrées compressées) ----------
+  const rangeStart = useMemo(() => {
+    if (!dayColumns.length) return new Date();
+    const d0 = new Date(dayColumns[0]);
+    d0.setHours(Math.floor(WORKDAY.start), Math.round((WORKDAY.start % 1) * 60), 0, 0);
+    return d0;
+  }, [dayColumns]);
+
+  const rangeEnd = useMemo(() => {
+    if (!dayColumns.length) return new Date();
+    const dn = new Date(dayColumns[dayColumns.length - 1]);
+    dn.setHours(Math.floor(WORKDAY.end), Math.round((WORKDAY.end % 1) * 60), 0, 0);
+    return dn;
+  }, [dayColumns]);
 
   // ----- Actions vue/controls -----
   const openCommande = useCallback((commande) => setModalCommande(commande), []);
@@ -493,7 +541,7 @@ export default function PlanningPage() {
   }, []);
   const backToTable = useCallback(() => setViewMode("table"), []);
 
-  // Vue jour
+  // Vue jour (inchangée)
   const dayViewMachines = useMemo(
     () => machines.map((m) => ({ id: String(m.id), name: m.nom ?? m.name ?? `Machine ${m.id}` })),
     [machines]
@@ -603,18 +651,28 @@ export default function PlanningPage() {
           </div>
 
           <PlanningGrid
-            machines={groupedMachines}               
+            machines={groupedMachines}
             dayColumns={dayColumns}
-            planningByMachine={planningByMachine}     
-            commandeById={commandeById}
-            onOpenCommande={openCommande}
-            onDayColumnClick={goToDay}
+            continuousByMachine={continuousBlocksByMachine}   // (ou laisse planningByMachine en fallback)
             commandeColorMap={commandeColorMap}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            onOpenCommande={(commandeId) => {
+              const c = commandeById.get(commandeId);
+              if (c) openCommande(c);
+            }}
+            onDayColumnClick={goToDay}
             groupMeta={{
               groups: machineGroups.map(g => ({ label: g.label, size: g.machines.length })),
-              breaks: groupBreakIndices,               // indices des DERNIÈRES lignes de chaque groupe
+              breaks: groupBreakIndices,
             }}
+            // Affichage
+            rowHeight={42}
+            leftWidth={220}
+            autoFit14Days={true}         // <-- important : 14 jours tiennent sans scroll
+            WORKDAY={WORKDAY}
           />
+
 
           {modalCommande && (
             <CommandeModal

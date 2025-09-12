@@ -106,7 +106,7 @@ function buildBlocksForCommande(cmd, visibleStart, visibleEnd) {
 
 /**
  * (Optionnel) Filtrer les blocs en dehors des heures ouvrées,
- * si ta grille ne rend que 8–12 & 13–16.
+ * si ta grille ne rend que 7–12 & 13–16.
  */
 function filterToWorkHours(blocks, { keepSlotIfTouches = false } = {}) {
   return blocks.filter((b) => {
