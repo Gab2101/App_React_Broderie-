@@ -7,10 +7,8 @@ import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRule
 import { clampPercentToStep5 } from "../utils/timeRealtime";
 import { getColorFromId, getUrgencyColor, computeUrgency } from "../../Planning/lib/priority";
 
-// Helpers d'affichage en Europe/Paris
 const parisDateTime = (d, opts = {}) =>
   d ? new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...opts }) : null;
-
 const parisDate = (d) =>
   d ? new Date(d).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : null;
 
@@ -23,27 +21,89 @@ export default function CommandeCard({
   machines = [],
   articleTags = [],
   nettoyageRules = [],
+  onToggleDeballe, // (id, bool) => Promise|void
 }) {
-  // Couleurs: fond stable par ID + bordure = urgence
   const bg = getColorFromId(cmd.id);
   const urgencyLevel = Number(cmd?.urgence ?? computeUrgency(cmd?.dateLivraison));
   const borderColor = getUrgencyColor(urgencyLevel);
 
-  // Verrouillage statut "Terminée"
+  // ✅ État local optimiste pour "déballé"
+  const [deballeLocal, setDeballeLocal] = React.useState(!!cmd?.deballe);
+  const [savingDeballe, setSavingDeballe] = React.useState(false);
+  React.useEffect(() => {
+    // se resynchronise si le parent change (refetch, etc.)
+    setDeballeLocal(!!cmd?.deballe);
+  }, [cmd?.deballe, cmd?.id]);
+
   const isTerminee = (cmd.statut || "") === "Terminée";
-  const handleStatusChange = (e) => {
+
+  // ★ Helpers pour l'auto-déballage & masquage UI
+  const shouldAutoDeballe = (statut) => statut === "En cours" || statut === "Terminée";
+  const isRunningOrDone = shouldAutoDeballe(cmd?.statut);
+  const hideADeballerUI = deballeLocal || isRunningOrDone; // si déjà déballé ou en cours/terminée → on cache
+
+  // ★ Backfill/sanitation si la donnée arrive déjà en "En cours/Terminée" avec deballe=false
+  const autoSetRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoSetRef.current && shouldAutoDeballe(cmd?.statut) && !cmd?.deballe) {
+      autoSetRef.current = true; // éviter les doubles appels
+      (async () => {
+        try {
+          setSavingDeballe(true);
+          setDeballeLocal(true); // optimiste
+          await onToggleDeballe?.(cmd.id, true);
+        } catch (e) {
+          console.error("Auto-set deballe failed:", e);
+          setDeballeLocal(false); // rollback si échec
+        } finally {
+          setSavingDeballe(false);
+        }
+      })();
+    }
+  }, [cmd?.statut, cmd?.deballe, cmd?.id, onToggleDeballe]);
+
+  const handleStatusChange = async (e) => {
     const next = e.target.value;
     if (next === "Terminée" && !isTerminee) {
       const ok = window.confirm(
-        "Confirmer le passage au statut « Terminée » ?\n" +
-          "Ce statut sera verrouillé et ne pourra plus être modifié depuis cet écran."
+        "Confirmer le passage au statut « Terminée » ?\nCe statut sera verrouillé."
       );
       if (!ok) return;
     }
+
+    // ★ si on passe à En cours/Terminée et que deballe n'est pas encore true → forcer à true (persisté)
+    if (shouldAutoDeballe(next) && !deballeLocal) {
+      try {
+        setSavingDeballe(true);
+        setDeballeLocal(true);              // optimiste
+        await onToggleDeballe?.(cmd.id, true);
+      } catch (err) {
+        console.error("MAJ deballe auto échouée:", err);
+        setDeballeLocal(false);             // rollback si échec
+      } finally {
+        setSavingDeballe(false);
+      }
+    }
+
     onChangeStatut(cmd.id, next);
   };
 
-  // Durées (si manquantes, recalcul rapide)
+  // ✅ Toggle optimiste + sync parent/DB
+  const handleToggleDeballe = async (e) => {
+    const checked = e.target.checked;
+    setDeballeLocal(checked);                  // maj immédiate UI
+    try {
+      setSavingDeballe(true);
+      await onToggleDeballe?.(cmd.id, checked); // le parent persiste (Supabase)
+    } catch (err) {
+      console.error("MAJ deballe échouée:", err);
+      setDeballeLocal((v) => !v);               // rollback si échec
+    } finally {
+      setSavingDeballe(false);
+    }
+  };
+
+  // Durées (fallback calcul si manquantes)
   let b = cmd.duree_broderie_heures;
   let n = cmd.duree_nettoyage_heures;
   let t = cmd.duree_totale_heures;
@@ -56,7 +116,6 @@ export default function CommandeCard({
       nettoyageRules,
       articleTags
     );
-
     const quantite = Number(cmd?.quantite || 0);
     const points = Number(cmd?.points || 0);
     const nbTetes = Number(machines.find((m) => m.nom === cmd?.machineAssignee)?.nbTetes || 1);
@@ -81,9 +140,8 @@ export default function CommandeCard({
       ? clampPercentToStep5(Math.round((Number(t || 0) / theoriqueTotal) * 100))
       : null;
 
-  // Affichages: TZ Europe/Paris
   const debutLabel = parisDateTime(cmd?.started_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
-  const finLabel = parisDateTime(cmd?.finished_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  const finLabel   = parisDateTime(cmd?.finished_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
   const livraisonLabel = parisDate(cmd?.dateLivraison);
 
   return (
@@ -97,8 +155,34 @@ export default function CommandeCard({
         padding: 12,
         marginBottom: 12,
         boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+        position: "relative",
       }}
     >
+      {/* ✅ Badge "À déballer" — n'apparaît plus si statut En cours/Terminée ou si déjà déballé */}
+      {!hideADeballerUI && !deballeLocal && (
+        <div
+          title="Commande à déballer"
+          aria-label="Commande à déballer"
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 8px",
+            borderRadius: 8,
+            border: "1px solid #f5c2c7",
+            background: "#f8d7da",
+            color: "#842029",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          ⚠️ À déballer
+        </div>
+      )}
+
       <div
         className="carte-commande__header"
         style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}
@@ -106,6 +190,20 @@ export default function CommandeCard({
         <h3 style={{ margin: 0 }}>Commande #{cmd.numero}</h3>
         <StatusBadge statut={cmd.statut || "A commencer"} />
       </div>
+
+      {/* ✅ Toggle déballé — masqué si déjà déballé ou si En cours/Terminée */}
+      {!hideADeballerUI && (
+        <p style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={deballeLocal}
+            onChange={handleToggleDeballe}
+            aria-label="Commande déballée"
+            disabled={savingDeballe}
+          />
+          <span>Commande déballée {savingDeballe ? "…" : ""}</span>
+        </p>
+      )}
 
       <p><strong>Client :</strong> {cmd.client}</p>
       <p><strong>Quantité :</strong> {cmd.quantite}</p>
@@ -139,11 +237,8 @@ export default function CommandeCard({
       </p>
 
       {debutLabel && <p><strong>Début de commande :</strong> {debutLabel}</p>}
-      {finLabel && <p><strong>Fin de commande :</strong> {finLabel}</p>}
-
-      {cmd.machineAssignee && (
-        <p><strong>Machine :</strong> {cmd.machineAssignee}</p>
-      )}
+      {finLabel &&   <p><strong>Fin de commande :</strong> {finLabel}</p>}
+      {cmd.machineAssignee && <p><strong>Machine :</strong> {cmd.machineAssignee}</p>}
 
       {(cmd.linked_commande_id || cmd.same_machine_as_linked || cmd.start_after_linked) && (
         <div className="bloc-liaison-info">

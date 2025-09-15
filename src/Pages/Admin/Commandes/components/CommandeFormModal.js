@@ -35,7 +35,7 @@ export default function CommandeFormModal({
   // ⚠️ Tous les hooks AVANT tout return conditionnel
   const [multiEnabled, setMultiEnabled] = useState(false);
 
-  // Sécuriser les champs de form pour éviter "uncontrolled/controlled"
+  // Champs sécurisés
   const numero = formData?.numero ?? "";
   const client = formData?.client ?? "";
   const quantite = formData?.quantite ?? "";
@@ -43,9 +43,21 @@ export default function CommandeFormModal({
   const vitesseMoyenne = formData?.vitesseMoyenne ?? "";
   const dateLivraison = formData?.dateLivraison ?? "";
   const urgence = formData?.urgence ?? 3;
+  const deballe = !!formData?.deballe; // ✅ NEW: booléen déballé
 
-  const selectedTypes = Array.isArray(formData?.types) ? formData.types : [];
-  const selectedOptions = Array.isArray(formData?.options) ? formData.options : [];
+  const selectedTypes = useMemo(
+  () => (Array.isArray(formData?.types) ? formData.types : []),
+  [formData?.types]
+);
+
+const selectedOptions = useMemo(
+  () => (Array.isArray(formData?.options) ? formData.options : []),
+  [formData?.options]
+);
+
+  // ✅ NEW: Sets pour des includes O(1)
+  const selectedTypesSet = useMemo(() => new Set(selectedTypes), [selectedTypes]);
+  const selectedOptionsSet = useMemo(() => new Set(selectedOptions), [selectedOptions]);
 
   const selectedArticleLabel = selectedTypes?.[0] ?? null;
 
@@ -67,12 +79,18 @@ export default function CommandeFormModal({
     return list.filter((tag) => allowedSet.has(normalizeOne(tag.label)));
   }, [broderieTags, allowedSet]);
 
-  // ✅ maintenant on peut faire le return conditionnel
   if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmit(multiEnabled ? { flow: "multi" } : { flow: "mono" });
+  };
+
+  // ✅ NEW: handler pour cocher/décocher "déballé"
+  const handleDeballeChange = (e) => {
+    const checked = e.target.checked;
+    // on fabrique un "event" compatible pour ton handleChange
+    handleChange?.({ target: { name: "deballe", value: checked } });
   };
 
   return (
@@ -226,12 +244,23 @@ export default function CommandeFormModal({
             </select>
           </label>
 
+          {/* ✅ NEW: Déballé ? */}
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              name="deballe"
+              checked={deballe}
+              onChange={handleDeballeChange}
+            />
+            Commande déballée ?
+          </label>
+
           {/* ----- TAGS ----- */}
           <label>Types :</label>
           <div className="tags-container">
             {Array.isArray(articleTags) &&
               articleTags.map((tag, idx) => {
-                const isActive = selectedTypes.includes(tag.label);
+                const isActive = selectedTypesSet.has(tag.label); // ✅ Set
                 const key = tag.id ?? `article-${slugify(tag.label)}-${idx}`;
                 return (
                   <button
@@ -252,7 +281,7 @@ export default function CommandeFormModal({
           <div className="tags-container">
             {Array.isArray(filteredBroderieTags) &&
               filteredBroderieTags.map((tag, idx) => {
-                const isActive = selectedOptions.includes(tag.label);
+                const isActive = selectedOptionsSet.has(tag.label); // ✅ Set
                 const key = tag.id ?? `option-${slugify(tag.label)}-${idx}`;
                 return (
                   <button
