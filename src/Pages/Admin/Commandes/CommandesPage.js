@@ -31,6 +31,7 @@ import {
   deleteCommandeWithPlanning,
 } from "./services/commandesApi";
 import { createCommandeWithAssignations } from "./services/assignationsApi";
+import { supabase } from "../../../supabaseClient"; // ✅ pour la MAJ "déballé"
 
 export default function CommandesPage() {
   // Étiquettes (context)
@@ -430,6 +431,37 @@ export default function CommandesPage() {
   };
 
   /* =========================
+     Toggle "déballé" (persistant)
+     ========================= */
+  const handleToggleDeballe = async (id, deballe) => {
+    // UI optimiste (snapshot pour rollback)
+    const prev = commandes;
+    setCommandes((list) =>
+      list.map((c) => (String(c.id) === String(id) ? { ...c, deballe } : c))
+    );
+
+    try {
+      const { data, error } = await supabase
+        .from("commandes")
+        .update({ deballe })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Optionnel : réappliquer la ligne retournée (source de vérité)
+      setCommandes((list) =>
+        list.map((c) => (String(c.id) === String(id) ? { ...c, ...data } : c))
+      );
+    } catch (e) {
+      console.error("MAJ deballe échouée", e);
+      setCommandes(prev); // rollback
+      alert("Impossible d’enregistrer le statut « déballé ». Réessaie.");
+    }
+  };
+
+  /* =========================
      Étape 2 + 3 : sections + barre colorée
      ========================= */
 
@@ -459,7 +491,7 @@ export default function CommandesPage() {
 
     // Hex explicite
     const hex =
-      m.couleur_hex || m.color_hex || m.hex || m.accentHex || m.badgeHex || null;
+      m.couleur_hex || m.color_hex || m.hex || m.accentHex || m.badgeHex || m.badge_hex || null;
     if (typeof hex === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) {
       return hex;
     }
@@ -625,6 +657,7 @@ export default function CommandesPage() {
                     machines={machines}
                     articleTags={articleTags}
                     nettoyageRules={nettoyageRules}
+                    onToggleDeballe={handleToggleDeballe}   // ✅ persiste "déballé"
                   />
                 ))}
               </div>

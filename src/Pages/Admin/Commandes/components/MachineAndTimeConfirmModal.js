@@ -4,34 +4,106 @@ import { convertHoursToHHMM } from "../../../../utils/time";
 import { roundMinutesTo5, clampPercentToStep5, computeProvisionalEnd } from "../utils/timeRealtime";
 import { toLabelArray } from "../utils/labels";
 
-// Helper affichage Europe/Paris
 const parisFormat = (d, options = {}) =>
-  new Date(d).toLocaleString("fr-FR", {
-    timeZone: "Europe/Paris",
-    ...options,
-  });
+  new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...options });
+
+/** Utilitaires tolérants pour extraire les minutes depuis un scénario */
+const toMin = (h) => Math.max(0, Math.round(Number(h || 0) * 60));
+function extractTheoMinutesFromScenario(scen) {
+  if (!scen) return { broderieMin: 0, nettoyageMin: 0, totalMin: 0 };
+
+  // Broderie
+  const broderieMin =
+    Number.isFinite(scen?.dureeBroderieMinutes)
+      ? Math.max(0, Math.round(scen.dureeBroderieMinutes))
+      : toMin(
+          scen?.dureeBroderieHeures ??
+            scen?.dureeBroderieHeuresTheorique ??
+            scen?.broderieHeures ??
+            0
+        );
+
+  // Nettoyage
+  const nettoyageMin =
+    Number.isFinite(scen?.dureeNettoyageMinutes)
+      ? Math.max(0, Math.round(scen.dureeNettoyageMinutes))
+      : toMin(
+          scen?.dureeNettoyageHeures ??
+            scen?.nettoyageHeures ??
+            0
+        );
+
+  // Total théorique (si non fourni on somme)
+  const totalMin =
+    Number.isFinite(scen?.dureeTotaleMinutes)
+      ? Math.max(0, Math.round(scen.dureeTotaleMinutes))
+      : (Number.isFinite(scen?.dureeTotaleHeures) ? toMin(scen.dureeTotaleHeures) : broderieMin + nettoyageMin);
+
+  // Si le total théorique fourni est incohérent, on recalibre
+  const safeTotal = Math.max(totalMin, broderieMin + nettoyageMin);
+
+  return { broderieMin, nettoyageMin, totalMin: safeTotal };
+}
+
+/** Calcule l'aperçu minutes quand le % s'applique UNIQUEMENT à la broderie */
+function computePreviewMinutes({
+  scenario,
+  percentBroderie, // 50–500 (pas 5)
+  isMono,
+  monoUnitsUsed = 1,
+}) {
+  const { broderieMin, nettoyageMin } = extractTheoMinutesFromScenario(scenario);
+
+  // Parallélisation mono : on divise la broderie par le nb d’unités mono
+  const units = isMono ? Math.max(1, Number(monoUnitsUsed || 1)) : 1;
+  const broderieTheoAdj = Math.round(broderieMin / units);
+
+  // Coef appliqué UNIQUEMENT sur la broderie
+  const coef = clampPercentToStep5(Number(percentBroderie || 100));
+  const broderieAppliquee = roundMinutesTo5(Math.round((broderieTheoAdj * coef) / 100));
+
+  // Nettoyage inchangé
+  const nettoyageApplique = roundMinutesTo5(nettoyageMin);
+
+  const totalTheoAdj = roundMinutesTo5(broderieTheoAdj + nettoyageApplique); // total théorique ajusté (mono)
+  const totalApplique = roundMinutesTo5(broderieAppliquee + nettoyageApplique);
+
+  // Coef "équivalent total" (utile si le backend attend encore un coef global sur (B+N))
+  const coefTotalEquivalent =
+    totalTheoAdj > 0
+      ? clampPercentToStep5(Math.round((totalApplique / totalTheoAdj) * 100))
+      : 100;
+
+  return {
+    broderieTheoAdj,
+    nettoyageApplique,   // = nettoyage théorique, non modifié
+    totalTheoAdj,
+    broderieAppliquee,
+    totalApplique,
+    coefTotalEquivalent,
+  };
+}
 
 export default function MachineAndTimeConfirmModal({
   isOpen,
   onClose,
-  machines,
+  machines = [],
   formData,
-  selectedScenario,
-  scenarioByMachineId,
-  currentScenario,
-  confirmCoef,
+  selectedScenario,         // scénario par défaut (machine sélectionnée)
+  scenarioByMachineId = {}, // { [machineId]: scenario }
+  currentScenario,          // (si utilisé dans ton UI existant)
+  confirmCoef,              // % contrôlé par le parent
   setConfirmCoef,
-  // minutes réelles déjà calculées en amont (minutes, arrondi 5 appliqué côté appelant si besoin)
-  minutesReellesAppliquees,
+  minutesReellesAppliquees, // (non utilisé ici: on recalcule localement avec la règle broderie-only)
   machineAssignee,
   setMachineAssignee,
-  monoUnitsUsed,
+  monoUnitsUsed = 1,
   setMonoUnitsUsed,
-  onConfirm,
+  onConfirm,                // ({ machineId, coef, monoUnitsUsed }) => void
 }) {
   const selectedMachine = useMemo(() => {
-    const id = machineAssignee ?? selectedScenario?.machine?.id;
-    return machines.find((m) => String(m.id) === String(id)) || selectedScenario?.machine || null;
+    const id = machineAssignee ?? selectedScenario?.machine?.id ?? selectedScenario?.machine_id;
+    return (machines || []).find((m) => String(m.id) === String(id)) || selectedScenario?.machine || null;
   }, [machines, machineAssignee, selectedScenario]);
 
   const isMono = useMemo(() => Number(selectedMachine?.nbTetes || 1) === 1, [selectedMachine]);
@@ -39,158 +111,138 @@ export default function MachineAndTimeConfirmModal({
 
   if (!isOpen || !selectedScenario || !selectedMachine) return null;
 
+  // Aperçu pour la machine sélectionnée (broderie-only %)
+  const preview = computePreviewMinutes({
+    scenario: selectedScenario,
+    percentBroderie: confirmCoef,
+    isMono,
+    monoUnitsUsed,
+  });
+
+  const finEstimee = (() => {
+    const end = computeProvisionalEnd(new Date(), preview.totalApplique);
+    return end
+      ? parisFormat(end, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : null;
+  })();
+
   const handleConfirm = () => {
-    const machineId = machineAssignee ?? selectedScenario.machine.id;
-
-    // Théorie (heures → minutes) depuis le scénario
-    const baseTheoMinRaw = Math.round(Number(selectedScenario.dureeTotaleHeuresReelle || 0) * 60);
-    const monoUnits = isMono ? Math.max(1, Number(monoUnitsUsed || 1)) : 1;
-    const duration_minutes = isMono ? Math.round(baseTheoMinRaw / monoUnits) : baseTheoMinRaw;
-
-    // Nettoyage (heures → minutes) depuis le scénario (attaché à la ligne mono)
-    const cleaning_minutes = Math.max(0, Math.round(Number(selectedScenario.dureeNettoyageHeures || 0) * 60));
-
-    // % appliqué et minutes calculées (après % + arrondi 5)
-    const coef = Math.max(50, Math.min(500, Number(confirmCoef || 100)));
-    const duration_calc_minutes = roundMinutesTo5(Math.round((duration_minutes * coef) / 100));
-    const extra_percent = Math.max(0, coef - 100);
-
-    // Planification proposée
-    const planned_start = currentScenario?.debut ?? null;
-    const planned_end = planned_start ? computeProvisionalEnd(planned_start, duration_calc_minutes) : null;
-
-    // Quantité totale de la commande (mono = pas d’éclatement)
-    const qty = Math.max(1, Number(formData?.quantite || 1));
-
-    // Payload prêt pour commandes_assignations
-    const assignation = {
-      commande_id: formData?.id,           // bigint (commande globale)
-      machine_id: machineId,               // uuid
-      qty,                                 // integer > 0
-      duration_minutes,                    // théorie
-      duration_calc_minutes,               // après % + arrondi 5
-      cleaning_minutes,                    // minutes de nettoyage
-      extra_percent,                       // coef - 100
-      planned_start,                       // timestamptz | null
-      planned_end,                         // timestamptz | null
-      status: "A commencer",
-    };
-
-    onConfirm({
+    const machineId = selectedMachine?.id ?? selectedScenario?.machine?.id;
+    // ⚠️ On transmet le coef "équivalent total" pour ne rien casser côté service actuel
+    onConfirm?.({
       machineId,
-      coef,
-      monoUnitsUsed: monoUnits,
-      minutesReellesAppliquees: duration_calc_minutes, // pour cohérence d’affichage en amont
-      assignation,                                     // ⬅️ à insérer dans commandes_assignations
-      flow: "mono",
+      coef: preview.coefTotalEquivalent,
+      monoUnitsUsed: isMono ? Math.max(1, Number(monoUnitsUsed || 1)) : 1,
     });
   };
 
+  const machineOptions = (machines || []).map((m) => {
+    // On calcule l’aperçu par machine, avec la même règle broderie-only
+    const scen = scenarioByMachineId?.[m.id] || (String(selectedMachine?.id) === String(m.id) ? selectedScenario : null);
+    if (!scen) return { m, label: m.nom || m.name || `Machine ${m.id}` };
+
+    const isMonoThis = Number(m.nbTetes || 1) === 1;
+    const pv = computePreviewMinutes({
+      scenario: scen,
+      percentBroderie: confirmCoef,
+      isMono: isMonoThis,
+      monoUnitsUsed: isMonoThis ? monoUnitsUsed : 1,
+    });
+
+    const end = computeProvisionalEnd(new Date(), pv.totalApplique);
+    const finLabel = end ? ` — fin ${parisFormat(end, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}` : "";
+
+    return {
+      m,
+      label: `${m.nom || m.name || `Machine ${m.id}`} (${pv.totalApplique} min)${finLabel}`,
+    };
+  });
+
   return (
-    <div className="modal-overlay">
+    <div className="modal__backdrop" role="dialog" aria-modal="true">
       <div className="modal">
-        <h2>Confirmer la machine & le temps réel</h2>
+        <header className="modal__header">
+          <h3>Confirmer machine & durée</h3>
+          <button className="btn-fermer" onClick={onClose} aria-label="Fermer">✕</button>
+        </header>
 
-        <p><strong>Machine proposée :</strong> {selectedScenario.machine.nom}</p>
-
-        <div className="grid-2cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <p><strong>Temps broderie (théorique) :</strong> {convertHoursToHHMM(selectedScenario.dureeBroderieHeures)}</p>
-            <p><strong>Temps nettoyage (théorique) :</strong> {convertHoursToHHMM(selectedScenario.dureeNettoyageHeures)}</p>
-            <p><strong>Temps total (théorique) :</strong> {convertHoursToHHMM(selectedScenario.dureeTotaleHeuresReelle)}</p>
+        <div className="modal__content">
+          <div className="muted" style={{ marginBottom: 8 }}>
+            Types d’article : {neededTypes.length ? neededTypes.join(" • ") : "—"}
           </div>
 
-          <div>
-            <label style={{ display: "block", marginBottom: 6 }}>Pourcentage appliqué (temps réel)</label>
-            <div className="flex" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button type="button" className="px-3 py-2 border rounded-lg" onClick={() => setConfirmCoef((c) => clampPercentToStep5(c - 5))}>– 5%</button>
+          {/* Réglage du % appliqué (UNIQUEMENT broderie) */}
+          <div style={{ marginTop: 8 }}>
+            <label>
+              Coefficient broderie (%)
               <input
-                type="number" className="border rounded-lg px-3 py-2 w-28 text-right"
-                value={confirmCoef}
-                onChange={(e) => setConfirmCoef(clampPercentToStep5(parseInt(e.target.value || "0", 10)))}
-                step={5} min={50} max={500}
+                type="range"
+                min={50}
+                max={500}
+                step={5}
+                value={clampPercentToStep5(Number(confirmCoef || 100))}
+                onChange={(e) => setConfirmCoef?.(clampPercentToStep5(Number(e.target.value)))}
+                style={{ width: "100%" }}
               />
-              <span>%</span>
-              <button type="button" className="px-3 py-2 border rounded-lg" onClick={() => setConfirmCoef((c) => clampPercentToStep5(c + 5))}>+ 5%</button>
+            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+              <span>50%</span><strong>{clampPercentToStep5(Number(confirmCoef || 100))}%</strong><span>500%</span>
             </div>
+            <div className="muted" style={{ marginTop: 4 }}>
+              (Le pourcentage s’applique uniquement au temps de <strong>broderie</strong>. Le <em>nettoyage</em> reste inchangé.)
+            </div>
+          </div>
 
-            <input
-              type="range" className="w-full" style={{ width: "100%", marginTop: 8 }}
-              min={50} max={500} step={5}
-              value={confirmCoef}
-              onChange={(e) => setConfirmCoef(parseInt(e.target.value, 10))}
-            />
-
-            {isMono && (
-              <div style={{ marginTop: 12 }}>
-                <label style={{ display: "block", marginBottom: 6 }}>Combien de mono-têtes utilisées ?</label>
+          {/* Parallélisation mono */}
+          {isMono && (
+            <div style={{ marginTop: 12 }}>
+              <label>
+                Nombre d’unités mono utilisées en parallèle
                 <input
-                  type="number" min={1}
-                  value={monoUnitsUsed}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value || "1", 10);
-                    setMonoUnitsUsed(isNaN(v) || v < 1 ? 1 : v);
-                  }}
-                  className="border rounded-lg px-3 py-2 w-28 text-right"
+                  type="number"
+                  min={1}
+                  value={Number(monoUnitsUsed || 1)}
+                  onChange={(e) => setMonoUnitsUsed?.(Math.max(1, Number(e.target.value) || 1))}
+                  style={{ marginLeft: 8, width: 80 }}
                 />
-                <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                  Nombre de têtes effectif = {selectedMachine.nbTetes} × {Math.max(1, Number(monoUnitsUsed || 1))}
-                </div>
+              </label>
+              <div className="muted" style={{ marginTop: 4 }}>
+                La broderie théorique est divisée par ce nombre. Le nettoyage n’est pas modifié.
               </div>
-            )}
+            </div>
+          )}
 
-            <p style={{ marginTop: 10 }}>
-              <strong>Temps réel (appliqué) :</strong>{" "}
-              {convertHoursToHHMM((minutesReellesAppliquees || 0) / 60)}
-              {"  "}
-              <em style={{ opacity: 0.7 }}>
-                (arrondi 5 min • réservation ≈ {Math.ceil((minutesReellesAppliquees || 0) / 60)} h)
-              </em>
-            </p>
+          {/* Récap’ durée (théorique vs appliquée) */}
+          <div style={{ marginTop: 12, padding: 8, border: "1px solid #eee", borderRadius: 8 }}>
+            <div><strong>Broderie (théorique adj.)</strong> : {preview.broderieTheoAdj} min</div>
+            <div><strong>Nettoyage (théorique)</strong> : {preview.nettoyageApplique} min</div>
+            <div><strong>Total théorique</strong> : {preview.totalTheoAdj} min ({convertHoursToHHMM(preview.totalTheoAdj / 60)})</div>
+            <hr />
+            <div><strong>Broderie appliquée</strong> : {preview.broderieAppliquee} min</div>
+            <div><strong>Total appliqué</strong> : {preview.totalApplique} min ({convertHoursToHHMM(preview.totalApplique / 60)})</div>
+            {finEstimee && <div className="muted">Fin estimée : {finEstimee}</div>}
+          </div>
 
-            <p style={{ marginTop: 6 }}>
-              <strong>Fin estimée avec % :</strong>{" "}
-              {currentScenario
-                ? parisFormat(
-                    computeProvisionalEnd(currentScenario.debut, minutesReellesAppliquees || 0),
-                    { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }
-                  )
-                : "—"}
-            </p>
+          {/* Choix de la machine avec ETA par option */}
+          <div style={{ marginTop: 12 }}>
+            <label>
+              Machine
+              <select
+                value={selectedMachine?.id ?? ""}
+                onChange={(e) => setMachineAssignee?.(e.target.value)}
+                style={{ marginLeft: 8 }}
+              >
+                {machineOptions.map(({ m, label }) => (
+                  <option key={m.id} value={m.id}>{label}</option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
 
-        <label style={{ marginTop: 12, display: "block" }}>Choisir une autre machine :</label>
-        <select
-          value={machineAssignee ?? selectedScenario.machine.id}
-          onChange={(e) => setMachineAssignee(e.target.value)}
-        >
-          {machines
-            .filter((m) => {
-              const machineLabels = toLabelArray(m.etiquettes);
-              return neededTypes.every((t) => machineLabels.includes(t));
-            })
-            .map((m) => {
-              const sc = scenarioByMachineId.get(m.id);
-              const baseMinutesTheo = sc ? Math.round(Number(sc.dureeTotaleHeuresReelle || 0) * 60) : 0;
-              const optionIsMono = Number(m.nbTetes || 1) === 1;
-              const adjustedTheo = optionIsMono ? Math.round(baseMinutesTheo / Math.max(1, Number(monoUnitsUsed || 1))) : baseMinutesTheo;
-              const minReelForOption = roundMinutesTo5(Math.round((adjustedTheo * (confirmCoef || 100)) / 100));
-              const finAvecCoef = sc ? computeProvisionalEnd(sc.debut, minReelForOption) : null;
-              const finLabel = finAvecCoef
-                ? ` — fin estimée ${parisFormat(finAvecCoef, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
-                : "";
-              return (
-                <option key={m.id} value={m.id}>
-                  {m.nom}{finLabel}
-                </option>
-              );
-            })}
-        </select>
-
-        <div style={{ marginTop: 12 }}>
+        <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button onClick={onClose}>Annuler</button>
           <button onClick={handleConfirm}>Confirmer ce choix</button>
-          <button className="btn-fermer" onClick={onClose} style={{ marginLeft: 8 }}>Fermer</button>
         </div>
       </div>
     </div>
