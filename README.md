@@ -1,115 +1,152 @@
-📖 Description
+# Automatisation Broderie - Development Guide
 
-Cette application est un outil interne développé pour Pubos afin de gérer la production de broderie et le suivi des commandes.
-Elle permet de planifier automatiquement ou manuellement les opérations de broderie sur les machines disponibles, de suivre l’état des commandes en temps réel et d’optimiser la gestion des ressources.
+A React-based embroidery production management system for Pubos. This application automates embroidery workflow management, machine scheduling, and production tracking.
 
-L’application est construite en React (Vite) pour le front-end, utilise Supabase (PostgreSQL + Auth + Storage) pour la base de données et est déployée sur Vercel.
+## 🚀 Quick Start
 
-✨ Fonctionnalités principales
+### Prerequisites
+- Node.js ≥ 18
+- npm or yarn
+- Supabase account (or access to company project)
 
-Gestion des commandes
-    Création et modification de commandes.
-    Calcul automatique de la durée de broderie (points, vitesse, nombre de têtes).
-    Calcul du temps de nettoyage par type d’article (tags).
-    Découpage automatique si une commande dépasse la fin de journée (17h → reprise le lendemain 8h).
+### Installation
 
-Gestion des machines
-    Liste des machines de broderie avec leurs caractéristiques (nombre de têtes, type).
-    Association commandes ↔ machines.
-    Suivi de la disponibilité.
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/BTMC1/App_React_Broderie-.git
+   cd App_React_Broderie-
+   ```
 
-Paramètres configurables
-    Gestion des étiquettes (tags) pour articles et broderies.
-    Durées de nettoyage paramétrables par type d’article.
-    Interface simple pour ajouter/supprimer/modifier les tags.
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-Planning horaire (vue production)
-    Affichage des créneaux horaires des machines.
-    Mise à jour automatique des commandes :
-        “À commencer” → décalée à la prochaine heure libre.
-        “En cours” → prolongée automatiquement jusqu’à fin réelle.
-    Coloration par urgence (calculée à partir de la date de livraison).
-    Interaction : survol pour mettre en évidence une commande, clic pour ouvrir un modal avec les détails.
+3. **Environment setup**
+   ```bash
+   cp .env.example .env.local
+   ```
 
-Gestion des utilisateurs (via Supabase Auth)
-    Connexion sécurisée avec gestion des rôles.
-    Restriction des accès aux données sensibles par Row Level Security (RLS).
+   Add your Supabase credentials to `.env.local`:
+   ```env
+   REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
 
-🏗️ Architecture
+4. **Start development server**
+   ```bash
+   npm start
+   ```
 
-React (Vite) —> Vercel (hébergement front)
-          |
-          v
-Supabase (hébergé Postgres + Auth + Storage + Edge Functions)
+The application will be available at `http://localhost:3000`.
 
+## 📁 Project Structure
 
-🚀 Installation locale
-Prérequis
-    Node.js ≥ 18
-    npm ou yarn
-    Compte Supabase (ou accès au projet de l’entreprise)
+```
+src/
+├── components/           # Reusable UI components
+│   ├── common/          # Generic components (buttons, badges)
+│   └── layout/          # Layout components (navbar, banner)
+├── Pages/               # Main application pages
+│   └── Admin/           # Admin section pages
+│       ├── Commandes/   # Order management
+│       ├── Machines/    # Machine management
+│       ├── Planning/    # Production planning
+│       └── Parametres/  # System configuration
+├── context/             # React Context providers
+├── utils/               # Utility functions and services
+├── styles/              # CSS stylesheets
+└── App.js              # Main application component
+```
 
-Étapes
-    1.Cloner le dépôt
-        git clone https://github.com/<organisation>/<repo>.git
-        cd <repo>
-    2.Installer les dépendances 
-        npm install
-    3.Créer un fichier .env.local à partir de l’exemple :
-        cp .env.example .env.local
-    4.Ajouter vos clés Supabase dans .env.local 
-        VITE_SUPABASE_URL=<url>
-        VITE_SUPABASE_ANON_KEY=<clé>
-    5.Lancer en local 
-        npm run dev
+## 🛠️ Development
 
-📦 Déploiement
-L’application est prévue pour être déployée sur Vercel.
-    Créer une Team Vercel pour l’entreprise.
-    Lier le dépôt GitHub.
-    Définir les variables d’environnement dans Settings > Environment Variables.
-    Déployer (Production et Preview activés).
+### Available Scripts
 
-🔑 Variables d’environnement
-| Variable                                  | Description                                                          |
-| ----------------------------------------- | -------------------------------------------------------------------- |
-| `VITE_SUPABASE_URL`                       | URL du projet Supabase                                               |
-| `VITE_SUPABASE_ANON_KEY`                  | Clé anonyme publique Supabase                                        |
-| *(optionnel)* `SUPABASE_SERVICE_ROLE_KEY` | Clé service (uniquement côté serveur/IT, jamais exposée côté client) |
+- `npm start` - Start development server
+- `npm run build` - Create production build
+- `npm test` - Run tests
+- `npm run eject` - Eject from Create React App
 
-🗄️ Base de données (Supabase)
-Tables principales :
-    commandes : infos sur les commandes (dates, machine, statut, durée, urgence).
-    machines : liste des machines et paramètres (têtes, vitesse).
-    articleTags : tags liés aux articles avec durée de nettoyage.
-    broderieTags : tags liés aux paramètres de broderie.
-Auth : géré par Supabase (GoTrue).
-Storage : possibilité d’ajouter fichiers/visuels liés aux commandes.
-Sécurité :
-    Row Level Security (RLS) activé.
-    Policies pour restreindre l’accès selon l’utilisateur/role.
+### Key Technologies
 
-📊 Données calculées automatiquement
-    Durée broderie théorique = (nbre de points ÷ vitesse) ÷ nbre de têtes.
-    Durée nettoyage = (durée par article selon articleTags) × quantité.
-    Temps total = broderie + nettoyage.
-    Urgence = score (1–5) calculé à partir de la date de livraison.
+- **Frontend**: React 19.1.0 with React Router
+- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **State Management**: React Context API
+- **Styling**: Custom CSS with component-specific stylesheets
+- **Drag & Drop**: React Beautiful DnD
 
-🧑‍💻 Développement
-    Stack : React + Tailwind + Supabase JS SDK.
-    Structure :
-        src/
-            components/   # composants réutilisables
-            pages/        # Commandes, Machines, Paramètres, Planning
-            utils/        # fonctions calculs, gestion du temps, services Supabase
-            context/      # gestion des étiquettes (EtiquettesContext)
-            styles/       # CSS custom
+### Architecture Patterns
 
-📚 Documentation & Passation
-    Guide utilisateur → comment créer/planifier une commande.
-    Guide IT → comment gérer les migrations Supabase, secrets, déploiement.
-    Runbook incident → que faire en cas de panne (DB, front).
+- **Component Structure**: Feature-based organization under `Pages/Admin/`
+- **State Management**: Context API for global state (EtiquettesContext)
+- **API Layer**: Centralized services in `utils/` and page-specific services
+- **Styling**: Modular CSS with separate stylesheets per component
 
-🧾 Licence
-    Projet interne, propriété de Pubos.
-    Non destiné à une diffusion externe.
+## 🗄️ Database Schema
+
+### Core Tables
+- `commandes` - Order information (dates, machine, status, duration, urgency)
+- `machines` - Machine specifications (heads, speed, type)
+- `articleTags` - Article tags with cleaning duration rules
+- `broderieTags` - Embroidery parameter tags
+
+### Key Calculations
+- **Embroidery Duration**: `(stitches ÷ speed) ÷ number_of_heads`
+- **Cleaning Duration**: `(duration_per_article_type) × quantity`
+- **Total Time**: `embroidery_duration + cleaning_duration`
+- **Urgency Score**: `1-5 scale based on delivery date`
+
+## 🔧 Development Guidelines
+
+### Code Style
+- Use functional components with hooks
+- Follow React best practices
+- Maintain consistent naming conventions
+- Keep components small and focused
+
+### Adding New Features
+1. Create components in appropriate directories
+2. Add API calls to service files
+3. Update routing in `App.js` if needed
+4. Add corresponding stylesheets
+
+### Testing
+- Use React Testing Library for component tests
+- Run `npm test` to execute test suite
+- Aim for good test coverage on critical business logic
+
+## 🚀 Deployment
+
+### Environment Variables
+```env
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### Build Process
+```bash
+npm run build
+```
+
+The build artifacts will be stored in the `build/` directory.
+
+### Vercel Deployment
+1. Connect GitHub repository to Vercel
+2. Set environment variables in Vercel dashboard
+3. Deploy automatically on push to main branch
+
+## 📚 Additional Resources
+
+- [React Documentation](https://reactjs.org/)
+- [Supabase Documentation](https://supabase.com/docs)
+- [React Router Documentation](https://reactrouter.com/)
+
+## 🤝 Contributing
+
+1. Create a feature branch from `main`
+2. Make your changes
+3. Test thoroughly
+4. Submit a pull request
+
+## 📄 License
+
+Internal project - Property of Pubos
