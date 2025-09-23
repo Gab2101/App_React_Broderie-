@@ -131,7 +131,7 @@ export default function CommandesPage() {
   };
 
   const filteredCommandes = React.useMemo(
-    () => (commandes || []).filter((c) => matchesQuery(c, debouncedQuery)),
+    () => (commandes || []).filter((c) => matchesQuery(c, debouncedQuery) && c.statut !== "Terminée"),
     [commandes, debouncedQuery]
   );
 

@@ -1,6 +1,11 @@
 // src/Pages/Admin/Planning/lib/priority.js
 
-export const getUrgencyColor = (level) => {
+export const getUrgencyColor = (level, statut) => {
+  // Couleur spéciale pour les commandes terminées
+  if (statut === "Terminée" || statut === "Terminée") {
+    return "#D1D5DB"; // Gris clair avec effet pâle
+  }
+
   const urgencyColors = {
     1: "#4caf50",
     2: "#2196f3",

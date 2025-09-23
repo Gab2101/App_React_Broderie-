@@ -6,6 +6,7 @@ import { calculerDurees } from "../../../../utils/calculs";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
 import { clampPercentToStep5 } from "../utils/timeRealtime";
 import { getColorFromId, getUrgencyColor, computeUrgency } from "../../Planning/lib/priority";
+import { useError } from "../../../../hooks/useError";
 
 const parisDateTime = (d, opts = {}) =>
   d ? new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...opts }) : null;
@@ -23,6 +24,8 @@ export default function CommandeCard({
   nettoyageRules = [],
   onToggleDeballe, // (id, bool) => Promise|void
 }) {
+  const { handleError } = useError();
+
   const bg = getColorFromId(cmd.id);
   const urgencyLevel = Number(cmd?.urgence ?? computeUrgency(cmd?.dateLivraison));
   const borderColor = getUrgencyColor(urgencyLevel);
@@ -53,7 +56,7 @@ export default function CommandeCard({
           setDeballeLocal(true); // optimiste
           await onToggleDeballe?.(cmd.id, true);
         } catch (e) {
-          console.error("Auto-set deballe failed:", e);
+          handleError(e, { context: 'Auto-déballage de la commande' });
           setDeballeLocal(false); // rollback si échec
         } finally {
           setSavingDeballe(false);
@@ -78,7 +81,7 @@ export default function CommandeCard({
         setDeballeLocal(true);              // optimiste
         await onToggleDeballe?.(cmd.id, true);
       } catch (err) {
-        console.error("MAJ deballe auto échouée:", err);
+        handleError(err, { context: 'Mise à jour automatique du statut déballé' });
         setDeballeLocal(false);             // rollback si échec
       } finally {
         setSavingDeballe(false);
@@ -96,7 +99,7 @@ export default function CommandeCard({
       setSavingDeballe(true);
       await onToggleDeballe?.(cmd.id, checked); // le parent persiste (Supabase)
     } catch (err) {
-      console.error("MAJ deballe échouée:", err);
+      handleError(err, { context: 'Mise à jour du statut déballé' });
       setDeballeLocal((v) => !v);               // rollback si échec
     } finally {
       setSavingDeballe(false);
@@ -206,6 +209,9 @@ export default function CommandeCard({
       )}
 
       <p><strong>Client :</strong> {cmd.client}</p>
+      {Array.isArray(cmd.types) && cmd.types.length > 0 && (
+        <p><strong>Types textile :</strong> {cmd.types.join(", ")}</p>
+      )}
       <p><strong>Quantité :</strong> {cmd.quantite}</p>
       <p><strong>Points :</strong> {cmd.points}</p>
       <p><strong>Urgence :</strong> {cmd.urgence}</p>
@@ -249,10 +255,8 @@ export default function CommandeCard({
         </div>
       )}
 
-      <p><strong>Durée broderie (théorique) :</strong> {convertDecimalToTime(b ?? 0)}</p>
-      <p><strong>Durée nettoyage (théorique) :</strong> {convertDecimalToTime(n ?? 0)}</p>
       <p>
-        <strong>Durée totale (réelle appliquée) :</strong> {convertDecimalToTime(t ?? 0)}
+        <strong>Durée totale :</strong> {convertDecimalToTime(t ?? 0)}
         {coefAffiche ? <em style={{ marginLeft: 6, opacity: 0.7 }}>({coefAffiche}% appliqué)</em> : null}
       </p>
 

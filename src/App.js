@@ -7,6 +7,8 @@ import PlanningPage from "./Pages/Admin/Planning/PlanningPage";
 import Parametres from "./Pages/Admin/Parametres/Parametres";
 import { EtiquettesProvider } from "./context/EtiquettesContext";
 import CommandesPage from "./Pages/Admin/Commandes/CommandesPage";
+import { ToastProvider } from "./components/common/Toast";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 
 function AppContent() {
   const location = useLocation();
@@ -30,11 +32,15 @@ function AppContent() {
 
 function App() {
   return (
-    <EtiquettesProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </EtiquettesProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <EtiquettesProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </EtiquettesProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 

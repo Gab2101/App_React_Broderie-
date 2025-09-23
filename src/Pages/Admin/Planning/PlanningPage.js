@@ -51,6 +51,20 @@ export function UrgencyLegend() {
           {label}
         </div>
       ))}
+      <div className="legend-item">
+        <span
+          className="legend-color"
+          style={{
+            background: getUrgencyColor(1, "Terminée"),
+            display: "inline-block",
+            width: 14,
+            height: 14,
+            marginRight: 6,
+            borderRadius: 3,
+          }}
+        />
+        Terminée
+      </div>
     </div>
   );
 }
@@ -420,7 +434,7 @@ export default function PlanningPage() {
       const dateLivraison =
         c.dateLivraison || c.deadline || c.date_livraison || c.date_limite || null;
       const level = computeUrgency(dateLivraison);
-      const color = getUrgencyColor(level);
+      const color = getUrgencyColor(level, c.statut);
       m.set(c.id, color);
     }
     return m;
