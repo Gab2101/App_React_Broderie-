@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import './Toast.css';
+import { classifyError, getToastTypeForSeverity } from '../../utils/errorHandler';
 
 const ToastContext = createContext();
 
