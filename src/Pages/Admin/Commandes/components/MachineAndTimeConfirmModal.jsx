@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { convertHoursToHHMM } from "../../../utils/time";
+import { convertHoursToHHMM } from "@/utils/time.js";
 
 const clampPercentToStep5 = (value) => Math.round(value / 5) * 5;
 

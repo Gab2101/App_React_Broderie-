@@ -2,8 +2,8 @@
 import React, { useContext, useState } from "react";
 import "../../../styles/Commandes.css";
 
-import NewButton from "../../../components/common/NewButton.jsx";
-import { EtiquettesContext } from "../../../context/EtiquettesContext";
+import NewButton from "@/components/common/NewButton.jsx";
+import { EtiquettesContext } from "@/context/EtiquettesContext.jsx";
 
 import CommandeFormModal from "./components/CommandeFormModal.jsx";
 import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal.jsx";
@@ -31,7 +31,7 @@ import {
   deleteCommandeWithPlanning,
 } from "./services/commandesApi";
 import { createCommandeWithAssignations } from "./services/assignationsApi";
-import { supabase } from "../../../supabaseClient"; // ✅ pour la MAJ "déballé"
+import { supabase } from "@/supabaseClient"; // ✅ pour la MAJ "déballé"
 
 export default function CommandesPage() {
   // Étiquettes (context)
