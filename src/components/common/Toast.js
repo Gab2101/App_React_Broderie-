@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import './Toast.css';
-import { classifyError, getToastTypeForSeverity } from '../../utils/errorHandler';
+import * as errorHandler from '../../utils/errorHandler';
 
 const ToastContext = createContext();
 
@@ -209,8 +209,8 @@ export function withErrorToast(Component) {
     const toast = useToast();
 
     const showErrorToast = (error, context = '') => {
-      const classifiedError = classifyError(error, context);
-      const toastType = getToastTypeForSeverity(classifiedError.severity);
+      const classifiedError = errorHandler.classifyError(error, context);
+      const toastType = errorHandler.getToastTypeForSeverity(classifiedError.severity);
 
       const action = classifiedError.retryable ? {
         retry: true,
