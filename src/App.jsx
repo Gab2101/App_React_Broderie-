@@ -8,8 +8,8 @@ import PlanningPage from "./Pages/Admin/Planning/PlanningPage.jsx";
 import Parametres from "./Pages/Admin/Parametres/Parametres.jsx";
 import { EtiquettesProvider } from "./context/EtiquettesContext.jsx";
 import CommandesPage from "./Pages/Admin/Commandes/CommandesPage.jsx";
-import { ToastProvider } from "./components/common/Toast";
-import ErrorBoundary from "./components/common/ErrorBoundary";
+import { ToastProvider } from "./components/common/Toast.jsx";
+import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 
 function AppContent() {
   const location = useLocation();

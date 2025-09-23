@@ -1,4 +1,4 @@
-// src/components/common/ErrorBoundary.js
+// src/components/common/ErrorBoundary.jsx
 // React Error Boundary for graceful error handling
 
 import React from 'react';
