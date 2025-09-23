@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import StatusBadge from "../../../components/common/StatusBadge";
-import { convertDecimalToTime } from "../../../utils/time.js";
-import { STATUTS } from "../utils/statut.js";
+import { convertDecimalToTime } from "../../../utils/time";
+import { STATUTS } from "../utils/statut";
 
 export default function CommandeCard({
   cmd,

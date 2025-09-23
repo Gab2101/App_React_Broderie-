@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useCommandesData } from "../hooks/useCommandesData.js";
-import { useForm } from "../hooks/useForm.js";
-import { useLinkedCommande } from "../hooks/useLinkedCommande.js";
-import { useSimulation } from "../hooks/useSimulation.js";
-import { useStatut } from "../hooks/useStatut.js";
+import { useCommandesData } from "../hooks/useCommandesData";
+import { useForm } from "../hooks/useForm";
+import { useLinkedCommande } from "../hooks/useLinkedCommande";
+import { useSimulation } from "../hooks/useSimulation";
+import { useStatut } from "../hooks/useStatut";
 import { TagsPicker } from "./TagsPicker";
 
 export default function CommandeFormModal({

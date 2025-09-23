@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "../../../supabaseClient.js";
+import { supabase } from "../../../supabaseClient";
 
 export default function NettoyageRulesEditor({ articleTags, broderieTags, onMutate }) {
   const [rules, setRules] = useState([]);
