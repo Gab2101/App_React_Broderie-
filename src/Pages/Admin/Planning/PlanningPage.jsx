@@ -23,7 +23,7 @@ import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority"
 
 console.log("[Planning] regenerated (gros blocs par commande, non découpés par jour)");
 
-/** ---------- Légende d’urgence ---------- **/
+/** ---------- Légende d'urgence ---------- **/
 export function UrgencyLegend() {
   const labels = {
     1: "Faible (≥ 15 jours)",
@@ -169,7 +169,7 @@ export default function PlanningPage() {
     setModalCommande((cur) => (cur?.id === updated.id ? { ...cur, ...updated } : cur));
   }, []);
 
-  /** --- Raccourcir quand “Terminée” --- */
+  /** --- Raccourcir quand "Terminée" --- */
   const shortenPlanningForCommandeTerminee = useCallback(async (commandeId, actualEnd = new Date()) => {
     const roundedEnd = ceilHourWorkParis(actualEnd ?? new Date());
     const endIso = roundedEnd.toISOString();
@@ -427,7 +427,7 @@ export default function PlanningPage() {
     return out;
   }, [planning, commandeById]);
 
-  // Couleur d’urgence par commande
+  // Couleur d'urgence par commande
   const commandeColorMap = useMemo(() => {
     const m = new Map();
     for (const c of commandes) {
@@ -439,7 +439,7 @@ export default function PlanningPage() {
     }
     return m;
   }, [commandes]);
-  
+
 
   // 14 jours ouvrés visibles
   const dayColumns = useMemo(() => {
@@ -473,7 +473,7 @@ export default function PlanningPage() {
     // 1) Rassembler toutes les tranches par (machineId, commandeId)
     const buckets = new Map(); // key: `${mid}::${cid}` -> { mid, cid, start: Date, end: Date }
     for (const row of filteredPlanning) {
-  
+
       const mids = normalizeMachineIds(row.machineId);
       const start = new Date(row.debut);
       const end = new Date(row.fin);
@@ -642,7 +642,7 @@ export default function PlanningPage() {
           <UrgencyLegend />
 
           <div className="zoom-buttons">
-            <button onClick={() => setStartDate(parisMidnight())}>Aujourd’hui</button>
+            <button onClick={() => setStartDate(parisMidnight())}>Aujourd'hui</button>
             <button
               onClick={() => {
                 const prev = parisMidnight(startDate);
@@ -661,7 +661,7 @@ export default function PlanningPage() {
             >
               14 jours suivants →
             </button>
-            <button onClick={() => goToDay(new Date())}>Voir aujourd’hui (vue jour)</button>
+            <button onClick={() => goToDay(new Date())}>Voir aujourd'hui (vue jour)</button>
           </div>
 
           <PlanningGrid

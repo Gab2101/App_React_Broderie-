@@ -457,7 +457,7 @@ export default function CommandesPage() {
     } catch (e) {
       console.error("MAJ deballe échouée", e);
       setCommandes(prev); // rollback
-      alert("Impossible d’enregistrer le statut « déballé ». Réessaie.");
+      alert("Impossible d'enregistrer le statut « déballé ». Réessaie.");
     }
   };
 
