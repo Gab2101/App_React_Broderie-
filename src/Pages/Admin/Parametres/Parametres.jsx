@@ -19,7 +19,7 @@ const sanitizeLabel = (v) => String(v ?? "").trim();
 /**
  * Parametres
  * — Centralise le chargement/MAJ des tags Article & Broderie
- * — Ajoute l’éditeur des règles de nettoyage (article × zone)
+ * — Ajoute l'éditeur des règles de nettoyage (article × zone)
  * — Realtime sur tags & nettoyage_rules
  * — Suppression en cascade (optionnelle) des règles liées aux tags supprimés
  */
@@ -340,7 +340,7 @@ export default function Parametres() {
               <strong> temps de nettoyage</strong> (en secondes). Ces règles servent au calcul temps & faisabilité.
             </p>
 
-            {/* On garde l’API existante du composant */}
+            {/* On garde l'API existante du composant */}
             <NettoyageRulesEditor
               articleTags={articleTags}
               broderieTags={broderieTags}
