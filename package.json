@@ -10,7 +10,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",
-    "react-scripts": "5.0.1",
+    "react-scripts": "6.0.2",
     "web-vitals": "^2.1.0"
   },
   "scripts": {
@@ -38,12 +38,7 @@
     ]
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.8.0",
-    "@testing-library/react": "^16.3.0",
-    "vitest": "^3.2.4"
-  },
-  "overrides": {
-    "ajv": "^8.17.1",
-    "ajv-keywords": "^5.1.0"
+    "@testing-library/jest-dom": "^6.9.0",
+    "@testing-library/react": "^16.2.0"
   }
 }
