@@ -12,9 +12,9 @@ import {
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 
-import CommandeModal from "./components/CommandeModal";
-import PlanningGrid from "./components/PlanningGrid";
-import PlanningDayView from "./PlanningDayView";
+import CommandeModal from "./components/CommandeModal.jsx";
+import PlanningGrid from "./components/PlanningGrid.jsx";
+import PlanningDayView from "./PlanningDayView.jsx";
 
 
 import { normalizeSlotForGrid } from "./lib/grid";

@@ -2,13 +2,13 @@
 import React, { useContext, useState } from "react";
 import "../../../styles/Commandes.css";
 
-import NewButton from "../../../components/common/NewButton";
+import NewButton from "../../../components/common/NewButton.jsx";
 import { EtiquettesContext } from "../../../context/EtiquettesContext";
 
-import CommandeFormModal from "./components/CommandeFormModal";
-import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal";
-import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal";
-import CommandeCard from "./components/CommandeCard";
+import CommandeFormModal from "./components/CommandeFormModal.jsx";
+import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal.jsx";
+import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal.jsx";
+import CommandeCard from "./components/CommandeCard.jsx";
 
 import useCommandesData from "./hooks/useCommandesData";
 import useForm from "./hooks/useForm";
