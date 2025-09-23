@@ -4,7 +4,7 @@ import { useForm } from "../hooks/useForm.js";
 import { useLinkedCommande } from "../hooks/useLinkedCommande.js";
 import { useSimulation } from "../hooks/useSimulation.js";
 import { useStatut } from "../hooks/useStatut.js";
-import { TagsPicker } from "./TagsPicker.jsx";
+import { TagsPicker } from "./TagsPicker";
 
 export default function CommandeFormModal({
   isOpen,

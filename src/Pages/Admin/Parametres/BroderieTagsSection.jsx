@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import TagItem from "./TagItem.jsx";
+import TagItem from "./TagItem";
 
 export default function BroderieTagsSection({
   broderieTags,
