@@ -1,4 +1,4 @@
-// src/context/EtiquettesContext.js
+// src/context/EtiquettesContext.jsx
 import React, { createContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { useError } from "../hooks/useError";
@@ -106,7 +106,7 @@ export function EtiquettesProvider({ children }) {
         { event: "*", schema: "public", table: "broderieTags" },
         (payload) => {
           const { eventType, new: newRow, old: oldRow } = payload;
-          setBroderieTags((prev) =>{
+          setBroderieTags((prev) => {
             if (eventType === "INSERT" || eventType === "UPDATE") {
               const next = upsertById(prev, newRow);
               return sortByLabel(next);

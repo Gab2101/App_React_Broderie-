@@ -6,7 +6,7 @@ import Navbar from "./components/layout/Navbar.jsx";
 import Machines from "./Pages/Admin/Machines/Machines.jsx";
 import PlanningPage from "./Pages/Admin/Planning/PlanningPage.jsx";
 import Parametres from "./Pages/Admin/Parametres/Parametres";
-import { EtiquettesProvider } from "./context/EtiquettesContext";
+import { EtiquettesProvider } from "./context/EtiquettesContext.jsx";
 import CommandesPage from "./Pages/Admin/Commandes/CommandesPage.jsx";
 import { ToastProvider } from "./components/common/Toast";
 import ErrorBoundary from "./components/common/ErrorBoundary";
