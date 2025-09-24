@@ -36,6 +36,12 @@ export default function useCommandesData() {
 
       if (err1 || err2 || err3) {
         console.error("Erreur chargement données:", err1, err2, err3);
+        // Set empty arrays to prevent app crash
+        setCommandes([]);
+        setMachines([]);
+        setPlanning([]);
+        setLinkableCommandes([]);
+        setNettoyageRules([]);
         return;
       }
 
@@ -49,12 +55,23 @@ export default function useCommandesData() {
         .select("id, numero, client, statut, machineAssignee")
         .in("statut", ["A commencer", "En cours"]);
 
-      if (!errLink) setLinkableCommandes(cmdLinkables || []);
+      if (errLink) {
+        console.error("Erreur chargement commandes liables:", errLink);
+        setLinkableCommandes([]);
+      } else {
+        setLinkableCommandes(cmdLinkables || []);
+      }
 
       const rules = await fetchNettoyageRules();
       setNettoyageRules(rules || []);
     } catch (err) {
       console.error("Erreur reloadData:", err);
+      // Set empty arrays to prevent app crash
+      setCommandes([]);
+      setMachines([]);
+      setPlanning([]);
+      setLinkableCommandes([]);
+      setNettoyageRules([]);
     }
   };
 

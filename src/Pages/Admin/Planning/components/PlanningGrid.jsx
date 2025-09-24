@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function PlanningGrid({ events, onEventClick, onTimeSlotClick }) {
+export default function PlanningGrid({ events = [], onEventClick, onTimeSlotClick }) {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   const getEventsForHour = (hour) => {

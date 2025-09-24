@@ -1,8 +1,8 @@
 // src/Pages/Admin/Commandes/hooks/useForm.js
 import { useState } from "react";
 
-export default function useForm() {
-  const emptyForm = {
+export default function useForm(initialState = {}) {
+  const defaultEmptyForm = {
     id: null,
     numero: "",
     client: "",
@@ -15,6 +15,8 @@ export default function useForm() {
     vitesseMoyenne: "",
   };
 
+  const emptyForm = { ...defaultEmptyForm, ...initialState };
+
   const [formData, setFormData] = useState(emptyForm);
   const [saved, setSaved] = useState(false);
 
@@ -24,17 +26,25 @@ export default function useForm() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (nameOrEvent, value) => {
+    let name, val;
+    if (typeof nameOrEvent === "string") {
+      name = nameOrEvent;
+      val = value;
+    } else {
+      const e = nameOrEvent;
+      name = e.target.name;
+      val = e.target.value;
+    }
     setFormData((prev) => {
       // Coercition douce : si champ numérique, on stocke un nombre (ou "")
       if (["quantite", "points", "vitesseMoyenne"].includes(name)) {
-        return { ...prev, [name]: value === "" ? "" : Number(value) };
+        return { ...prev, [name]: val === "" ? "" : Number(val) };
       }
       if (name === "urgence") {
-        return { ...prev, urgence: value === "" ? "" : Number(value) };
+        return { ...prev, urgence: val === "" ? "" : Number(val) };
       }
-      return { ...prev, [name]: value };
+      return { ...prev, [name]: val };
     });
   };
 

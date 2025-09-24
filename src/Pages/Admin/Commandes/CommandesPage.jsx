@@ -567,25 +567,13 @@ export default function CommandesPage() {
       <CommandeFormModal
         isOpen={isFormOpen}
         onClose={() => !isSubmitting && setIsFormOpen(false)}
-        onSubmit={handleSubmitForm}
-        formData={form.formData}
-        handleChange={form.handleChange}
-        handleDateChange={form.handleDateChange}
-        toggleTag={form.toggleTag}
-        saved={form.saved}
-        isLinked={linked.isLinked}
-        setIsLinked={linked.setIsLinked}
+        onSave={handleSubmitForm}
+        commande={form.formData?.id ? form.formData : null}
         linkedCommandeId={linked.linkedCommandeId}
         setLinkedCommandeId={linked.setLinkedCommandeId}
-        sameMachineAsLinked={linked.sameMachineAsLinked}
-        setSameMachineAsLinked={linked.setSameMachineAsLinked}
-        startAfterLinked={linked.startAfterLinked}
-        setStartAfterLinked={linked.setStartAfterLinked}
         linkableCommandes={linkableCommandes}
         articleTags={articleTags}
         broderieTags={broderieTags}
-        machines={machines}
-        isEditing={Boolean(form.formData?.id)}
       />
 
       {/* Confirmation MONO */}

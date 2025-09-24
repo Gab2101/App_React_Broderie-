@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import useCommandesData from "../hooks/useCommandesData";
 import useForm from "../hooks/useForm";
-import useLinkedCommande from "../hooks/useLinkedCommande";
 import useSimulation from "../hooks/useSimulation";
 import useStatut from "../hooks/useStatut";
 import { TagsPicker } from "./TagsPicker";
@@ -13,7 +12,9 @@ export default function CommandeFormModal({
   commande,
   articleTags,
   broderieTags,
-  linkableCommandes
+  linkableCommandes,
+  linkedCommandeId,
+  setLinkedCommandeId
 }) {
   const isEditing = !!commande;
   const [saved, setSaved] = useState(false);
@@ -45,13 +46,12 @@ export default function CommandeFormModal({
     deballe,
     types,
     options,
-    linkedCommandeId,
     sameMachineAsLinked,
     startAfterLinked
   } = formData;
 
   // Liaison
-  const { linkedCommandeId: linkedId, setLinkedCommandeId } = useLinkedCommande(linkedCommandeId);
+  const linkedId = linkedCommandeId;
 
   // Simulation
   const { simulation, simulate } = useSimulation();

@@ -10,6 +10,7 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  envPrefix: ['VITE_'],
   server: {
     port: 3000,
     open: true
