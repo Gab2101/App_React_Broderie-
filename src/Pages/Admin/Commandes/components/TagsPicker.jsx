@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // src/Pages/Admin/Commandes/components/TagsPicker.jsx
 import React, { memo, useMemo } from "react";
 
@@ -34,20 +35,45 @@ function TagsPicker({
 }) {
   const selectedSet = useMemo(() => toSelectedSet(selected), [selected]);
   const canInteract = !(disabled || readOnly);
+=======
+import React from "react";
+
+/**
+ * TagsPicker – composant réutilisable pour sélectionner des tags.
+ *
+ * @param {Object[]} items - Liste des tags: { label: string, id?: string|number }.
+ * @param {string[]|Set<string>} selected - Liste/Set des labels sélectionnés.
+ * @param {(label: string) => void} onToggle - Callback au clic.
+ * @param {string} className - Classes CSS additionnelles.
+ */
+export function TagsPicker({ items, selected, onToggle, className = "" }) {
+  const isSelected = (label) => {
+    if (Array.isArray(selected)) return selected.includes(label);
+    if (selected instanceof Set) return selected.has(label);
+    return false;
+  };
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
 
   return (
     <div className={`tags-container${className ? " " + className : ""}`}>
       {Array.isArray(items) &&
+<<<<<<< HEAD
         items.map((tag, idx) => {
           const label = tag?.label ?? "";
           const key = tag?.id ?? `tag-${slugify(label)}-${idx}`;
           const isActive = selectedSet.has(norm(label));
           const base = variant === "pill" ? "tag-pill" : "tag";
+=======
+        items.map((item, index) => {
+          const key = item.id || item.label || index;
+          const isActive = isSelected(item.label);
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
 
           return (
             <button
               key={key}
               type="button"
+<<<<<<< HEAD
               className={`${base} ${isActive ? "active" : ""}`}
               onClick={() => {
                 if (!canInteract) return;
@@ -61,6 +87,13 @@ function TagsPicker({
               data-variant={variant}
             >
               {label}
+=======
+              className={`tag-item ${isActive ? "active" : ""}`}
+              onClick={() => onToggle(item.label)}
+              title={isActive ? "Retirer" : "Ajouter"}
+            >
+              {item.label}
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
             </button>
           );
         })}
@@ -68,4 +101,8 @@ function TagsPicker({
   );
 }
 
+<<<<<<< HEAD
 export default memo(TagsPicker);
+=======
+export default TagsPicker;
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735

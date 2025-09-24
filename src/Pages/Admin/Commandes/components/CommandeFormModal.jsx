@@ -1,97 +1,122 @@
-// src/Pages/Admin/Commandes/components/CommandeFormModal.js
-import React, { useMemo, useState } from "react";
-import { getAllowedBroderieForArticle, normalizeOne } from "../../../../utils/nettoyageRules";
-
-const slugify = (s) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+import React, { useState, useEffect } from "react";
+import useCommandesData from "../hooks/useCommandesData";
+import useForm from "../hooks/useForm";
+import useSimulation from "../hooks/useSimulation";
+import useStatut from "../hooks/useStatut";
+import { TagsPicker } from "./TagsPicker";
 
 export default function CommandeFormModal({
   isOpen,
   onClose,
-  onSubmit,
-  // form
-  formData,
-  handleChange,
-  handleDateChange,
-  toggleTag,
-  saved,
-  // liaison
-  isLinked,
-  setIsLinked,
-  linkedCommandeId,
-  setLinkedCommandeId,
-  sameMachineAsLinked,
-  setSameMachineAsLinked,
-  startAfterLinked,
-  setStartAfterLinked,
+  onSave,
+  commande,
+  articleTags,
+  broderieTags,
   linkableCommandes,
-  // tags
-  articleTags = [],
-  broderieTags = [],
-  // machines
-  machines = [],
-  // édition ?
-  isEditing = false,
+  linkedCommandeId,
+  setLinkedCommandeId
 }) {
-  // ⚠️ Tous les hooks AVANT tout return conditionnel
-  const [multiEnabled, setMultiEnabled] = useState(false);
+  const isEditing = !!commande;
+  const [saved, setSaved] = useState(false);
 
-  // Champs sécurisés
-  const numero = formData?.numero ?? "";
-  const client = formData?.client ?? "";
-  const quantite = formData?.quantite ?? "";
-  const points = formData?.points ?? "";
-  const vitesseMoyenne = formData?.vitesseMoyenne ?? "";
-  const dateLivraison = formData?.dateLivraison ?? "";
-  const urgence = formData?.urgence ?? 3;
-  const deballe = !!formData?.deballe; // ✅ NEW: booléen déballé
+  const { formData, handleChange, resetForm, setFormData } = useForm({
+    numero: "",
+    client: "",
+    quantite: "",
+    points: "",
+    vitesseMoyenne: "",
+    dateLivraison: "",
+    urgence: 3,
+    deballe: false,
+    types: [],
+    options: [],
+    linkedCommandeId: null,
+    sameMachineAsLinked: false,
+    startAfterLinked: false
+  });
 
-  const selectedTypes = useMemo(
-  () => (Array.isArray(formData?.types) ? formData.types : []),
-  [formData?.types]
-);
+  const {
+    numero,
+    client,
+    quantite,
+    points,
+    vitesseMoyenne,
+    dateLivraison,
+    urgence,
+    deballe,
+    types,
+    options,
+    sameMachineAsLinked,
+    startAfterLinked
+  } = formData;
 
-const selectedOptions = useMemo(
-  () => (Array.isArray(formData?.options) ? formData.options : []),
-  [formData?.options]
-);
+  // Liaison
+  const linkedId = linkedCommandeId;
 
-  // ✅ NEW: Sets pour des includes O(1)
-  const selectedTypesSet = useMemo(() => new Set(selectedTypes), [selectedTypes]);
-  const selectedOptionsSet = useMemo(() => new Set(selectedOptions), [selectedOptions]);
+  // Simulation
+  const { simulation, simulate } = useSimulation();
 
-  const selectedArticleLabel = selectedTypes?.[0] ?? null;
+  // Statut
+  const { statut, setStatut } = useStatut();
 
-  // Ensemble des options autorisées pour l’article sélectionné
-  const allowedSet = useMemo(() => {
-    try {
-      if (!selectedArticleLabel) return null;
-      const set = getAllowedBroderieForArticle(broderieTags || [], selectedArticleLabel);
-      return set && set.size > 0 ? set : null;
-    } catch {
-      return null;
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditing && commande) {
+        setFormData({
+          numero: commande.numero || "",
+          client: commande.client || "",
+          quantite: commande.quantite || "",
+          points: commande.points || "",
+          vitesseMoyenne: commande.vitesseMoyenne || "",
+          dateLivraison: commande.dateLivraison || "",
+          urgence: commande.urgence || 3,
+          deballe: commande.deballe || false,
+          types: commande.types || [],
+          options: commande.options || [],
+          linkedCommandeId: commande.linked_commande_id || null,
+          sameMachineAsLinked: commande.same_machine_as_linked || false,
+          startAfterLinked: commande.start_after_linked || false
+        });
+        setLinkedCommandeId(commande.linked_commande_id || null);
+      } else {
+        resetForm();
+        setLinkedCommandeId(null);
+      }
+      setSaved(false);
     }
-  }, [selectedArticleLabel, broderieTags]);
+  }, [isOpen, isEditing, commande, setFormData, resetForm, setLinkedCommandeId]);
 
-  // Liste affichée : si allowedSet est null → on montre tout
-  const filteredBroderieTags = useMemo(() => {
-    const list = Array.isArray(broderieTags) ? broderieTags : [];
-    if (!allowedSet) return list;
-    return list.filter((tag) => allowedSet.has(normalizeOne(tag.label)));
-  }, [broderieTags, allowedSet]);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const data = {
+      numero: numero.trim(),
+      client: client.trim(),
+      quantite: parseInt(quantite) || 0,
+      points: parseInt(points) || 0,
+      vitesseMoyenne: parseFloat(vitesseMoyenne) || 0,
+      dateLivraison: dateLivraison || null,
+      urgence: parseInt(urgence) || 3,
+      deballe,
+      types: types.filter(t => t.trim()),
+      options: options.filter(o => o.trim()),
+      linked_commande_id: linkedId,
+      same_machine_as_linked: sameMachineAsLinked,
+      start_after_linked: startAfterLinked
+    };
+
+    try {
+      await onSave(data);
+      setSaved(true);
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+    }
+  };
 
   if (!isOpen) return null;
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(multiEnabled ? { flow: "multi" } : { flow: "mono" });
-  };
-
-  // ✅ NEW: handler pour cocher/décocher "déballé"
-  const handleDeballeChange = (e) => {
-    const checked = e.target.checked;
-    // on fabrique un "event" compatible pour ton handleChange
-    handleChange?.({ target: { name: "deballe", value: checked } });
-  };
 
   return (
     <div className="modal-overlay">
@@ -104,60 +129,52 @@ const selectedOptions = useMemo(
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
                 type="checkbox"
-                checked={!!isLinked}
+                checked={linkedId !== null}
                 onChange={(e) => {
-                  const val = e.target.checked;
-                  setIsLinked(val);
-                  if (!val) {
+                  if (!e.target.checked) {
                     setLinkedCommandeId(null);
-                    setSameMachineAsLinked(false);
-                    setStartAfterLinked(true);
+                    handleChange("sameMachineAsLinked", false);
+                    handleChange("startAfterLinked", false);
                   }
                 }}
               />
-              Cette commande est-elle liée à une commande existante ?
+              Lier à une commande existante
             </label>
 
-            {isLinked && (
+            {linkedId !== null && (
               <>
                 <label>
                   Sélectionnez la commande liée :
                   <select
-                    value={linkedCommandeId || ""}
-                    onChange={(e) =>
-                      setLinkedCommandeId(e.target.value ? Number(e.target.value) : null)
-                    }
+                    value={linkedId || ""}
+                    onChange={(e) => setLinkedCommandeId(e.target.value || null)}
                   >
                     <option value="">-- choisir --</option>
                     {Array.isArray(linkableCommandes) &&
-                      linkableCommandes
-                        .filter((c) => !formData?.id || c.id !== formData.id)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            #{c.numero} — {c.client} ({c.statut})
-                          </option>
-                        ))}
+                      linkableCommandes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          #{c.numero} — {c.client} ({c.statut})
+                        </option>
+                      ))}
                   </select>
                 </label>
 
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
-                    checked={!!sameMachineAsLinked}
-                    onChange={(e) => setSameMachineAsLinked(e.target.checked)}
-                    disabled={!linkedCommandeId}
+                    checked={sameMachineAsLinked}
+                    onChange={(e) => handleChange("sameMachineAsLinked", e.target.checked)}
                   />
-                  Utiliser la même brodeuse (même machine) que la commande liée
+                  Même machine que la commande liée
                 </label>
 
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
-                    checked={!!startAfterLinked}
-                    onChange={(e) => setStartAfterLinked(e.target.checked)}
-                    disabled={!linkedCommandeId}
+                    checked={startAfterLinked}
+                    onChange={(e) => handleChange("startAfterLinked", e.target.checked)}
                   />
-                  Planifier après la commande liée (enchaînement)
+                  Commencer après la commande liée
                 </label>
               </>
             )}
@@ -168,9 +185,8 @@ const selectedOptions = useMemo(
             Numéro de commande :
             <input
               type="text"
-              name="numero"
               value={numero}
-              onChange={handleChange}
+              onChange={(e) => handleChange("numero", e.target.value)}
               required
             />
           </label>
@@ -179,9 +195,8 @@ const selectedOptions = useMemo(
             Client :
             <input
               type="text"
-              name="client"
               value={client}
-              onChange={handleChange}
+              onChange={(e) => handleChange("client", e.target.value)}
               required
             />
           </label>
@@ -190,9 +205,8 @@ const selectedOptions = useMemo(
             Quantité :
             <input
               type="number"
-              name="quantite"
               value={quantite}
-              onChange={handleChange}
+              onChange={(e) => handleChange("quantite", e.target.value)}
               min="1"
               required
             />
@@ -202,10 +216,9 @@ const selectedOptions = useMemo(
             Points :
             <input
               type="number"
-              name="points"
               value={points}
-              onChange={handleChange}
-              min="1"
+              onChange={(e) => handleChange("points", e.target.value)}
+              min="0"
               required
             />
           </label>
@@ -214,11 +227,10 @@ const selectedOptions = useMemo(
             Vitesse moyenne (points/minute) :
             <input
               type="number"
-              name="vitesseMoyenne"
               value={vitesseMoyenne}
-              onChange={handleChange}
-              placeholder="680"
-              min="1"
+              onChange={(e) => handleChange("vitesseMoyenne", e.target.value)}
+              min="0.1"
+              step="0.1"
             />
           </label>
 
@@ -226,16 +238,14 @@ const selectedOptions = useMemo(
             Date livraison :
             <input
               type="date"
-              name="dateLivraison"
               value={dateLivraison}
-              onChange={handleDateChange}
-              aria-label="Date de livraison (JJ/MM/AAAA)"
+              onChange={(e) => handleChange("dateLivraison", e.target.value)}
             />
           </label>
 
           <label>
             Urgence :
-            <select name="urgence" value={urgence} onChange={handleChange}>
+            <select name="urgence" value={urgence} onChange={(e) => handleChange("urgence", e.target.value)}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
                   {n}
@@ -248,74 +258,56 @@ const selectedOptions = useMemo(
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
               type="checkbox"
-              name="deballe"
               checked={deballe}
-              onChange={handleDeballeChange}
+              onChange={(e) => handleChange("deballe", e.target.checked)}
             />
-            Commande déballée ?
+            Commande déjà déballée
           </label>
 
           {/* ----- TAGS ----- */}
           <label>Types :</label>
-          <div className="tags-container">
-            {Array.isArray(articleTags) &&
-              articleTags.map((tag, idx) => {
-                const isActive = selectedTypesSet.has(tag.label); // ✅ Set
-                const key = tag.id ?? `article-${slugify(tag.label)}-${idx}`;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`tag ${isActive ? "active" : ""}`}
-                    onClick={() => toggleTag("types", tag.label)}
-                    aria-pressed={isActive}
-                    title={tag.label}
-                  >
-                    {tag.label}
-                  </button>
-                );
-              })}
-          </div>
+          <TagsPicker
+            items={articleTags}
+            selected={types}
+            onToggle={(label) => {
+              const newTypes = types.includes(label)
+                ? types.filter(t => t !== label)
+                : [...types, label];
+              handleChange("types", newTypes);
+            }}
+          />
 
           <label>Options :</label>
-          <div className="tags-container">
-            {Array.isArray(filteredBroderieTags) &&
-              filteredBroderieTags.map((tag, idx) => {
-                const isActive = selectedOptionsSet.has(tag.label); // ✅ Set
-                const key = tag.id ?? `option-${slugify(tag.label)}-${idx}`;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`tag ${isActive ? "active" : ""}`}
-                    onClick={() => toggleTag("options", tag.label)}
-                    aria-pressed={isActive}
-                    title={tag.label}
-                  >
-                    {tag.label}
-                  </button>
-                );
-              })}
-          </div>
+          <TagsPicker
+            items={broderieTags}
+            selected={options}
+            onToggle={(label) => {
+              const newOptions = options.includes(label)
+                ? options.filter(o => o !== label)
+                : [...options, label];
+              handleChange("options", newOptions);
+            }}
+          />
 
           {/* ✅ Multi-machines */}
           <div className="bloc-liaison" style={{ display: "grid", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
                 type="checkbox"
-                checked={multiEnabled}
-                onChange={(e) => setMultiEnabled(e.target.checked)}
+                checked={false} // TODO: implement multi-machine logic
+                onChange={() => {}} // TODO: implement
               />
-              Faire avec plusieurs machines : Indisponible pour le moment
+              Répartition multi-machines
             </label>
           </div>
 
           <button type="submit" className="btn-enregistrer">
             Enregistrer
           </button>
+
+          {saved && <div className="message-saved">✅ Enregistré</div>}
         </form>
 
-        {saved && <div className="message-saved">✅ Enregistré</div>}
         <button className="btn-fermer" onClick={onClose}>
           Fermer
         </button>

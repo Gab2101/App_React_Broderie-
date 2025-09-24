@@ -1,6 +1,7 @@
-// src/context/EtiquettesContext.js
+// src/context/EtiquettesContext.jsx
 import React, { createContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../supabaseClient";
+import { useError } from "../hooks/useError";
 
 export const EtiquettesContext = createContext({
   articleTags: [],
@@ -21,6 +22,9 @@ export function EtiquettesProvider({ children }) {
   const [broderieTags, setBroderieTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Use the error handling hook
+  const { handleError } = useError();
 
   /* =========================
      Helpers immuables
@@ -102,7 +106,7 @@ export function EtiquettesProvider({ children }) {
         { event: "*", schema: "public", table: "broderieTags" },
         (payload) => {
           const { eventType, new: newRow, old: oldRow } = payload;
-          setBroderieTags((prev) =>{
+          setBroderieTags((prev) => {
             if (eventType === "INSERT" || eventType === "UPDATE") {
               const next = upsertById(prev, newRow);
               return sortByLabel(next);
@@ -126,97 +130,108 @@ export function EtiquettesProvider({ children }) {
      CRUD — articleTags
   ========================== */
   const addArticleTag = useCallback(async (label, nettoyage) => {
-    // ⬇️ Si ta colonne s’appelle nettoyage_minutes, remplace "nettoyage" par "nettoyage_minutes"
-    const { data, error: err } = await supabase
-      .from("articleTags")
-      .insert([{ label: String(label ?? "").trim(), nettoyage }])
-      .select()
-      .single();
+    try {
+      const { data, error: err } = await supabase
+        .from("articleTags")
+        .insert([{ label: String(label ?? "").trim(), nettoyage }])
+        .select()
+        .single();
 
-    if (err) {
-      console.error("Erreur ajout article:", err);
-      setError(err.message);
+      if (err) throw err;
+
+      // Évite la double‑insertion si le realtime arrive avant :
+      setArticleTags((prev) => sortByLabel(upsertById(prev, data)));
+      return data;
+    } catch (error) {
+      handleError(error, { context: 'Ajout étiquette article' });
       return null;
     }
-    // Évite la double‑insertion si le realtime arrive avant :
-    setArticleTags((prev) => sortByLabel(upsertById(prev, data)));
-    return data;
-  }, []);
+  }, [handleError]);
 
   const updateArticleTag = useCallback(async (id, label, nettoyage) => {
-    const { data, error: err } = await supabase
-      .from("articleTags")
-      .update({ label: String(label ?? "").trim(), nettoyage })
-      .eq("id", id)
-      .select()
-      .single();
+    try {
+      const { data, error: err } = await supabase
+        .from("articleTags")
+        .update({ label: String(label ?? "").trim(), nettoyage })
+        .eq("id", id)
+        .select()
+        .single();
 
-    if (err) {
-      console.error("Erreur mise à jour article:", err);
-      setError(err.message);
+      if (err) throw err;
+
+      setArticleTags((prev) => sortByLabel(upsertById(prev, data)));
+      return data;
+    } catch (error) {
+      handleError(error, { context: 'Mise à jour étiquette article' });
       return null;
     }
-    setArticleTags((prev) => sortByLabel(upsertById(prev, data)));
-    return data;
-  }, []);
+  }, [handleError]);
 
   const deleteArticleTag = useCallback(async (id) => {
-    const { error: err } = await supabase.from("articleTags").delete().eq("id", id);
-    if (err) {
-      console.error("Erreur suppression article:", err);
-      setError(err.message);
+    try {
+      const { error: err } = await supabase.from("articleTags").delete().eq("id", id);
+      if (err) throw err;
+
+      setArticleTags((prev) => removeById(prev, id));
+      return true;
+    } catch (error) {
+      handleError(error, { context: 'Suppression étiquette article' });
       return false;
     }
-    setArticleTags((prev) => removeById(prev, id));
-    return true;
-  }, []);
+  }, [handleError]);
 
   /* =========================
      CRUD — broderieTags
   ========================== */
   const addBroderieTag = useCallback(async (label) => {
-    const { data, error: err } = await supabase
-      .from("broderieTags")
-      .insert([{ label: String(label ?? "").trim() }])
-      .select()
-      .single();
+    try {
+      const { data, error: err } = await supabase
+        .from("broderieTags")
+        .insert([{ label: String(label ?? "").trim() }])
+        .select()
+        .single();
 
-    if (err) {
-      console.error("Erreur ajout broderieTag :", err);
-      setError(err.message);
+      if (err) throw err;
+
+      setBroderieTags((prev) => sortByLabel(upsertById(prev, data)));
+      return data;
+    } catch (error) {
+      handleError(error, { context: 'Ajout étiquette broderie' });
       return null;
     }
-    setBroderieTags((prev) => sortByLabel(upsertById(prev, data)));
-    return data;
-  }, []);
+  }, [handleError]);
 
   const updateBroderieTag = useCallback(async (id, label) => {
-    const { data, error: err } = await supabase
-      .from("broderieTags")
-      .update({ label: String(label ?? "").trim() })
-      .eq("id", id)
-      .select()
-      .single();
+    try {
+      const { data, error: err } = await supabase
+        .from("broderieTags")
+        .update({ label: String(label ?? "").trim() })
+        .eq("id", id)
+        .select()
+        .single();
 
-    if (err) {
-      console.error("Erreur mise à jour broderieTag :", err);
-      setError(err.message);
+      if (err) throw err;
+
+      setBroderieTags((prev) => sortByLabel(upsertById(prev, data)));
+      return data;
+    } catch (error) {
+      handleError(error, { context: 'Mise à jour étiquette broderie' });
       return null;
     }
-    setBroderieTags((prev) => sortByLabel(upsertById(prev, data)));
-    return data;
-  }, []);
+  }, [handleError]);
 
   const deleteBroderieTag = useCallback(async (id) => {
-    const { error: err } = await supabase.from("broderieTags").delete().eq("id", id);
-    if (err) {
-      console.error("Erreur suppression broderieTag :", err);
-      setError(err.message);
+    try {
+      const { error: err } = await supabase.from("broderieTags").delete().eq("id", id);
+      if (err) throw err;
+
+      setBroderieTags((prev) => removeById(prev, id));
+      return true;
+    } catch (error) {
+      handleError(error, { context: 'Suppression étiquette broderie' });
       return false;
     }
-    setBroderieTags((prev) => removeById(prev, id));
-    return true;
-  }, []);
+  }, [handleError]);
 
   /* =========================
      Valeur de contexte mémoïsée

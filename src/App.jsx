@@ -1,12 +1,15 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
-import Banner from "./components/layout/Banner";
-import AdminNavbar from "./components/layout/AdminNavbar/AdminNavbar";
-import Machines from "./Pages/Admin/Machines/Machines";
-import PlanningPage from "./Pages/Admin/Planning/PlanningPage";
-import Parametres from "./Pages/Admin/Parametres/Parametres";
-import { EtiquettesProvider } from "./context/EtiquettesContext";
-import CommandesPage from "./Pages/Admin/Commandes/CommandesPage";
+import Banner from "./components/layout/Banner.jsx";
+import AdminNavbar from "./components/layout/AdminNavbar/AdminNavbar.jsx";
+import Navbar from "./components/layout/Navbar.jsx";
+import Machines from "./Pages/Admin/Machines/Machines.jsx";
+import PlanningPage from "./Pages/Admin/Planning/PlanningPage.jsx";
+import Parametres from "./Pages/Admin/Parametres/Parametres.jsx";
+import { EtiquettesProvider } from "./context/EtiquettesContext.jsx";
+import CommandesPage from "./Pages/Admin/Commandes/CommandesPage.jsx";
+import { ToastProvider } from "./components/common/Toast.jsx";
+import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 
 function AppContent() {
   const location = useLocation();
@@ -30,11 +33,15 @@ function AppContent() {
 
 function App() {
   return (
-    <EtiquettesProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </EtiquettesProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <EtiquettesProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </EtiquettesProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 

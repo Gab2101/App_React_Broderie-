@@ -2,13 +2,13 @@
 import React, { useContext, useState } from "react";
 import "../../../styles/Commandes.css";
 
-import NewButton from "../../../components/common/NewButton";
-import { EtiquettesContext } from "../../../context/EtiquettesContext";
+import NewButton from "@/components/common/NewButton.jsx";
+import { EtiquettesContext } from "@/context/EtiquettesContext.jsx";
 
-import CommandeFormModal from "./components/CommandeFormModal";
-import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal";
-import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal";
-import CommandeCard from "./components/CommandeCard";
+import CommandeFormModal from "./components/CommandeFormModal.jsx";
+import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal.jsx";
+import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal.jsx";
+import CommandeCard from "./components/CommandeCard.jsx";
 
 import useCommandesData from "./hooks/useCommandesData";
 import useForm from "./hooks/useForm";
@@ -31,7 +31,7 @@ import {
   deleteCommandeWithPlanning,
 } from "./services/commandesApi";
 import { createCommandeWithAssignations } from "./services/assignationsApi";
-import { supabase } from "../../../supabaseClient"; // ✅ pour la MAJ "déballé"
+import { supabase } from "@/supabaseClient"; // ✅ pour la MAJ "déballé"
 
 export default function CommandesPage() {
   // Étiquettes (context)
@@ -131,7 +131,7 @@ export default function CommandesPage() {
   };
 
   const filteredCommandes = React.useMemo(
-    () => (commandes || []).filter((c) => matchesQuery(c, debouncedQuery)),
+    () => (commandes || []).filter((c) => matchesQuery(c, debouncedQuery) && c.statut !== "Terminée"),
     [commandes, debouncedQuery]
   );
 
@@ -457,7 +457,7 @@ export default function CommandesPage() {
     } catch (e) {
       console.error("MAJ deballe échouée", e);
       setCommandes(prev); // rollback
-      alert("Impossible d’enregistrer le statut « déballé ». Réessaie.");
+      alert("Impossible d'enregistrer le statut « déballé ». Réessaie.");
     }
   };
 
@@ -567,25 +567,13 @@ export default function CommandesPage() {
       <CommandeFormModal
         isOpen={isFormOpen}
         onClose={() => !isSubmitting && setIsFormOpen(false)}
-        onSubmit={handleSubmitForm}
-        formData={form.formData}
-        handleChange={form.handleChange}
-        handleDateChange={form.handleDateChange}
-        toggleTag={form.toggleTag}
-        saved={form.saved}
-        isLinked={linked.isLinked}
-        setIsLinked={linked.setIsLinked}
+        onSave={handleSubmitForm}
+        commande={form.formData?.id ? form.formData : null}
         linkedCommandeId={linked.linkedCommandeId}
         setLinkedCommandeId={linked.setLinkedCommandeId}
-        sameMachineAsLinked={linked.sameMachineAsLinked}
-        setSameMachineAsLinked={linked.setSameMachineAsLinked}
-        startAfterLinked={linked.startAfterLinked}
-        setStartAfterLinked={linked.setStartAfterLinked}
         linkableCommandes={linkableCommandes}
         articleTags={articleTags}
         broderieTags={broderieTags}
-        machines={machines}
-        isEditing={Boolean(form.formData?.id)}
       />
 
       {/* Confirmation MONO */}

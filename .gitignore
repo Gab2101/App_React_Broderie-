@@ -121,3 +121,6 @@ public
 # Temporary folders
 tmp/
 temp/
+
+# Python virtual environment (for testing)
+venv/

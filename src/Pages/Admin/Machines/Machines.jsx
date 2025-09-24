@@ -32,7 +32,7 @@ const sortByName = (arr) =>
     String(a?.nom ?? "").localeCompare(String(b?.nom ?? ""), "fr", { sensitivity: "base" })
   );
 
-// --- Groupes (ordre d’affichage + helpers) ---
+// --- Groupes (ordre d'affichage + helpers) ---
 const GROUP_ORDER = ["Rose", "Verte Orange", "Verte grise", "Verte", "Autres"];
 
 function getGroupLabel(m) {
@@ -291,7 +291,7 @@ export default function Machines() {
       by.get(label).push(m);
     }
 
-    // tri interne par nom (identique à aujourd’hui)
+    // tri interne par nom (identique à aujourd'hui)
     for (const [, arr] of by) {
       arr.sort((a, b) =>
         String(a?.nom ?? "").localeCompare(String(b?.nom ?? ""), "fr", { sensitivity: "base" })
@@ -319,7 +319,7 @@ export default function Machines() {
 
       {/* Liste des machines */}
       <div className="liste-machines">
-        {/* Fallback : si aucune machine n’a de group_label, on garde l’affichage à plat */}
+        {/* Fallback : si aucune machine n'a de group_label, on garde l'affichage à plat */}
         {!(machines || []).some((m) => m.group_label) ? (
           <>
             {machines.map((machine) => (

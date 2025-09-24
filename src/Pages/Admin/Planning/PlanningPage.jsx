@@ -12,9 +12,9 @@ import {
 } from "../../../utils/time";
 import { updateCommandeStatut, replaceCommandeInArray } from "../../../utils/CommandesService";
 
-import CommandeModal from "./components/CommandeModal";
-import PlanningGrid from "./components/PlanningGrid";
-import PlanningDayView from "./PlanningDayView";
+import CommandeModal from "./components/CommandeModal.jsx";
+import PlanningGrid from "./components/PlanningGrid.jsx";
+import PlanningDayView from "./PlanningDayView.jsx";
 
 
 import { normalizeSlotForGrid } from "./lib/grid";
@@ -23,7 +23,7 @@ import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority"
 
 console.log("[Planning] regenerated (gros blocs par commande, non découpés par jour)");
 
-/** ---------- Légende d’urgence ---------- **/
+/** ---------- Légende d'urgence ---------- **/
 export function UrgencyLegend() {
   const labels = {
     1: "Faible (≥ 15 jours)",
@@ -51,6 +51,20 @@ export function UrgencyLegend() {
           {label}
         </div>
       ))}
+      <div className="legend-item">
+        <span
+          className="legend-color"
+          style={{
+            background: getUrgencyColor(1, "Terminée"),
+            display: "inline-block",
+            width: 14,
+            height: 14,
+            marginRight: 6,
+            borderRadius: 3,
+          }}
+        />
+        Terminée
+      </div>
     </div>
   );
 }
@@ -155,7 +169,7 @@ export default function PlanningPage() {
     setModalCommande((cur) => (cur?.id === updated.id ? { ...cur, ...updated } : cur));
   }, []);
 
-  /** --- Raccourcir quand “Terminée” --- */
+  /** --- Raccourcir quand "Terminée" --- */
   const shortenPlanningForCommandeTerminee = useCallback(async (commandeId, actualEnd = new Date()) => {
     const roundedEnd = ceilHourWorkParis(actualEnd ?? new Date());
     const endIso = roundedEnd.toISOString();
@@ -413,19 +427,19 @@ export default function PlanningPage() {
     return out;
   }, [planning, commandeById]);
 
-  // Couleur d’urgence par commande
+  // Couleur d'urgence par commande
   const commandeColorMap = useMemo(() => {
     const m = new Map();
     for (const c of commandes) {
       const dateLivraison =
         c.dateLivraison || c.deadline || c.date_livraison || c.date_limite || null;
       const level = computeUrgency(dateLivraison);
-      const color = getUrgencyColor(level);
+      const color = getUrgencyColor(level, c.statut);
       m.set(c.id, color);
     }
     return m;
   }, [commandes]);
-  
+
 
   // 14 jours ouvrés visibles
   const dayColumns = useMemo(() => {
@@ -459,7 +473,7 @@ export default function PlanningPage() {
     // 1) Rassembler toutes les tranches par (machineId, commandeId)
     const buckets = new Map(); // key: `${mid}::${cid}` -> { mid, cid, start: Date, end: Date }
     for (const row of filteredPlanning) {
-  
+
       const mids = normalizeMachineIds(row.machineId);
       const start = new Date(row.debut);
       const end = new Date(row.fin);
@@ -628,7 +642,7 @@ export default function PlanningPage() {
           <UrgencyLegend />
 
           <div className="zoom-buttons">
-            <button onClick={() => setStartDate(parisMidnight())}>Aujourd’hui</button>
+            <button onClick={() => setStartDate(parisMidnight())}>Aujourd'hui</button>
             <button
               onClick={() => {
                 const prev = parisMidnight(startDate);
@@ -647,7 +661,7 @@ export default function PlanningPage() {
             >
               14 jours suivants →
             </button>
-            <button onClick={() => goToDay(new Date())}>Voir aujourd’hui (vue jour)</button>
+            <button onClick={() => goToDay(new Date())}>Voir aujourd'hui (vue jour)</button>
           </div>
 
           <PlanningGrid

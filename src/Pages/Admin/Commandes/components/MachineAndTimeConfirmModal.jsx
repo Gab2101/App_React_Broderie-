@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // src/Pages/Admin/Commandes/components/MachineAndTimeConfirmModal.js
 import React, { useMemo } from "react";
 import { convertHoursToHHMM } from "../../../../utils/time";
@@ -83,10 +84,17 @@ function computePreviewMinutes({
     coefTotalEquivalent,
   };
 }
+=======
+import React, { useState, useEffect } from "react";
+import { convertHoursToHHMM } from "@/utils/time.js";
+
+const clampPercentToStep5 = (value) => Math.round(value / 5) * 5;
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
 
 export default function MachineAndTimeConfirmModal({
   isOpen,
   onClose,
+<<<<<<< HEAD
   machines = [],
   formData,
   selectedScenario,         // scénario par défaut (machine sélectionnée)
@@ -158,6 +166,34 @@ export default function MachineAndTimeConfirmModal({
     };
   });
 
+=======
+  commande,
+  machineOptions,
+  onConfirm,
+  preview,
+  finEstimee
+}) {
+  const [selectedMachine, setSelectedMachine] = useState(null);
+  const [confirmCoef, setConfirmCoef] = useState(100);
+
+  useEffect(() => {
+    if (isOpen && machineOptions.length > 0) {
+      setSelectedMachine(machineOptions[0]?.m || null);
+      setConfirmCoef(100);
+    }
+  }, [isOpen, machineOptions]);
+
+  if (!isOpen) return null;
+
+  const neededTypes = Array.isArray(commande?.types) ? commande.types : [];
+  const isMono = !commande?.multiMachine;
+
+  const handleConfirm = () => {
+    if (!selectedMachine) return;
+    onConfirm(selectedMachine.id, confirmCoef);
+  };
+
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
   return (
     <div className="modal__backdrop" role="dialog" aria-modal="true">
       <div className="modal">
@@ -168,7 +204,11 @@ export default function MachineAndTimeConfirmModal({
 
         <div className="modal__content">
           <div className="muted" style={{ marginBottom: 8 }}>
+<<<<<<< HEAD
             Types d’article : {neededTypes.length ? neededTypes.join(" • ") : "—"}
+=======
+            Types d'article : {neededTypes.length ? neededTypes.join(" • ") : "—"}
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
           </div>
 
           {/* Réglage du % appliqué (UNIQUEMENT broderie) */}
@@ -177,11 +217,19 @@ export default function MachineAndTimeConfirmModal({
               Coefficient broderie (%)
               <input
                 type="range"
+<<<<<<< HEAD
                 min={50}
                 max={500}
                 step={5}
                 value={clampPercentToStep5(Number(confirmCoef || 100))}
                 onChange={(e) => setConfirmCoef?.(clampPercentToStep5(Number(e.target.value)))}
+=======
+                min="50"
+                max="500"
+                step="5"
+                value={confirmCoef}
+                onChange={(e) => setConfirmCoef(Number(e.target.value))}
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
                 style={{ width: "100%" }}
               />
             </label>
@@ -189,6 +237,7 @@ export default function MachineAndTimeConfirmModal({
               <span>50%</span><strong>{clampPercentToStep5(Number(confirmCoef || 100))}%</strong><span>500%</span>
             </div>
             <div className="muted" style={{ marginTop: 4 }}>
+<<<<<<< HEAD
               (Le pourcentage s’applique uniquement au temps de <strong>broderie</strong>. Le <em>nettoyage</em> reste inchangé.)
             </div>
           </div>
@@ -208,11 +257,36 @@ export default function MachineAndTimeConfirmModal({
               </label>
               <div className="muted" style={{ marginTop: 4 }}>
                 La broderie théorique est divisée par ce nombre. Le nettoyage n’est pas modifié.
+=======
+              (Le pourcentage s'applique uniquement au temps de <strong>broderie</strong>. Le <em>nettoyage</em> reste inchangé.)
+            </div>
+          </div>
+
+          {isMono && (
+            <div style={{ marginTop: 12 }}>
+              <label>
+                Nombre d'unités mono utilisées en parallèle
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={1}
+                  disabled
+                  style={{ width: "60px", marginLeft: 8 }}
+                />
+              </label>
+              <div className="muted" style={{ marginTop: 4 }}>
+                La broderie théorique est divisée par ce nombre. Le nettoyage n'est pas modifié.
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
               </div>
             </div>
           )}
 
+<<<<<<< HEAD
           {/* Récap’ durée (théorique vs appliquée) */}
+=======
+          {/* Récap' durée (théorique vs appliquée) */}
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
           <div style={{ marginTop: 12, padding: 8, border: "1px solid #eee", borderRadius: 8 }}>
             <div><strong>Broderie (théorique adj.)</strong> : {preview.broderieTheoAdj} min</div>
             <div><strong>Nettoyage (théorique)</strong> : {preview.nettoyageApplique} min</div>
@@ -229,8 +303,16 @@ export default function MachineAndTimeConfirmModal({
               Machine
               <select
                 value={selectedMachine?.id ?? ""}
+<<<<<<< HEAD
                 onChange={(e) => setMachineAssignee?.(e.target.value)}
                 style={{ marginLeft: 8 }}
+=======
+                onChange={(e) => {
+                  const machine = machineOptions.find(opt => opt.m.id === e.target.value)?.m;
+                  setSelectedMachine(machine || null);
+                }}
+                style={{ width: "100%", marginTop: 4 }}
+>>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
               >
                 {machineOptions.map(({ m, label }) => (
                   <option key={m.id} value={m.id}>{label}</option>

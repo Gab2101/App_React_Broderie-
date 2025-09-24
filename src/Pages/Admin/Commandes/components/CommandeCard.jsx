@@ -1,204 +1,79 @@
-// src/Pages/Admin/Commandes/components/CommandeCard.jsx
-import React from "react";
-import StatusBadge from "../../../../components/common/StatusBadge";
-import { convertDecimalToTime } from "../../../../utils/time";
-import { calculerDurees } from "../../../../utils/calculs";
-import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
-import { clampPercentToStep5 } from "../utils/timeRealtime";
-import { getColorFromId, getUrgencyColor, computeUrgency } from "../../Planning/lib/priority";
-
-const parisDateTime = (d, opts = {}) =>
-  d ? new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...opts }) : null;
-const parisDate = (d) =>
-  d ? new Date(d).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : null;
+import React, { useState } from "react";
+import StatusBadge from "@/components/common/StatusBadge.jsx";
+import { convertDecimalToTime } from "@/utils/time";
+import { STATUTS } from "../utils/statut";
 
 export default function CommandeCard({
   cmd,
-  STATUTS,
-  onChangeStatut,
   onEdit,
   onDelete,
-  machines = [],
-  articleTags = [],
-  nettoyageRules = [],
-  onToggleDeballe, // (id, bool) => Promise|void
+  onStatutChange,
+  onDeballeChange,
+  hideADeballerUI = false,
+  livraisonLabel,
+  debutLabel,
+  finLabel,
+  t,
+  coefAffiche
 }) {
-  const bg = getColorFromId(cmd.id);
-  const urgencyLevel = Number(cmd?.urgence ?? computeUrgency(cmd?.dateLivraison));
-  const borderColor = getUrgencyColor(urgencyLevel);
+  const [savingDeballe, setSavingDeballe] = useState(false);
+  const [deballeLocal, setDeballeLocal] = useState(cmd.deballe || false);
 
-  // ✅ État local optimiste pour "déballé"
-  const [deballeLocal, setDeballeLocal] = React.useState(!!cmd?.deballe);
-  const [savingDeballe, setSavingDeballe] = React.useState(false);
-  React.useEffect(() => {
-    // se resynchronise si le parent change (refetch, etc.)
-    setDeballeLocal(!!cmd?.deballe);
-  }, [cmd?.deballe, cmd?.id]);
-
-  const isTerminee = (cmd.statut || "") === "Terminée";
-
-  // ★ Helpers pour l'auto-déballage & masquage UI
-  const shouldAutoDeballe = (statut) => statut === "En cours" || statut === "Terminée";
-  const isRunningOrDone = shouldAutoDeballe(cmd?.statut);
-  const hideADeballerUI = deballeLocal || isRunningOrDone; // si déjà déballé ou en cours/terminée → on cache
-
-  // ★ Backfill/sanitation si la donnée arrive déjà en "En cours/Terminée" avec deballe=false
-  const autoSetRef = React.useRef(false);
-  React.useEffect(() => {
-    if (!autoSetRef.current && shouldAutoDeballe(cmd?.statut) && !cmd?.deballe) {
-      autoSetRef.current = true; // éviter les doubles appels
-      (async () => {
-        try {
-          setSavingDeballe(true);
-          setDeballeLocal(true); // optimiste
-          await onToggleDeballe?.(cmd.id, true);
-        } catch (e) {
-          console.error("Auto-set deballe failed:", e);
-          setDeballeLocal(false); // rollback si échec
-        } finally {
-          setSavingDeballe(false);
-        }
-      })();
-    }
-  }, [cmd?.statut, cmd?.deballe, cmd?.id, onToggleDeballe]);
-
-  const handleStatusChange = async (e) => {
-    const next = e.target.value;
-    if (next === "Terminée" && !isTerminee) {
-      const ok = window.confirm(
-        "Confirmer le passage au statut « Terminée » ?\nCe statut sera verrouillé."
-      );
-      if (!ok) return;
-    }
-
-    // ★ si on passe à En cours/Terminée et que deballe n'est pas encore true → forcer à true (persisté)
-    if (shouldAutoDeballe(next) && !deballeLocal) {
-      try {
-        setSavingDeballe(true);
-        setDeballeLocal(true);              // optimiste
-        await onToggleDeballe?.(cmd.id, true);
-      } catch (err) {
-        console.error("MAJ deballe auto échouée:", err);
-        setDeballeLocal(false);             // rollback si échec
-      } finally {
-        setSavingDeballe(false);
-      }
-    }
-
-    onChangeStatut(cmd.id, next);
-  };
-
-  // ✅ Toggle optimiste + sync parent/DB
-  const handleToggleDeballe = async (e) => {
-    const checked = e.target.checked;
-    setDeballeLocal(checked);                  // maj immédiate UI
+  const handleDeballeChange = async (checked) => {
+    setSavingDeballe(true);
+    setDeballeLocal(checked);
     try {
-      setSavingDeballe(true);
-      await onToggleDeballe?.(cmd.id, checked); // le parent persiste (Supabase)
-    } catch (err) {
-      console.error("MAJ deballe échouée:", err);
-      setDeballeLocal((v) => !v);               // rollback si échec
+      await onDeballeChange(cmd.id, checked);
     } finally {
       setSavingDeballe(false);
     }
   };
 
-  // Durées (fallback calcul si manquantes)
-  let b = cmd.duree_broderie_heures;
-  let n = cmd.duree_nettoyage_heures;
-  let t = cmd.duree_totale_heures;
-
-  if (b == null || n == null || t == null) {
-    const etiquetteArticle = cmd?.types?.[0] || null;
-    const nettoyageSec = computeNettoyageSecondsForOrder(
-      etiquetteArticle,
-      cmd?.options,
-      nettoyageRules,
-      articleTags
-    );
-    const quantite = Number(cmd?.quantite || 0);
-    const points = Number(cmd?.points || 0);
-    const nbTetes = Number(machines.find((m) => m.nom === cmd?.machineAssignee)?.nbTetes || 1);
-    const vitessePPM = Number(cmd?.vitesseMoyenne || 680);
-
-    const calc = calculerDurees({
-      quantite,
-      points,
-      vitesse: vitessePPM,
-      nbTetes,
-      nettoyageParArticleSec: nettoyageSec,
-    });
-
-    b = calc.dureeBroderieHeures;
-    n = calc.dureeNettoyageHeures;
-    t = calc.dureeTotaleHeures;
-  }
-
-  const theoriqueTotal = (Number(b) || 0) + (Number(n) || 0);
-  const coefAffiche =
-    theoriqueTotal > 0
-      ? clampPercentToStep5(Math.round((Number(t || 0) / theoriqueTotal) * 100))
-      : null;
-
-  const debutLabel = parisDateTime(cmd?.started_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
-  const finLabel   = parisDateTime(cmd?.finished_at, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
-  const livraisonLabel = parisDate(cmd?.dateLivraison);
-
   return (
     <div
       className="carte-commande"
       style={{
-        backgroundColor: bg,
-        borderLeft: `6px solid ${borderColor}`,
-        border: "1px solid #e0e0e0",
-        borderRadius: 12,
-        padding: 12,
+        border: "1px solid #ddd",
+        borderRadius: 8,
+        padding: 16,
         marginBottom: 12,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-        position: "relative",
+        backgroundColor: "#fff",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
       }}
     >
-      {/* ✅ Badge "À déballer" — n'apparaît plus si statut En cours/Terminée ou si déjà déballé */}
       {!hideADeballerUI && !deballeLocal && (
         <div
-          title="Commande à déballer"
-          aria-label="Commande à déballer"
           style={{
             position: "absolute",
             top: 8,
             right: 8,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
+            backgroundColor: "#ff6b35",
+            color: "white",
             padding: "4px 8px",
-            borderRadius: 8,
-            border: "1px solid #f5c2c7",
-            background: "#f8d7da",
-            color: "#842029",
+            borderRadius: 4,
             fontSize: 12,
-            fontWeight: 600,
+            fontWeight: "bold"
           }}
+          title="Commande à déballer"
         >
-          ⚠️ À déballer
+          À déballer
         </div>
       )}
 
       <div
         className="carte-commande__header"
-        style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}
       >
         <h3 style={{ margin: 0 }}>Commande #{cmd.numero}</h3>
         <StatusBadge statut={cmd.statut || "A commencer"} />
       </div>
 
-      {/* ✅ Toggle déballé — masqué si déjà déballé ou si En cours/Terminée */}
       {!hideADeballerUI && (
         <p style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <input
             type="checkbox"
             checked={deballeLocal}
-            onChange={handleToggleDeballe}
-            aria-label="Commande déballée"
+            onChange={(e) => handleDeballeChange(e.target.checked)}
             disabled={savingDeballe}
           />
           <span>Commande déballée {savingDeballe ? "…" : ""}</span>
@@ -206,6 +81,9 @@ export default function CommandeCard({
       )}
 
       <p><strong>Client :</strong> {cmd.client}</p>
+      {Array.isArray(cmd.types) && cmd.types.length > 0 && (
+        <p><strong>Types textile :</strong> {cmd.types.join(", ")}</p>
+      )}
       <p><strong>Quantité :</strong> {cmd.quantite}</p>
       <p><strong>Points :</strong> {cmd.points}</p>
       <p><strong>Urgence :</strong> {cmd.urgence}</p>
@@ -216,19 +94,8 @@ export default function CommandeCard({
         <StatusBadge statut={cmd.statut || "A commencer"} size="sm" />
         <select
           value={cmd.statut || "A commencer"}
-          onChange={handleStatusChange}
-          disabled={isTerminee}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 8,
-            border: `1px solid ${borderColor}`,
-            backgroundColor: isTerminee ? "#f5f5f5" : "#fff",
-            color: "#333",
-            outlineColor: borderColor,
-            cursor: isTerminee ? "not-allowed" : "pointer",
-          }}
-          title={isTerminee ? "Statut verrouillé (Terminée)" : "Changer le statut"}
-          aria-label="Changer le statut de la commande"
+          onChange={(e) => onStatutChange(cmd.id, e.target.value)}
+          style={{ marginLeft: 8 }}
         >
           {STATUTS.map((s) => (
             <option key={s} value={s}>{s}</option>
@@ -244,33 +111,40 @@ export default function CommandeCard({
         <div className="bloc-liaison-info">
           <strong>Liaison :</strong>{" "}
           {cmd.linked_commande_id ? `#${cmd.linked_commande_id}` : "—"} •{" "}
-          {cmd.same_machine_as_linked ? "même brodeuse" : "brodeuse libre"} •{" "}
-          {cmd.start_after_linked ? "enchaînée après" : "non enchaînée"}
+          {cmd.same_machine_as_linked ? "Même machine" : "Machine différente"} •{" "}
+          {cmd.start_after_linked ? "Après la liée" : "Parallèle"}
         </div>
       )}
 
-      <p><strong>Durée broderie (théorique) :</strong> {convertDecimalToTime(b ?? 0)}</p>
-      <p><strong>Durée nettoyage (théorique) :</strong> {convertDecimalToTime(n ?? 0)}</p>
       <p>
-        <strong>Durée totale (réelle appliquée) :</strong> {convertDecimalToTime(t ?? 0)}
+        <strong>Durée totale :</strong> {convertDecimalToTime(t ?? 0)}
         {coefAffiche ? <em style={{ marginLeft: 6, opacity: 0.7 }}>({coefAffiche}% appliqué)</em> : null}
       </p>
 
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
         <button
           onClick={() => onEdit(cmd)}
-          className="btn-enregistrer"
-          style={{ borderRadius: 8 }}
-          disabled={isTerminee}
-          title={isTerminee ? "Commande terminée : édition désactivée" : "Modifier"}
+          style={{
+            padding: "6px 12px",
+            backgroundColor: "#007bff",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer"
+          }}
         >
           Modifier
         </button>
         <button
           onClick={() => onDelete(cmd.id)}
-          className="btn-fermer"
-          style={{ borderRadius: 8 }}
-          title="Supprimer la commande"
+          style={{
+            padding: "6px 12px",
+            backgroundColor: "#dc3545",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer"
+          }}
         >
           Supprimer
         </button>
