@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { useMemo, useState, useCallback } from "react";
 import PropTypes from "prop-types";
 import TagItem from "./TagItem";
@@ -118,81 +117,10 @@ export default function ArticlesTagsSection({
           onClick={handleAdd}
           disabled={saving}
         >
-=======
-import React, { useState } from "react";
-import TagItem from "./TagItem";
-
-export default function ArticlesTagsSection({
-  articleTags,
-  addArticleTag,
-  updateArticleTag,
-  deleteArticleTag
-}) {
-  const [newTag, setNewTag] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [editingValue, setEditingValue] = useState("");
-
-  const handleAdd = async () => {
-    if (!newTag.trim()) return;
-
-    const result = await addArticleTag(newTag.trim());
-    if (result.ok) {
-      setNewTag("");
-    } else {
-      alert(result.reason);
-    }
-  };
-
-  const handleEdit = (tag) => {
-    setEditingId(tag.id);
-    setEditingValue(tag.label);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingValue.trim()) return;
-
-    const result = await updateArticleTag(editingId, editingValue.trim());
-    if (result.ok) {
-      setEditingId(null);
-      setEditingValue("");
-    } else {
-      alert(result.reason);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditingValue("");
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm("Supprimer ce tag article ?")) return;
-
-    const result = await deleteArticleTag(id);
-    if (!result.ok) {
-      alert(result.reason);
-    }
-  };
-
-  return (
-    <section className="tags-section">
-      <h3>Types d'articles</h3>
-
-      <div className="add-tag-form">
-        <input
-          type="text"
-          value={newTag}
-          onChange={(e) => setNewTag(e.target.value)}
-          placeholder="Nouveau type d'article"
-          onKeyPress={(e) => e.key === "Enter" && handleAdd()}
-        />
-        <button onClick={handleAdd} disabled={!newTag.trim()}>
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
           Ajouter
         </button>
       </div>
 
-<<<<<<< HEAD
       {/* Feedback */}
       {error && <p className="error-message">{error}</p>}
       {success && <p className="success-message">{success}</p>}
@@ -210,15 +138,10 @@ export default function ArticlesTagsSection({
       {/* Liste */}
       <ul>
         {filtered.map((tag) => (
-=======
-      <div className="tags-list">
-        {articleTags.map((tag) => (
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
           <TagItem
             key={tag.id}
             tag={tag}
             isEditing={editingId === tag.id}
-<<<<<<< HEAD
             editingLabel={editingLabel}
             onChangeLabel={setEditingLabel}
             onEdit={onEditWrap(tag)}
@@ -246,17 +169,3 @@ ArticlesTagsSection.propTypes = {
   updateArticleTag: PropTypes.func.isRequired,  // (id, label) => { ok, reason? }
   deleteArticleTag: PropTypes.func.isRequired,  // (id) => { ok, reason? }
 };
-=======
-            editingValue={editingValue}
-            onEdit={() => handleEdit(tag)}
-            onSaveEdit={handleSaveEdit}
-            onCancelEdit={handleCancelEdit}
-            onDelete={() => handleDelete(tag.id)}
-            onEditingValueChange={setEditingValue}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735

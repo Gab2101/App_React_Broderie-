@@ -1,20 +1,11 @@
-<<<<<<< HEAD
 // src/Pages/Admin/Commandes/components/MultiMachineSplitModal.jsx
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { roundMinutesTo5, computeProvisionalEnd } from "../utils/timeRealtime";
 // (optionnel pour affichage) import { convertHoursToHHMM } from "../../../../utils/time";
-=======
-import React, { useState, useEffect, useMemo } from "react";
-
-const inputStyle = { border: "1px solid #ccc", borderRadius: 4, padding: "4px 8px", fontSize: 12 };
-const panelStyle = { border: "1px solid #e3e3e3", borderRadius: 8, padding: 12, backgroundColor: "#fafafa" };
-const cardStyle = { display: "flex", alignItems: "center", gap: 8, padding: 8, border: "1px solid #ddd", borderRadius: 6, backgroundColor: "white" };
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
 
 export default function MultiMachineConfirmModal({
   isOpen,
   onClose,
-<<<<<<< HEAD
   machines = [],
   // Données de base (issues du form principal)
   formData, // attendu: { id, quantite, points, vitesseMoyenne }
@@ -294,80 +285,6 @@ export default function MultiMachineConfirmModal({
     background: "#fff",
   };
 
-=======
-  commande,
-  machines,
-  onConfirm,
-  preview
-}) {
-  const [selected, setSelected] = useState(new Set());
-  const [effUsed, setEffUsed] = useState(100);
-  const [coefUsed, setCoefUsed] = useState(100);
-  const [cleanPerItemUsed, setCleanPerItemUsed] = useState(0);
-  const [cleanBatchUsed, setCleanBatchUsed] = useState(0);
-  const [cleaningMode, setCleaningMode] = useState("per_item");
-  const [roundingMode, setRoundingMode] = useState("round");
-  const [startDate, setStartDate] = useState("");
-  const [planified, setPlanified] = useState(false);
-
-  const filtered = useMemo(() => {
-    return machines.filter(m => m.nom.toLowerCase().includes(""));
-  }, [machines]);
-
-  const checked = (id) => selected.has(id);
-  const toggle = (id) => {
-    const newSelected = new Set(selected);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelected(newSelected);
-  };
-
-  const rows = useMemo(() => {
-    if (!preview?.rows) return [];
-    return preview.rows.filter(r => selected.has(r.machineId));
-  }, [preview?.rows, selected]);
-
-  const totalHours = useMemo(() => {
-    return rows.reduce((sum, r) => sum + r.durationHours, 0);
-  }, [rows]);
-
-  const labelById = useMemo(() => {
-    const map = new Map();
-    machines.forEach(m => map.set(String(m.id), m.nom));
-    return map;
-  }, [machines]);
-
-  const errorText = selected.size === 0 ? "Sélectionnez au moins une machine" : null;
-
-  const submit = () => {
-    if (selected.size === 0) return;
-    onConfirm({
-      machineIds: Array.from(selected),
-      startDate: planified ? startDate : null,
-      coef: coefUsed
-    });
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      setSelected(new Set());
-      setEffUsed(100);
-      setCoefUsed(100);
-      setCleanPerItemUsed(0);
-      setCleanBatchUsed(0);
-      setCleaningMode("per_item");
-      setRoundingMode("round");
-      setStartDate("");
-      setPlanified(false);
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
   return (
     <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: 980 }}>
@@ -382,19 +299,12 @@ export default function MultiMachineConfirmModal({
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 type="text"
-<<<<<<< HEAD
                 placeholder="Rechercher une machine…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 style={inputStyle}
               />
               <span style={{ fontSize: 13, opacity: 0.75 }}>{selected.length} sélectionnée(s)</span>
-=======
-                placeholder="Filtrer machines..."
-                style={{ flex: 1, ...inputStyle }}
-              />
-              <span style={{ fontSize: 13, opacity: 0.75 }}>{selected.size} sélectionnée(s)</span>
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
             </div>
 
             <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
@@ -440,36 +350,22 @@ export default function MultiMachineConfirmModal({
           {/* Liste des machines */}
           <div style={{ ...panelStyle, maxHeight: 280, overflow: "auto", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
             {filtered.map((opt) => {
-<<<<<<< HEAD
               const checked = selected.includes(opt.value);
               return (
                 <label key={opt.value} style={cardStyle}>
                   <input type="checkbox" checked={checked} onChange={() => toggle(opt.value)} />
                   <span>{opt.label}</span>
-=======
-              return (
-                <label key={opt.id} style={cardStyle}>
-                  <input type="checkbox" checked={checked(opt.id)} onChange={() => toggle(opt.id)} />
-                  <span>{opt.nom}</span>
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
                 </label>
               );
             })}
             {filtered.length === 0 && <div style={{ padding: 8, fontSize: 13, opacity: 0.7 }}>Aucune machine.</div>}
           </div>
 
-<<<<<<< HEAD
           {/* Récap résultats */}
           {errorText ? (
             <div style={{ color: "#c62828", fontSize: 13 }}>{errorText}</div>
           ) : (
             selected.length > 0 && rows.length > 0 && (
-=======
-          {errorText ? (
-            <div style={{ color: "#c62828", fontSize: 13 }}>{errorText}</div>
-          ) : (
-            selected.size > 0 && rows.length > 0 && (
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
               <div style={{ border: "1px dashed #e3e3e3", borderRadius: 10, padding: 10 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>
                   Durée totale (somme + batch) : {totalHours.toFixed(2)} h
@@ -506,42 +402,24 @@ export default function MultiMachineConfirmModal({
             <label style={{ fontSize: 13, opacity: 0.8 }}>Début planifié</label>
             <input
               type="datetime-local"
-<<<<<<< HEAD
               value={plannedStartLocal}
               onChange={(e) => setPlannedStartLocal(e.target.value)}
               style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #e3e3e3", background: "#fff" }}
-=======
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              disabled={!planified}
-              style={{ ...inputStyle, width: "100%" }}
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
             />
             <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
               <input
                 type="checkbox"
-<<<<<<< HEAD
                 checked={respectWorkHours}
                 onChange={(e) => setRespectWorkHours(e.target.checked)}
               />
               Respecter les heures ouvrées (08:00–18:00, sans week-end)
-=======
-                checked={planified}
-                onChange={(e) => setPlanified(e.target.checked)}
-              />
-              <span style={{ fontSize: 13 }}>Planifier immédiatement</span>
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
             </label>
           </div>
         </div>
 
         <div className="modal__footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button onClick={onClose}>Annuler</button>
-<<<<<<< HEAD
           <button onClick={submit} disabled={selected.length === 0 || !!errorText}>Valider</button>
-=======
-          <button onClick={submit} disabled={selected.size === 0 || !!errorText}>Valider</button>
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
         </div>
       </div>
     </div>

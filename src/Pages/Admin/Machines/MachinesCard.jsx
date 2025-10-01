@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // src/pages/Machines/MachinesCard.js
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
@@ -117,27 +116,3 @@ MachinesCard.propTypes = {
 };
 
 export default React.memo(MachinesCard);
-=======
-import React from "react";
-
-export default function MachinesCard({ machine, onEdit, onDelete }) {
-  return (
-    <div className="machine-card">
-      <div className="machine-card__header">
-        <h3>{machine.nom}</h3>
-        <div className="machine-card__actions">
-          <button onClick={() => onEdit(machine)}>Modifier</button>
-          <button onClick={() => onDelete(machine.id)}>Supprimer</button>
-        </div>
-      </div>
-
-      <div className="machine-card__content">
-        <p><strong>Type :</strong> {machine.type || "—"}</p>
-        <p><strong>Capacité :</strong> {machine.capacite || "—"}</p>
-        <p><strong>État :</strong> {machine.etat || "—"}</p>
-        {machine.description && <p><strong>Description :</strong> {machine.description}</p>}
-      </div>
-    </div>
-  );
-}
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
