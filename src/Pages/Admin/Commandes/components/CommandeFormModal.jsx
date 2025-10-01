@@ -3,7 +3,7 @@ import useCommandesData from "../hooks/useCommandesData";
 import useForm from "../hooks/useForm";
 import useSimulation from "../hooks/useSimulation";
 import useStatut from "../hooks/useStatut";
-import { TagsPicker } from "./TagsPicker";
+import TagsPicker from "./TagsPicker";
 
 export default function CommandeFormModal({
   isOpen,

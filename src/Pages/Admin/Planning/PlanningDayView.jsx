@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // src/Pages/Admin/Planning/PlanningDayView.jsx
 import React, { useMemo } from "react";
 import "./PlanningDayView.css";
@@ -51,7 +50,7 @@ export default function PlanningDayView({
     return d3;
   }, [day, lunchEnd]);
 
-  // En-tête horaires : on SAUTE la pause (12–13 n’apparaît pas)
+  // En-tête horaires : on SAUTE la pause (12–13 n'apparaît pas)
   const slots = useMemo(() => {
     const arr = [];
     for (let h = workStart; h < workEnd; h++) {
@@ -61,17 +60,17 @@ export default function PlanningDayView({
     return arr;
   }, [workStart, workEnd, lunchStart, lunchEnd]);
 
-  // Minutes “ouvrées” (on retire la pause de la largeur)
+  // Minutes "ouvrées" (on retire la pause de la largeur)
   const minutesBeforeLunch = Math.max(0, (lunchStartDate - startOfDay) / 60000);
   const lunchMinutes = Math.max(0, (lunchEndDate - lunchStartDate) / 60000);
   const totalWorkingMinutesRaw = Math.max(0, (endOfDay - startOfDay) / 60000 - lunchMinutes);
   const totalWorkingMinutes = totalWorkingMinutesRaw > 0 ? totalWorkingMinutesRaw : 0;
 
-  // Convertit un instant -> offset en minutes sur l’axe OUVRÉ (pause compressée)
+  // Convertit un instant -> offset en minutes sur l'axe OUVRÉ (pause compressée)
   const toWorkingOffsetMin = (t) => {
     if (t <= lunchStartDate) return Math.max(0, (t - startOfDay) / 60000);
     if (t >= lunchEndDate) return minutesBeforeLunch + (t - lunchEndDate) / 60000;
-    // si t est dans la pause, on le “clampe” au début de la pause
+    // si t est dans la pause, on le "clampe" au début de la pause
     return minutesBeforeLunch;
   };
 
@@ -214,49 +213,6 @@ export default function PlanningDayView({
             })}
           </tbody>
         </table>
-=======
-import React from "react";
-
-export default function PlanningDayView({ date, events, onEventClick }) {
-  const formatTime = (date) => {
-    return new Date(date).toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  return (
-    <div className="planning-day-view">
-      <h3>{formatDate(date)}</h3>
-
-      <div className="day-events">
-        {events.length === 0 ? (
-          <p className="no-events">Aucun événement prévu pour cette journée</p>
-        ) : (
-          events.map(event => (
-            <div
-              key={event.id}
-              className="event-item"
-              onClick={() => onEventClick(event)}
-            >
-              <div className="event-time">
-                {formatTime(event.start)} - {formatTime(event.end)}
-              </div>
-              <div className="event-title">{event.title}</div>
-              <div className="event-description">{event.description}</div>
-            </div>
-          ))
-        )}
->>>>>>> 569ea764f271911548a727d2b8d582a5567e7735
       </div>
     </div>
   );
