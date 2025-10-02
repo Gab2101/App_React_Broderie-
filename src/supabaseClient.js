@@ -1,8 +1,8 @@
 // src/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://iejytndopjcloyqefbae.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imllanl0bmRvcGpjbG95cWVmYmFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI1NjIxOTAsImV4cCI6MjA2ODEzODE5MH0.GnF3IZ5SttFsAKZtWfBWsc1VROrvOZKwC47kPxIMQRY';
 
 if (!supabaseUrl) {
   alert("VITE_SUPABASE_URL is required");
