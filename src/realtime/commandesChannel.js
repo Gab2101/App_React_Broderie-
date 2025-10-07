@@ -8,13 +8,11 @@ let refCount = 0
 function safeSubscribe(ch) {
   try {
     ch.subscribe(status => {
-      if (status === 'SUBSCRIBED') console.log('Realtime subscription established')
-      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Realtime subscription failed')
-      else if (status === 'CLOSED') console.log('Realtime channel closed')
+      // Realtime status logging removed for production cleanliness
     })
     return true
   } catch (e) {
-    console.warn('[Realtime] subscribe skipped:', e?.message || e)
+    // Silent failure - realtime is not critical
     return false
   }
 }
@@ -35,8 +33,7 @@ export function attachCommandesListener(cb) {
   try {
     ensureChannel()
   } catch (e) {
-    console.warn('[Realtime] not available:', e?.message || e)
-    return () => {}
+    return () => {} // Silent failure handler
   }
   listeners.add(cb)
   refCount++

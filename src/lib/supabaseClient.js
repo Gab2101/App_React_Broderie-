@@ -27,10 +27,7 @@ function makeClient() {
     })
   }
 
-  if (import.meta.env.DEV) {
-    console.log('[Supabase] URL:', url)
-    console.log('[Supabase] Key: Present')
-  }
+  // Debug logs removed - check debug-supabase.js for diagnostics
 
   return createClient(url, key, {
     auth: {

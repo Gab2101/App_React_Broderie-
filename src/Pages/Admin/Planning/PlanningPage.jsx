@@ -510,6 +510,7 @@ export default function PlanningPage() {
         color: com ? (commandeColorMap.get(com.id) || undefined) : undefined,
         statut: com?.statut ?? "",
         client: com?.client || com?.client_nom || com?.client_name || "",
+        validation_client: com?.validation_client ?? false,
       });
     }
 

@@ -31,7 +31,7 @@ class ErrorBoundary extends React.Component {
     const timestamp = new Date().toISOString();
     const userAgent = navigator?.userAgent || 'Unknown';
     const url = window?.location?.href || 'Unknown';
-    const environment = process.env.NODE_ENV || 'unknown';
+    const environment = import.meta.env.MODE || 'unknown';
 
     const logMessage = formatErrorForLogging({
       ...classifiedError,
@@ -129,7 +129,7 @@ class ErrorBoundary extends React.Component {
               </button>
             </div>
 
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <details className="error-boundary-details">
                 <summary>Détails de l'erreur (développement)</summary>
                 <pre className="error-boundary-stack">

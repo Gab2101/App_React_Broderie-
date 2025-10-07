@@ -63,6 +63,16 @@ export default function useSimulation(opts = {}) {
         ? compatiblesStrict
         : machinesWithLabels.filter((m) => neededTypes.every((t) => m._labels.includes(t)));
 
+    // Debug: Log matching details for troubleshooting
+    console.log('[useSimulation] Machine compatibility debug:', {
+      neededTypes,
+      neededOptions,
+      compatiblesStrictCount: compatiblesStrict.length,
+      compatiblesCount: compatibles.length,
+      machinesLabels: machinesWithLabels.map(m => ({ id: m.id, nom: m.nom, labels: m._labels })),
+      compatiblesLabels: compatibles.map(m => ({ id: m.id, nom: m.nom, labels: m._labels }))
+    });
+
     if (compatibles.length === 0) {
       alert("Aucune machine compatible. Vérifie 'types' / 'options' (casse/espaces).");
       return;

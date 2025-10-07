@@ -87,7 +87,7 @@ button:hover,
 .carte-commande:hover,
 .carte-machine:hover,
 .carte-operateur:hover {
-  background-color: #F59C00; /* Fond ORANGE PUBOS */
+  background-color: #c0c0c0; /* Fond ORANGE PUBOS */
   transform: translateY(-3px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
@@ -157,7 +157,7 @@ button:hover,
 
 /* Quand l'étiquette est active (sélectionnée) */
 .tag.active {
-  background-color: #F59C00;       /* ORANGE PUBOS */
+  background-color: #929292;       /* ORANGE PUBOS */
   color: white;
 }
 

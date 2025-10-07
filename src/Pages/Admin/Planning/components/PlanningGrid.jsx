@@ -46,11 +46,16 @@ function mergeContinuousFromSlots(planningByMachine) {
       if (!cur) {
         byCommande.set(cid, {
           machineId: mid, commandeId: cid, start, end,
-          numero: s.numero, color: s.color, statut: s.statut, client: s.client
+          numero: s.numero, color: s.color, statut: s.statut, client: s.client,
+          validation_client: s.validation_client
         });
       } else {
         if (start < cur.start) cur.start = start;
         if (end   > cur.end)   cur.end   = end;
+        // Ensure validation_client is propagated even on merges
+        if (s.validation_client !== undefined) {
+          cur.validation_client = s.validation_client;
+        }
       }
     }
     out.set(mid, Array.from(byCommande.values()));
@@ -305,6 +310,8 @@ export default function PlanningGrid({
                     const color = b.color || commandeColorMap?.get?.(b.commandeId);
                     const title = `#${b.numero ?? b.commandeId} • ${b.client ?? ""} • ${b.statut ?? ""}`;
 
+                    const isValidated = b.validation_client !== false; // Default true if undefined
+
                     return (
                       <div
                         key={`${b.commandeId}:${mid}`}
@@ -328,11 +335,26 @@ export default function PlanningGrid({
                           overflow: "hidden",
                           color: "#fff",
                           textAlign: "center",
+                          opacity: isValidated ? 1 : 0.4,
+                          filter: isValidated ? 'none' : 'grayscale(70%) saturate(0.5)',
                         }}
                         onClick={() => onOpenCommande?.(b.commandeId)}
-                        title={title}
+                        title={`${title}${isValidated ? ' • Validé' : ' • Non validé'}`}
                       >
                         <span className="pg-block-label">#{b.numero ?? b.commandeId}</span>
+                        {isValidated ? null : (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            background: 'rgba(255, 255, 255, 0.8)',
+                            color: '#dc3545',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            marginLeft: '4px',
+                          }}>
+                            ✗
+                          </span>
+                        )}
                       </div>
                     );
                   })}

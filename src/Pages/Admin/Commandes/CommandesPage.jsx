@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/CommandesPage.jsx
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useCallback } from "react";
 import "../../../styles/Commandes.css";
 
 import NewButton from "@/components/common/NewButton.jsx";
@@ -15,7 +15,7 @@ import useForm from "./hooks/useForm";
 import useLinkedCommande from "./hooks/useLinkedCommande";
 import useSimulation from "./hooks/useSimulation";
 import useStatut from "./hooks/useStatut";
-import { groupAndSortByMachine } from "./utils/grouping";
+import { groupAndSortByMachine, groupByMachineAndDate } from "./utils/grouping";
 
 import {
   parseLocalDatetime,
@@ -82,12 +82,22 @@ export default function CommandesPage() {
   const [isMultiConfirmOpen, setIsMultiConfirmOpen] = useState(false);
   const [pendingMultiPayload, setPendingMultiPayload] = useState(null);
 
+  // Archive toggle for finished orders
+  const [showArchive, setShowArchive] = useState(false);
+
   /* =========================
-     A. États & UX de recherche
+     A. États & UX de recherche + filtrage date
      ========================= */
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const searchRef = React.useRef(null);
+
+  // Date filtering
+  const [dateFilter, setDateFilter] = useState({
+    enabled: false,
+    startDate: '',
+    endDate: '',
+  });
 
   // Debounce 250 ms
   React.useEffect(() => {
@@ -130,15 +140,42 @@ export default function CommandesPage() {
     return haystack.includes(q.toLowerCase());
   };
 
-  const filteredCommandes = React.useMemo(
-    () => (commandes || []).filter((c) => matchesQuery(c, debouncedQuery) && c.statut !== "Terminée"),
-    [commandes, debouncedQuery]
-  );
+  const filteredCommandes = React.useMemo(() => {
+    let filtered = (commandes || []).filter(c =>
+      matchesQuery(c, debouncedQuery) && c.statut !== "Terminée"
+    );
 
-  // Étape 1 : groupage + tri (sur la liste filtrée)
+    // Apply date filtering if enabled
+    if (dateFilter.enabled && (dateFilter.startDate || dateFilter.endDate)) {
+      const startDate = dateFilter.startDate ? new Date(dateFilter.startDate) : null;
+      const endDate = dateFilter.endDate ? new Date(dateFilter.endDate) : null;
+
+      filtered = filtered.filter(c => {
+        if (!c.dateLivraison) return dateFilter.startDate === '' && dateFilter.endDate === '';
+
+        const livraisonDate = new Date(c.dateLivraison);
+
+        if (startDate && endDate) {
+          return livraisonDate >= startDate && livraisonDate <= endDate;
+        } else if (startDate) {
+          return livraisonDate >= startDate;
+        } else if (endDate) {
+          return livraisonDate <= endDate;
+        }
+
+        return false;
+      });
+    }
+
+    return filtered;
+  }, [commandes, debouncedQuery, dateFilter]);
+
+  // Étape 1 : groupage conditionnel - machine seule par défaut, ou machine+date si filtre date actif
   const machineBuckets = React.useMemo(
-    () => groupAndSortByMachine(filteredCommandes),
-    [filteredCommandes]
+    () => dateFilter.enabled
+      ? groupByMachineAndDate(filteredCommandes)  // Avec sous-groupes par date
+      : groupAndSortByMachine(filteredCommandes),  // Par machine seulement
+    [filteredCommandes, dateFilter.enabled]
   );
 
   // -- Helpers de flux --
@@ -163,6 +200,19 @@ export default function CommandesPage() {
 
   const openFormForNew = () => {
     resetCreationState();
+    // Set default values for new order
+    form.setFormData({
+      quantite: 5000,           // Default quantity
+      points: 5000,              // Default points count
+      vitesseMoyenne: 750,       // Default 750 points per minute
+      urgence: 3,                // Default medium priority
+      client: '',
+      numero: '',
+      types: [],
+      options: [],
+      dateLivraison: '',
+      deballe: false,
+    });
     setIsFormOpen(true);
   };
 
@@ -190,20 +240,23 @@ export default function CommandesPage() {
   };
 
   // Soumission formulaire (création/édition)
-  const handleSubmitForm = async (config) => {
+  const handleSubmitForm = async (formData) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const qty = parseInt(form.formData.quantite, 10);
-      const pts = parseInt(form.formData.points, 10);
-      if (!Number.isFinite(qty) || !Number.isFinite(pts) || qty <= 0 || pts <= 0) {
-        alert("La quantité et le nombre de points doivent être supérieurs à zéro.");
+      const qty = parseInt(formData.quantite, 10);
+      const pts = parseInt(formData.points, 10);
+
+      // More robust validation - handle empty strings, undefined, null
+      if (isNaN(qty) || !Number.isFinite(qty) || qty <= 0 ||
+          isNaN(pts) || !Number.isFinite(pts) || pts <= 0) {
+        alert(`La quantité et le nombre de points doivent être supérieurs à zéro.`);
         return;
       }
 
       // ÉDITION
-      if (form.formData.id) {
-        const { error } = await apiUpdateCommande(form.formData);
+      if (formData.id) {
+        const { error } = await apiUpdateCommande(formData);
         if (error) {
           console.error(error);
           alert("Erreur lors de la mise à jour.");
@@ -215,46 +268,18 @@ export default function CommandesPage() {
         return;
       }
 
-      // CRÉATION : MULTI prioritaire
-      if (config?.flow === "multi") {
-        const list = Array.isArray(config.perMachine) ? config.perMachine : [];
-        const validList = list.filter((r) => r && r.machineId && Number(r.quantity) > 0);
-        if (validList.length < 2) {
-          alert("Sélectionnez au moins 2 machines avec des quantités > 0.");
-          return;
-        }
+      // CRÉATION : Par défaut MONO (multi-machines removed)
+      // Update form data with submitted values for simulation
+      form.setFormData(formData);
 
-        setCreationFlow("multi");
-        setPendingMultiPayload({
-          perMachine: validList,
-          meta: config.meta || null,
-          plannedStartISO:
-            config.plannedStartISO ||
-            (form.formData?.date_debut_planning
-              ? toUTCISOString(parseLocalDatetime(form.formData.date_debut_planning))
-              : toUTCISOString(snapToNextWorkStart(new Date(), DEFAULT_WORKDAY))),
-        });
-
+      await sim.handleSimulation();
+      if (sim.selectedScenario) {
+        setCreationFlow("mono");
         setIsFormOpen(false);
-        setIsConfirmOpen(false);
-        setIsMultiConfirmOpen(true);
-        return;
+        setIsConfirmOpen(true);
+      } else {
+        alert("Impossible de créer la commande - aucun scénario disponible.");
       }
-
-      // CRÉATION : MONO
-      if (config?.flow === "mono") {
-        if (creationFlow === "multi") return; // sécurité
-
-        await sim.handleSimulation();
-        if (sim.selectedScenario) {
-          setCreationFlow("mono");
-          setIsFormOpen(false);
-          setIsConfirmOpen(true);
-        }
-        return;
-      }
-
-      console.warn("[handleSubmitForm] Appel ignoré : payload inattendu", config);
     } finally {
       setIsSubmitting(false);
     }
@@ -389,8 +414,11 @@ export default function CommandesPage() {
   };
 
   // Garde-fou : empêcher 2 "En cours" sur une même machine
-  const safeChangeStatut = (id, nextStatut) => {
+  const safeChangeStatut = useCallback((id, nextStatut) => {
     try {
+      // Early validation
+      if (!id || !nextStatut) return;
+
       const current = commandes.find((c) => String(c.id) === String(id));
       if (!current) return;
 
@@ -424,11 +452,16 @@ export default function CommandesPage() {
         }
       }
 
-      handleChangeStatut(id, nextStatut);
+      // Final check before calling
+      if (typeof handleChangeStatut === 'function') {
+        handleChangeStatut(id, nextStatut);
+      } else {
+        console.error('[CommandesPage] handleChangeStatut is not a function');
+      }
     } catch (e) {
-      console.error("safeChangeStatut error", e);
+      console.error("safeChangeStatut error:", e);
     }
-  };
+  }, [commandes, handleChangeStatut]);
 
   /* =========================
      Toggle "déballé" (persistant)
@@ -462,6 +495,37 @@ export default function CommandesPage() {
   };
 
   /* =========================
+     Toggle "validation client" (persistant)
+     ========================= */
+  const handleToggleValidation = async (id, validated) => {
+    // UI optimiste (snapshot pour rollback)
+    const prev = commandes;
+    setCommandes((list) =>
+      list.map((c) => (String(c.id) === String(id) ? { ...c, validation_client: validated } : c))
+    );
+
+    try {
+      const { data, error } = await supabase
+        .from("commandes")
+        .update({ validation_client: validated })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Optionnel : réappliquer la ligne retournée (source de vérité)
+      setCommandes((list) =>
+        list.map((c) => (String(c.id) === String(id) ? { ...c, ...data } : c))
+      );
+    } catch (e) {
+      console.error("MAJ validation_client échouée", e);
+      setCommandes(prev); // rollback
+      alert("Impossible d'enregistrer la validation client. Réessaie.");
+    }
+  };
+
+  /* =========================
      Étape 2 + 3 : sections + barre colorée
      ========================= */
 
@@ -479,16 +543,59 @@ export default function CommandesPage() {
     return m || null;
   };
 
-  const getMachineLabel = (key) => {
+  const getMachineLabel = (key, orderCount = 0) => {
     const m = findMachineByKey(key);
-    return m?.nom || m?.name || m?.label || String(key);
+    const machineName = m?.nom || m?.name || m?.label || String(key);
+    return `${machineName} (${orderCount > 1 ? orderCount + ' commandes' : '1 commande'})`;
   };
 
-  // 2) Couleur de la machine (barre sous le titre)
+  // 2) Couleur de la machine (barre sous le titre + cartes)
+  // Color utility functions
+  const hexToRgb = (hex) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  };
+
+  const rgbToHex = (r, g, b) => "#" + [r, g, b].map(x => {
+    const hex = Math.round(x).toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  }).join("");
+
+  const blendColors = (color1, color2) => {
+    const rgb1 = hexToRgb(color1);
+    const rgb2 = hexToRgb(color2);
+    if (!rgb1 || !rgb2) return color1;
+
+    return rgbToHex(
+      (rgb1.r + rgb2.r) / 2,
+      (rgb1.g + rgb2.g) / 2,
+      (rgb1.b + rgb2.b) / 2
+    );
+  };
+
+  // Enhanced color function that considers machine groups
   const getMachineColor = (key) => {
     const m = findMachineByKey(key);
-    if (!m) return "var(--border, #e5e7eb)";
+    if (!m) return "#ffffff"; // Default white
 
+    // Check if machine belongs to a group - if so, use group-based coloring
+    const groupLabel = m.group_label;
+    if (groupLabel) {
+      // For group-based coloring, create consistent colors based on group
+      // Use a simple hash of group name to generate colors
+      const hash = groupLabel.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const hue = hash % 360; // Distribute across color wheel
+      const saturation = 65; // Medium saturation
+      const lightness = 75;  // Light background
+
+      return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    // Fall back to machine-specific color logic
     // Hex explicite
     const hex =
       m.couleur_hex || m.color_hex || m.hex || m.accentHex || m.badgeHex || m.badge_hex || null;
@@ -513,53 +620,189 @@ export default function CommandesPage() {
       jaune: "#F59E0B",
       gris: "#9CA3AF",
     };
-    return MAP[name] || "var(--border, #e5e7eb)";
+    return MAP[name] || "#ffffff"; // Default white
   };
 
   // 3) Ordre des sections : suivre `machines`, puis les clés restantes
-  const bucketKeys = React.useMemo(() => Array.from(machineBuckets.keys()), [machineBuckets]);
+  const machineKeys = React.useMemo(() => Array.from(machineBuckets.keys()), [machineBuckets]);
 
-  const orderedSectionKeys = React.useMemo(() => {
+  const orderedMachineKeys = React.useMemo(() => {
     const keys = [];
     for (const m of machines || []) {
       const candidates = [String(m.id), m.nom, m.name, m.label].filter(Boolean).map(String);
-      const match = bucketKeys.find((k) =>
+      const match = machineKeys.find((k) =>
         candidates.some((c) => c.toLowerCase() === String(k).toLowerCase())
       );
       if (match && !keys.includes(match)) keys.push(match);
     }
-    for (const k of bucketKeys) {
+    for (const k of machineKeys) {
       if (!keys.includes(k)) keys.push(k);
     }
     return keys;
-  }, [machines, bucketKeys]);
+  }, [machines, machineKeys]);
 
   // --- Rendu ---
   return (
     <div className="commandes-page">
-      <NewButton onClick={openFormForNew} disabled={isSubmitting}>
-        Nouvelle commande
-      </NewButton>
+      {/* Enhanced search bar - sticky positioned for better accessibility */}
+      <div className="commandes-search-sticky">
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', maxWidth: '1200px', margin: '0 auto', padding: '0 16px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder='Rechercher (client, réf, article, statut, tags…) — tape "/"'
+              aria-label="Rechercher une commande"
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '16px',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#007bff'}
+              onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+            />
+          </div>
 
-      {/* BARRE DE RECHERCHE */}
-      <div className="commandes-search">
-        <input
-          ref={searchRef}
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder='Rechercher (client, réf, article, statut, tags…) — tape "/"'
-          aria-label="Rechercher une commande"
-        />
-        {query && (
-          <button
-            className="clear-btn"
-            onClick={() => setQuery("")}
-            aria-label="Effacer la recherche"
-            title="Effacer"
-          >
-            ✕
-          </button>
+          {query && (
+            <button
+              className="clear-btn"
+              onClick={() => setQuery("")}
+              aria-label="Effacer la recherche"
+              title="Effacer"
+              style={{
+                padding: '10px 16px',
+                background: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#4b5563'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#6b7280'}
+            >
+              ✕ Effacer
+            </button>
+          )}
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <NewButton onClick={openFormForNew} disabled={isSubmitting}>
+              Nouvelle commande
+            </NewButton>
+          </div>
+        </div>
+      </div>
+
+      {/* FILTRE PAR DATE */}
+      <div style={{
+        marginBottom: '16px',
+        padding: '12px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '12px',
+        alignItems: 'center',
+      }}>
+        <label style={{
+          fontWeight: '500',
+          color: '#374151',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <input
+            type="checkbox"
+            checked={dateFilter.enabled}
+            onChange={(e) => setDateFilter(prev => ({
+              ...prev,
+              enabled: e.target.checked
+            }))}
+          />
+          Filtrer par date de livraison
+        </label>
+
+        {dateFilter.enabled && (
+          <>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <label style={{ fontSize: '14px', color: '#6b7280' }}>
+                Du:
+              </label>
+              <input
+                type="date"
+                value={dateFilter.startDate}
+                onChange={(e) => setDateFilter(prev => ({
+                  ...prev,
+                  startDate: e.target.value
+                }))}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <label style={{ fontSize: '14px', color: '#6b7280' }}>
+                Au:
+              </label>
+              <input
+                type="date"
+                value={dateFilter.endDate}
+                onChange={(e) => setDateFilter(prev => ({
+                  ...prev,
+                  endDate: e.target.value
+                }))}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                }}
+              />
+            </div>
+
+            {(dateFilter.startDate || dateFilter.endDate) && (
+              <button
+                style={{
+                  padding: '4px 8px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setDateFilter(prev => ({
+                  ...prev,
+                  startDate: '',
+                  endDate: '',
+                }))}
+              >
+                Effacer dates
+              </button>
+            )}
+          </>
+        )}
+
+        {dateFilter.enabled && (dateFilter.startDate || dateFilter.endDate) && (
+          <div style={{
+            fontSize: '14px',
+            color: '#059669',
+            fontWeight: '500',
+          }}>
+            Filtre actif: {dateFilter.startDate || '...'} → {dateFilter.endDate || '...'}
+          </div>
         )}
       </div>
 
@@ -568,7 +811,7 @@ export default function CommandesPage() {
         isOpen={isFormOpen}
         onClose={() => !isSubmitting && setIsFormOpen(false)}
         onSave={handleSubmitForm}
-        commande={form.formData?.id ? form.formData : null}
+        commande={form.formData}
         linkedCommandeId={linked.linkedCommandeId}
         setLinkedCommandeId={linked.setLinkedCommandeId}
         linkableCommandes={linkableCommandes}
@@ -607,25 +850,40 @@ export default function CommandesPage() {
         onConfirm={handleConfirmMultiSave}
       />
 
-      {/* Sections par machine */}
+      {/* Sections par machine avec sous-sections par date */}
       <div className="sections-container">
-        {orderedSectionKeys.map((key) => {
-          const list = machineBuckets.get(key) || [];
-          if (!list.length) return null;
+        {orderedMachineKeys.map((machineKey) => {
+          const machineData = machineBuckets.get(machineKey);
+          if (!machineData || machineData.size === 0) return null;
 
-          const label = getMachineLabel(key);
+          // Check if this is dual-level (machine + date) or single-level (machine only)
+          const isDualLevelGrouping = typeof machineData.get === 'function' && machineData.constructor === Map;
+
+          let orders = [];
+          let totalOrders = 0;
+
+          if (isDualLevelGrouping) {
+            // Dual-level: machine + date groups
+            orders = Array.from(machineData.values()).flat();
+            totalOrders = orders.length;
+          } else {
+            // Single-level: direct array of orders
+            orders = machineData;
+            totalOrders = orders.length;
+          }
+
+          const machineLabel = getMachineLabel(machineKey, totalOrders);
 
           // Récupérer le group_label de la machine pour data-group
-          const machineObj = findMachineByKey(key);
-          const groupLabel = machineObj?.group_label || key;
+          const machineObj = findMachineByKey(machineKey);
+          const groupLabel = machineObj?.group_label || machineKey;
 
           return (
-            <section key={key} className="machines-group" data-group={groupLabel}>
-              {/* En-tête de section */}
+            <section key={machineKey} className="machines-group" data-group={groupLabel}>
+              {/* En-tête de section machine */}
               <header className="machines-group__header">
                 <h2 className="machines-group__title">
-                  {label}
-                  <span className="count-badge">{list.length}</span>
+                  {machineLabel}
                 </h2>
 
                 {/* Barre colorée - maintenant contrôlée par CSS data-group */}
@@ -635,47 +893,233 @@ export default function CommandesPage() {
                 />
               </header>
 
-              {/* Liste des cartes de la machine */}
-              <div className="cards-grid">
-                {list.map((cmd) => {
-                  // Formater la date de livraison (UTC vers Europe/Paris)
-                  const livraisonLabel = cmd.dateLivraison
-                    ? new Date(cmd.dateLivraison).toLocaleDateString('fr-FR', {
-                        timeZone: 'Europe/Paris',
-                        year: 'numeric',
+              {isDualLevelGrouping ? (
+                /* Dual-level: Sous-sections par date */
+                Array.from(machineData.entries()).map(([dateKey, dateOrders]) => {
+                  if (!dateOrders || dateOrders.length === 0) return null;
+
+                  const dateLabel = dateKey === 'Date inconnue'
+                    ? 'Date inconnue'
+                    : new Date(dateKey + 'T00:00:00').toLocaleDateString('fr-FR', {
+                        weekday: 'short',
+                        day: '2-digit',
                         month: '2-digit',
-                        day: '2-digit'
-                      })
-                    : null;
+                        year: 'numeric'
+                      });
+
+                  const ordersLabel = dateOrders.length === 1 ? '1 commande' : `${dateOrders.length} commandes`;
 
                   return (
-                    <CommandeCard
-                      key={cmd.id}
-                      cmd={cmd}
-                      STATUTS={STATUTS}
-                      onChangeStatut={(id, statut) => safeChangeStatut(id, statut)}
-                      onEdit={openFormForEdit}
-                      onDelete={handleDelete}
-                      machines={machines}
-                      articleTags={articleTags}
-                      nettoyageRules={nettoyageRules}
-                      onToggleDeballe={handleToggleDeballe}   // ✅ persiste "déballé"
-                      livraisonLabel={livraisonLabel}
-                      t={cmd.duree_totale_heures}
-                    />
+                    <div key={dateKey} className="date-subgroup">
+                      {/* En-tête de sous-section date */}
+                      <header className="date-subgroup__header">
+                        <h3 className="date-subgroup__title">
+                          {dateLabel} ({ordersLabel})
+                        </h3>
+                      </header>
+
+                      {/* Liste des cartes pour cette date */}
+                      <div className="cards-grid">
+                        {dateOrders.map((cmd) => {
+                          // Formater la date de livraison (UTC vers Europe/Paris)
+                          const livraisonLabel = cmd.dateLivraison
+                            ? new Date(cmd.dateLivraison).toLocaleDateString('fr-FR', {
+                                timeZone: 'Europe/Paris',
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
+                              })
+                            : null;
+
+                          // Get machine color for this order
+                          const machineColor = getMachineColor(machineKey);
+
+                          return (
+                            <CommandeCard
+                              key={cmd.id}
+                              commande={cmd}
+                              machineColor={machineColor}
+                              onStatusChange={(id, statut) => safeChangeStatut(id, statut)}
+                              onEdit={(commande) => openFormForEdit(commande)}
+                              onDelete={handleDelete}
+                              onDeballeChange={(id, checked) => handleToggleDeballe(id, checked)}
+                              onValidationChange={(id, checked) => handleToggleValidation(id, checked)}
+                              livraisonLabel={livraisonLabel}
+                              t={cmd.duree_totale_heures}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
-                })}
-              </div>
+                })
+              ) : (
+                /* Single-level: Direct cards list */
+                <div className="cards-grid">
+                  {orders.map((cmd) => {
+                    // Formater la date de livraison (UTC vers Europe/Paris)
+                    const livraisonLabel = cmd.dateLivraison
+                      ? new Date(cmd.dateLivraison).toLocaleDateString('fr-FR', {
+                          timeZone: 'Europe/Paris',
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        })
+                      : null;
+
+                    // Get machine color for this order
+                    const machineColor = getMachineColor(machineKey);
+
+                    return (
+                      <CommandeCard
+                        key={cmd.id}
+                        commande={cmd}
+                        machineColor={machineColor}
+                        onStatusChange={(id, statut) => safeChangeStatut(id, statut)}
+                        onEdit={(commande) => openFormForEdit(commande)}
+                        onDelete={handleDelete}
+                        onDeballeChange={(id, checked) => handleToggleDeballe(id, checked)}
+                        onValidationChange={(id, checked) => handleToggleValidation(id, checked)}
+                        livraisonLabel={livraisonLabel}
+                        t={cmd.duree_totale_heures}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </section>
           );
         })}
 
         {/* État vide quand la recherche ne retourne rien */}
-        {orderedSectionKeys.length === 0 && debouncedQuery && (
+        {orderedMachineKeys.length === 0 && debouncedQuery && !showArchive && (
           <div className="muted" style={{ marginTop: 8 }}>
             Aucune commande ne correspond à « {debouncedQuery} ».
           </div>
         )}
+
+        {/* Archive section for finished orders */}
+        {(() => {
+          const allFinishedOrders = (commandes || []).filter(c =>
+            c.statut === "Terminée"
+          );
+          const filteredFinishedOrders = (commandes || []).filter(c =>
+            c.statut === "Terminée" && matchesQuery(c, debouncedQuery)
+          );
+
+          if (allFinishedOrders.length === 0) return null;
+
+          return (
+            <div className="archive-section">
+              <button
+                type="button"
+                className={`archive-toggle ${showArchive ? 'active' : ''}`}
+                onClick={() => setShowArchive(!showArchive)}
+              >
+                {showArchive ? 'Masquer l\'archive' : `Voir l'archive (${allFinishedOrders.length})`}
+              </button>
+
+              {showArchive && filteredFinishedOrders.length > 0 && (
+                <div className="archive-grid">
+                  {filteredFinishedOrders.map(cmd => {
+                    const livraisonLabel = cmd.dateLivraison
+                      ? new Date(cmd.dateLivraison).toLocaleDateString('fr-FR', {
+                          timeZone: 'Europe/Paris',
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit'
+                        })
+                      : null;
+
+                    return (
+                      <div
+                        key={`archive-${cmd.id}`}
+                        className="carte-commande carte-commande--mini"
+                        style={{
+                          position: "relative",
+                          border: "1px solid #ddd",
+                          borderRadius: 6,
+                          padding: 8,
+                          marginBottom: 4,
+                          backgroundColor: "#f8f9fa",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                          zIndex: 10
+                        }}
+                      >
+                        <div
+                          className="carte-commande__header"
+                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}
+                        >
+                          <h3 style={{ margin: 0, fontSize: 14 }}>
+                            Commande #{cmd?.numero ?? cmd?.id}
+                          </h3>
+                          <span style={{
+                            backgroundColor: "#28a745",
+                            color: "white",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            fontSize: 11,
+                            fontWeight: "bold"
+                          }}>
+                            Terminée
+                          </span>
+                        </div>
+
+                        <p style={{ fontSize: 12, marginBottom: 4 }}>
+                          <strong>Client :</strong> {cmd.client}
+                        </p>
+
+                        <p style={{ fontSize: 12, marginBottom: 4 }}>
+                          <strong>Date de livraison  :</strong> {livraisonLabel || "—"}
+                        </p>
+
+                        <p style={{ fontSize: 12, marginBottom: 6 }}>
+                          <strong>Terminée le :</strong>{" "}
+                          {cmd.finished_at
+                            ? new Date(cmd.finished_at).toLocaleDateString('fr-FR', {
+                                timeZone: 'Europe/Paris',
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
+                              })
+                            : "—"}
+                        </p>
+
+                        <div
+                          className="carte-commande__footer"
+                          style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(cmd.id)}
+                            style={{
+                              padding: "6px 12px",
+                              backgroundColor: "#dc3545",
+                              color: "white",
+                              border: "none",
+                              borderRadius: 4,
+                              cursor: "pointer",
+                              fontSize: 11,
+                              pointerEvents: 'auto'
+                            }}
+                          >
+                            Supprimer
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {showArchive && filteredFinishedOrders.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d' }}>
+                  Aucune commande terminée ne correspond à votre recherche.
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

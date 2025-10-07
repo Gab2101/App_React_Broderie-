@@ -1,8 +1,7 @@
 export const STATUTS = [
   "A commencer",
   "En cours",
-  "Terminé",
+  "Terminée",
   "Annulé",
-  "En attente",
-  "Suspendu"
+  "En attente"
 ];

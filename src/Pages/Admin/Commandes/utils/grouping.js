@@ -63,30 +63,90 @@ export function groupAndSortByMachine(commandes = []) {
     return new Map();
   }
 
-  const acc = new Map();
+  const PRIORITY = { 'En cours': 0, 'A commencer': 1, 'En attente': 2, 'Terminée': 3 };
+  const map = new Map();
 
-  for (const cmd of commandes) {
-    const key = getSingleMachineKey(cmd);
-    if (!key) continue; // on saute les multi-machines ici
+  for (const c of commandes) {
+    const key =
+      c.machineAssignee ??
+      c.machine ??
+      c.machine_id ??
+      (c.machineLabel ?? c.machine_name) ??
+      'Non assignée';
 
-    // on garantit un tableau à chaque clé
-    const list = acc.get(key);
-    if (!Array.isArray(list)) {
-      acc.set(key, [cmd]);
-    } else {
-      list.push(cmd);
-    }
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(c);
   }
 
-  // tri sûr pour chaque groupe
-  for (const [key, list] of acc.entries()) {
-    if (Array.isArray(list)) {
-      list.sort(compareCommandeAsc);
-    } else {
-      console.warn(`groupAndSortByMachine: valeur non-tableau pour la clé ${key}`, list);
-      acc.set(key, []);
-    }
+  for (const [k, list] of map) {
+    list.sort((a, b) => {
+      const pa = PRIORITY[a?.statut] ?? 99;
+      const pb = PRIORITY[b?.statut] ?? 99;
+      if (pa !== pb) return pa - pb;
+      // fallback: plus ancienne d'abord
+      return (a?.id ?? 0) - (b?.id ?? 0);
+    });
   }
 
-  return acc;
+  return map;
+}
+
+// --- Dual-level grouping by machine and delivery date ---
+export function groupByMachineAndDate(commandes = []) {
+  if (!Array.isArray(commandes)) {
+    console.warn("groupByMachineAndDate: commandes n'est pas un tableau", commandes);
+    return new Map();
+  }
+
+  const PRIORITY = { 'En cours': 0, 'A commencer': 1, 'En attente': 2, 'Terminée': 3 };
+  const map = new Map(); // machineKey -> { dateKey -> [orders] }
+
+  for (const c of commandes) {
+    const machineKey =
+      c.machineAssignee ??
+      c.machine ??
+      c.machine_id ??
+      (c.machineLabel ?? c.machine_name) ??
+      'Non assignée';
+
+    // Format delivery date consistently
+    const dateObj = parseDate(c.dateLivraison || c.livraisonAt || c.deadline);
+    const dateKey = dateObj
+      ? dateObj.toISOString().split('T')[0] // YYYY-MM-DD format
+      : 'Date inconnue';
+
+    if (!map.has(machineKey)) {
+      map.set(machineKey, new Map());
+    }
+
+    const dateMap = map.get(machineKey);
+    if (!dateMap.has(dateKey)) {
+      dateMap.set(dateKey, []);
+    }
+    dateMap.get(dateKey).push(c);
+  }
+
+  // Sort orders within each date group
+  for (const [machineKey, dateMap] of map) {
+    for (const [dateKey, orders] of dateMap) {
+      orders.sort((a, b) => {
+        const pa = PRIORITY[a?.statut] ?? 99;
+        const pb = PRIORITY[b?.statut] ?? 99;
+        if (pa !== pb) return pa - pb;
+        // fallback: older orders first
+        return (a?.id ?? 0) - (b?.id ?? 0);
+      });
+    }
+
+    // Sort date groups within machine (chronological)
+    const sortedDates = Array.from(dateMap.entries()).sort(([dateA], [dateB]) => {
+      if (dateA === 'Date inconnue') return 1;  // Unknown dates at end
+      if (dateB === 'Date inconnue') return -1;
+      return dateA.localeCompare(dateB); // YYYY-MM-DD string comparison
+    });
+
+    map.set(machineKey, new Map(sortedDates));
+  }
+
+  return map;
 }

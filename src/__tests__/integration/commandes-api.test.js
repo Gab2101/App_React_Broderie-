@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { supabase } from '../../supabaseClient'
+import { supabase } from '@/supabaseClient'
 import {
   createCommandeAndPlanning,
   updateCommande,

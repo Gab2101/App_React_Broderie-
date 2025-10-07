@@ -11,10 +11,15 @@
     "web-vitals": "^2.1.0"
   },
   "scripts": {
-    "dev": "node scripts/check-env.cjs || true && vite",
+    "dev": "node scripts/check-env.cjs || true && npx vite --host 0.0.0.0 --port 5173",
     "build": "node scripts/check-env.cjs && vite build",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext js,jsx --fix",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "depcheck": "npx depcheck"
   },
   "eslintConfig": {
     "extends": [
@@ -35,12 +40,16 @@
     ]
   },
   "devDependencies": {
-    "@svgr/core": "^8.1.0",
-    "@svgr/plugin-jsx": "^8.1.0",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "dotenv": "^17.2.3",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-unused-imports": "^4.2.0",
+    "jsdom": "^27.0.0",
+    "rollup-plugin-visualizer": "^6.0.4",
     "vite": "^7.0.0",
     "vitest": "^3.2.4"
   }
