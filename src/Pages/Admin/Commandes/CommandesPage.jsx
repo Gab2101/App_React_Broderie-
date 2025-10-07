@@ -31,7 +31,7 @@ import {
   deleteCommandeWithPlanning,
 } from "./services/commandesApi";
 import { createCommandeWithAssignations } from "./services/assignationsApi";
-import { supabase } from "@/supabaseClient"; // ✅ pour la MAJ "déballé"
+import supabase from '@/lib/supabaseClient' // ✅ pour la MAJ "déballé"
 
 export default function CommandesPage() {
   // Étiquettes (context)
@@ -615,39 +615,56 @@ export default function CommandesPage() {
 
           const label = getMachineLabel(key);
 
+          // Récupérer le group_label de la machine pour data-group
+          const machineObj = findMachineByKey(key);
+          const groupLabel = machineObj?.group_label || key;
+
           return (
-            <section key={key} className="machine-section">
+            <section key={key} className="machines-group" data-group={groupLabel}>
               {/* En-tête de section */}
-              <header className="machine-section-header">
-                <h2 className="machine-section-title">
+              <header className="machines-group__header">
+                <h2 className="machines-group__title">
                   {label}
                   <span className="count-badge">{list.length}</span>
                 </h2>
 
-                {/* Barre colorée */}
+                {/* Barre colorée - maintenant contrôlée par CSS data-group */}
                 <div
-                  className="machine-accent"
-                  style={{ backgroundColor: getMachineColor(key) }}
+                  className="machines-group__colorbar"
                   aria-hidden="true"
                 />
               </header>
 
               {/* Liste des cartes de la machine */}
               <div className="cards-grid">
-                {list.map((cmd) => (
-                  <CommandeCard
-                    key={cmd.id}
-                    cmd={cmd}
-                    STATUTS={STATUTS}
-                    onChangeStatut={(id, statut) => safeChangeStatut(id, statut)}
-                    onEdit={openFormForEdit}
-                    onDelete={handleDelete}
-                    machines={machines}
-                    articleTags={articleTags}
-                    nettoyageRules={nettoyageRules}
-                    onToggleDeballe={handleToggleDeballe}   // ✅ persiste "déballé"
-                  />
-                ))}
+                {list.map((cmd) => {
+                  // Formater la date de livraison (UTC vers Europe/Paris)
+                  const livraisonLabel = cmd.dateLivraison
+                    ? new Date(cmd.dateLivraison).toLocaleDateString('fr-FR', {
+                        timeZone: 'Europe/Paris',
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit'
+                      })
+                    : null;
+
+                  return (
+                    <CommandeCard
+                      key={cmd.id}
+                      cmd={cmd}
+                      STATUTS={STATUTS}
+                      onChangeStatut={(id, statut) => safeChangeStatut(id, statut)}
+                      onEdit={openFormForEdit}
+                      onDelete={handleDelete}
+                      machines={machines}
+                      articleTags={articleTags}
+                      nettoyageRules={nettoyageRules}
+                      onToggleDeballe={handleToggleDeballe}   // ✅ persiste "déballé"
+                      livraisonLabel={livraisonLabel}
+                      t={cmd.duree_totale_heures}
+                    />
+                  );
+                })}
               </div>
             </section>
           );

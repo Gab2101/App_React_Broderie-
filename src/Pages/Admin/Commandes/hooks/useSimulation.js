@@ -7,14 +7,17 @@ import { toLabelArray } from "../utils/labels";
 import { roundMinutesTo5 } from "../utils/timeRealtime";
 import { getLinkedLastFinishAndMachineId } from "../utils/linked";
 
-export default function useSimulation({
-  formData,
-  machines,
-  planning,
-  nettoyageRules,
-  articleTags,
-  linked: { isLinked, linkedCommandeId, sameMachineAsLinked, startAfterLinked },
-}) {
+export default function useSimulation(opts = {}) {
+  const { formData: rawFormData, ...rest } = opts ?? {}
+  const formData = rawFormData ?? {}
+
+  const {
+    machines,
+    planning,
+    nettoyageRules,
+    articleTags,
+    linked: { isLinked, linkedCommandeId, sameMachineAsLinked, startAfterLinked } = {}
+  } = rest
   const [scenarios, setScenarios] = useState([]);
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [machineAssignee, setMachineAssignee] = useState(null);

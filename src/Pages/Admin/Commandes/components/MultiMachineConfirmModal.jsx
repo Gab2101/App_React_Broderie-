@@ -8,7 +8,7 @@ export default function MultiMachineConfirmModal({
   onClose,
   machines = [],
   // Données de base (issues du form principal)
-  formData, // attendu: { id, quantite, points, vitesseMoyenne }
+  formData = {}, // attendu: { id, quantite, points, vitesseMoyenne }
   // Coef (%) appliqué comme dans le mono (ex: confirmCoef du modal2)
   confirmCoef = 100,
 

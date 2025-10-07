@@ -1,5 +1,5 @@
 // utils/CommandesService.js
-import { supabase } from "../supabaseClient";
+import supabase from '@/lib/supabaseClient'
 
 /** Diff minutes (arrondi au supérieur) entre deux ISO/timestamptz */
 export const minutesBetween = (startISO, endISO) => {

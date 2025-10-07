@@ -1,9 +1,10 @@
 // src/Pages/Admin/Commandes/hooks/useCommandesData.js
-import { useEffect, useState } from "react";
-import { supabase } from "../../../../supabaseClient";
-import { replaceCommandeInArray } from "../../../../utils/CommandesService";
-import { fetchNettoyageRules } from "../../../../utils/nettoyageRules";
-import { dayBoundsParisUTC } from "../utils/workhours";
+import { useEffect, useState, useCallback } from 'react'
+import supabase from '@/lib/supabaseClient'
+import { replaceCommandeInArray } from '@/utils/CommandesService'
+import { fetchNettoyageRules } from '@/utils/nettoyageRules'
+import { dayBoundsParisUTC } from '../utils/workhours'
+import { attachCommandesListener } from '@/realtime/commandesChannel'
 
 export default function useCommandesData() {
   const [commandes, setCommandes] = useState([]);
@@ -81,69 +82,38 @@ export default function useCommandesData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Realtime : commandes + planning (INSERT/UPDATE/DELETE)
+  // Realtime : utilise le canal partagé pour éviter les duplications
   useEffect(() => {
-    const ch = supabase.channel("realtime-commandes-page");
-
-    // --- COMMANDES ---
-    ch.on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "commandes" },
-      ({ new: row }) => {
-        setCommandes((prev) => [...prev, row]);
+    const detach = attachCommandesListener(payload => {
+      // Applique les mises à jour selon le type d'événement
+      if (payload.eventType === 'INSERT') {
+        setCommandes((prev) => [payload.new, ...prev]);
+        // Ajouter aux linkables si éligible
         setLinkableCommandes((prev) => {
-          const isEligible = ["A commencer", "En cours"].includes(row.statut);
-          return isEligible ? [...prev, row] : prev;
+          const isEligible = ["A commencer", "En cours"].includes(payload.new.statut);
+          return isEligible ? [payload.new, ...prev] : prev;
         });
       }
-    );
 
-    ch.on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "commandes" },
-      ({ new: row }) => {
-        setCommandes((prev) => replaceCommandeInArray(prev, row));
+      if (payload.eventType === 'UPDATE') {
+        setCommandes((prev) => replaceCommandeInArray(prev, payload.new));
+        // Mettre à jour linkables
         setLinkableCommandes((prev) => {
-          const isEligible = ["A commencer", "En cours"].includes(row.statut);
-          const exists = prev.some((c) => String(c.id) === String(row.id));
-          if (isEligible && !exists) return [...prev, row];
-          if (!isEligible && exists) return prev.filter((c) => String(c.id) !== String(row.id));
-          return prev.map((c) => (String(c.id) === String(row.id) ? row : c));
+          const isEligible = ["A commencer", "En cours"].includes(payload.new.statut);
+          const exists = prev.some((c) => String(c.id) === String(payload.new.id));
+          if (isEligible && !exists) return [payload.new, ...prev];
+          if (!isEligible && exists) return prev.filter((c) => String(c.id) !== String(payload.new.id));
+          return prev.map((c) => (String(c.id) === String(payload.new.id) ? payload.new : c));
         });
       }
-    );
 
-    ch.on(
-      "postgres_changes",
-      { event: "DELETE", schema: "public", table: "commandes" },
-      ({ old: row }) => {
-        setCommandes((prev) => prev.filter((c) => String(c.id) !== String(row.id)));
-        setLinkableCommandes((prev) => prev.filter((c) => String(c.id) !== String(row.id)));
+      if (payload.eventType === 'DELETE') {
+        setCommandes((prev) => prev.filter((c) => String(c.id) !== String(payload.old.id)));
+        setLinkableCommandes((prev) => prev.filter((c) => String(c.id) !== String(payload.old.id)));
       }
-    );
+    });
 
-    // --- PLANNING ---
-    ch.on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "planning" },
-      ({ new: row }) => setPlanning((prev) => [...prev, row])
-    );
-
-    ch.on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "planning" },
-      ({ new: row }) =>
-        setPlanning((prev) => prev.map((p) => (String(p.id) === String(row.id) ? row : p)))
-    );
-
-    ch.on(
-      "postgres_changes",
-      { event: "DELETE", schema: "public", table: "planning" },
-      ({ old: row }) => setPlanning((prev) => prev.filter((p) => String(p.id) !== String(row.id)))
-    );
-
-    ch.subscribe();
-    return () => supabase.removeChannel(ch);
+    return detach;
   }, []);
 
   return {

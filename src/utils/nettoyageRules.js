@@ -1,5 +1,5 @@
 // src/utils/nettoyageRules.js
-import { supabase } from "../supabaseClient";
+import supabase from '@/lib/supabaseClient'
 
 /** Normalise un label en string lowercased/trimmed */
 export function normalizeLabel(v) {

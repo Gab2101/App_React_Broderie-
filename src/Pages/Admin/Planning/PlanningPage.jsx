@@ -1,6 +1,6 @@
 // src/Pages/Admin/Planning/PlanningPage.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { supabase } from "../../../supabaseClient";
+import supabase from "../../../lib/supabaseClient";
 import "./PlanningPage.css";
 import { WORKDAY } from "../../../utils/time";
 
@@ -20,8 +20,11 @@ import PlanningDayView from "./PlanningDayView.jsx";
 import { normalizeSlotForGrid } from "./lib/grid";
 import { workingHoursBetween } from "./lib/workingHours";
 import { sortByPriority, getUrgencyColor, computeUrgency } from "./lib/priority";
+import { getBusinessHours, shouldSliceByDay } from "../../../utils/planningConfig";
 
-console.log("[Planning] regenerated (gros blocs par commande, non découpés par jour)");
+const slice = shouldSliceByDay()
+const hours = getBusinessHours()
+console.log('[Planning] regenerated', { slice, hours });
 
 /** ---------- Légende d'urgence ---------- **/
 export function UrgencyLegend() {

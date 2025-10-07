@@ -88,7 +88,7 @@ export default function MachineAndTimeConfirmModal({
   isOpen,
   onClose,
   machines = [],
-  formData,
+  formData = {},
   selectedScenario,         // scénario par défaut (machine sélectionnée)
   scenarioByMachineId = {}, // { [machineId]: scenario }
   currentScenario,          // (si utilisé dans ton UI existant)

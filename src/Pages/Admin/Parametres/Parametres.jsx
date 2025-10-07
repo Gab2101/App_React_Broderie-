@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ArticleTagsSection from "./ArticlesTagsSection";
 import BroderieTagsSection from "./BroderieTagsSection";
 import NettoyageRulesEditor from "./NettoyageRulesEditor";
-import { supabase } from "../../../supabaseClient";
+import supabase from '@/lib/supabaseClient'
 import "./Parametres.css";
 
 /** Normalisation robuste pour comparer/assainir les labels */

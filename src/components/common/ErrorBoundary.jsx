@@ -27,15 +27,33 @@ class ErrorBoundary extends React.Component {
     // Classify and log the error
     const classifiedError = classifyError(error, 'React Error Boundary');
 
-    // Log detailed error information
+    // Enhanced logging for production debugging
+    const timestamp = new Date().toISOString();
+    const userAgent = navigator?.userAgent || 'Unknown';
+    const url = window?.location?.href || 'Unknown';
+    const environment = process.env.NODE_ENV || 'unknown';
+
     const logMessage = formatErrorForLogging({
       ...classifiedError,
+      timestamp,
+      userAgent,
+      url,
+      environment,
       context: `React Error Boundary - ${classifiedError.context}`,
-      componentStack: errorInfo.componentStack
+      componentStack: errorInfo.componentStack,
+      errorName: error?.name,
+      errorStack: error?.stack
     });
 
+    console.error('=== PRODUCTION ERROR ===');
     console.error(logMessage);
+    console.error('Original Error:', error);
     console.error('Component Stack:', errorInfo.componentStack);
+    console.error('Environment:', environment);
+    console.error('URL:', url);
+    console.error('User Agent:', userAgent);
+    console.error('Timestamp:', timestamp);
+    console.error('======================');
 
     // Store error details for debugging
     this.setState({
@@ -47,7 +65,11 @@ class ErrorBoundary extends React.Component {
     // errorReportingService.send({
     //   ...classifiedError,
     //   componentStack: errorInfo.componentStack,
-    //   errorId: this.state.errorId
+    //   errorId: this.state.errorId,
+    //   timestamp,
+    //   userAgent,
+    //   url,
+    //   environment
     // });
 
     // Call optional error callback

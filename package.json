@@ -11,10 +11,10 @@
     "web-vitals": "^2.1.0"
   },
   "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "test": "vitest",
-    "dev": "vite"
+    "dev": "node scripts/check-env.cjs || true && vite",
+    "build": "node scripts/check-env.cjs && vite build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
   },
   "eslintConfig": {
     "extends": [
@@ -35,12 +35,13 @@
     ]
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.8.0",
-    "@testing-library/react": "^16.3.0",
-    "vitest": "^3.2.4",
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
     "@vitejs/plugin-react": "^4.6.0",
-    "vite": "^7.0.0"
+    "dotenv": "^17.2.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.4"
   }
 }

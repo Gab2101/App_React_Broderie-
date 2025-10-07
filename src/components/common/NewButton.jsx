@@ -20,7 +20,7 @@ import "./NewButton.css";
  */
 export default function NewButton({
   children,
-  onClick,
+  onClick,  // ✅ Ajouter cette prop manquante
   type = "button",
   disabled = false,
   isLoading = false,
@@ -40,7 +40,7 @@ export default function NewButton({
       e.preventDefault();
       return;
     }
-    onClick?.(e);
+    onClick && onClick(e);
   };
 
   const classes = [

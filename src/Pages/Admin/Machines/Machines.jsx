@@ -4,7 +4,7 @@ import "./Machines.css";
 import "../../../styles/Common.css";
 import { EtiquettesContext } from "../../../context/EtiquettesContext";
 import NewButton from "../../../components/common/NewButton";
-import { supabase } from "../../../supabaseClient";
+import supabase from '@/lib/supabaseClient'
 import MachinesCard from "./MachinesCard";
 import MachinesForm from "./MachinesForm";
 

@@ -1,11 +1,11 @@
 // src/Pages/Admin/Commandes/services/commandesApi.js
-import { supabase } from "../../../../supabaseClient";
+import supabase from '@/lib/supabaseClient'
 import { toLabelArray } from "../utils/labels";
 import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
-import { calculerDurees } from "../../../../utils/calculs";
+import { calculerDurees } from "@/utils/calculs";
 import {
   computeNettoyageSecondsForOrder,
-} from "../../../../utils/nettoyageRules";
+} from "@/utils/nettoyageRules";
 import {
   getLinkedLastFinishAndMachineId,
   getMachineByName,

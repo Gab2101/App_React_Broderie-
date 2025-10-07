@@ -10,6 +10,7 @@ import { EtiquettesProvider } from "./context/EtiquettesContext.jsx";
 import CommandesPage from "./Pages/Admin/Commandes/CommandesPage.jsx";
 import { ToastProvider } from "./components/common/Toast.jsx";
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
+import Diagnostics from "./components/common/Diagnostics.jsx";
 
 function AppContent() {
   const location = useLocation();
@@ -27,6 +28,8 @@ function AppContent() {
         <Route path="/admin/Planning" element={<PlanningPage />} />
         <Route path="/admin/Parametres" element={<Parametres />} />
       </Routes>
+
+      <Diagnostics />
     </div>
   );
 }

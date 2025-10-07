@@ -1,5 +1,13 @@
 {
+  "framework": "vite",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/(.*\\.webmanifest)", "destination": "/$1" },
+    { "source": "/(manifest\\.json)", "destination": "/$1" },
+    { "source": "/(.*\\.(?:js|css|png|jpg|jpeg|svg|ico|txt|map|webmanifest))", "destination": "/$1" },
+    { "source": "/(.*)", "destination": "/" }
+  ]
 }

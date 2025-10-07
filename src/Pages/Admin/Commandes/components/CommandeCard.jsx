@@ -33,6 +33,7 @@ export default function CommandeCard({
     <div
       className="carte-commande"
       style={{
+        position: "relative", // ✅ Fix pour la vignette absolue
         border: "1px solid #ddd",
         borderRadius: 8,
         padding: 16,
