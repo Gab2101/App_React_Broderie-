@@ -2,7 +2,8 @@
 // Comprehensive tests for useCommandesData hook
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useCommandesData } from '../useCommandesData.js';
+// Correct import - useCommandesData is a default export
+import useCommandesData from '../useCommandesData.js';
 
 // Mock Supabase dependencies
 vi.mock('@/lib/supabaseClient', () => ({

@@ -11,6 +11,7 @@ export const SYNONYMS = {
   'tshirt': 't-shirt',
   'tee': 't-shirt',
   'tee-shirt': 't-shirt',
+  'tee shirt': 't-shirt',
   'ts': 't-shirt',
 
   // Heart/cœur variations
