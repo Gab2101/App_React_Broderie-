@@ -1,5 +1,5 @@
 // Diagnostics component for production debugging
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import supabase from '../../lib/supabaseClient';
 
 export default function Diagnostics() {

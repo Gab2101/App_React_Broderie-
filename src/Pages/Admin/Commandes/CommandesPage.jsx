@@ -211,7 +211,8 @@ export default function CommandesPage() {
       // More robust validation - handle empty strings, undefined, null
       if (isNaN(qty) || !Number.isFinite(qty) || qty <= 0 ||
           isNaN(pts) || !Number.isFinite(pts) || pts <= 0) {
-        alert(`La quantité et le nombre de points doivent être supérieurs à zéro.`);
+        // TODO: Replace with toast notification
+        console.warn(`Validation failed: quantité=${qty}, points=${pts}`);
         return;
       }
 
@@ -220,7 +221,8 @@ export default function CommandesPage() {
         const { error } = await apiUpdateCommande(formData);
         if (error) {
           console.error(error);
-          alert("Erreur lors de la mise à jour.");
+          // TODO: Replace with toast notification
+          console.warn("Erreur lors de la mise à jour.");
           return;
         }
         await reloadData();
@@ -235,7 +237,8 @@ export default function CommandesPage() {
         setIsFormOpen(false);
         setIsConfirmOpen(true);
       } else {
-        alert("Impossible de créer la commande - aucune machine disponible.");
+        // TODO: Replace with toast notification
+        console.warn("Cannot create commande - no machines available.");
       }
     } finally {
       setIsSubmitting(false);

@@ -1,5 +1,5 @@
 // src/Pages/Admin/Planning/components/PlanningGrid.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /** Utilitaires horaires */
 function workingHoursPerDay(W) {

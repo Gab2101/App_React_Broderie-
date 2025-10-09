@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { calculerDurees } from "../../../../utils/calculs";
 import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
-import { buildNeededSet } from '@/compat/labels';
 import { toLabelArray, toNormalizedSet, normalizeLabel } from '../utils/labels';
 import { roundMinutesTo5 } from "../utils/timeRealtime";
 import { getLinkedLastFinishAndMachineId } from "../utils/linked";

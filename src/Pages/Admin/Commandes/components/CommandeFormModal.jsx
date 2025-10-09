@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSimulation from '../hooks/useSimulation'
 
 export default function CommandeFormModal(props = {}) {

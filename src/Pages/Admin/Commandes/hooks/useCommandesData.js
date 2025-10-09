@@ -12,9 +12,14 @@ export default function useCommandesData() {
   const [planning, setPlanning] = useState([]);
   const [linkableCommandes, setLinkableCommandes] = useState([]);
   const [nettoyageRules, setNettoyageRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Recharge tout, ou uniquement le planning qui chevauche un "day" (Europe/Paris)
   const reloadData = async (day = null) => {
+    setLoading(true);
+    setError(null);
+
     try {
       let planningQuery = supabase.from("planning").select("*");
       if (day) {
@@ -37,12 +42,14 @@ export default function useCommandesData() {
 
       if (err1 || err2 || err3) {
         console.error("Erreur chargement données:", err1, err2, err3);
+        setError(err1 || err2 || err3);
         // Set empty arrays to prevent app crash
         setCommandes([]);
         setMachines([]);
         setPlanning([]);
         setLinkableCommandes([]);
         setNettoyageRules([]);
+        setLoading(false);
         return;
       }
 
@@ -58,6 +65,7 @@ export default function useCommandesData() {
 
       if (errLink) {
         console.error("Erreur chargement commandes liables:", errLink);
+        setError(errLink);
         setLinkableCommandes([]);
       } else {
         setLinkableCommandes(cmdLinkables || []);
@@ -65,14 +73,17 @@ export default function useCommandesData() {
 
       const rules = await fetchNettoyageRules();
       setNettoyageRules(rules || []);
+      setLoading(false);
     } catch (err) {
       console.error("Erreur reloadData:", err);
+      setError(err);
       // Set empty arrays to prevent app crash
       setCommandes([]);
       setMachines([]);
       setPlanning([]);
       setLinkableCommandes([]);
       setNettoyageRules([]);
+      setLoading(false);
     }
   };
 
@@ -116,6 +127,36 @@ export default function useCommandesData() {
     return detach;
   }, []);
 
+  const refreshCommandes = useCallback(() => {
+    return reloadData();
+  }, []);
+
+  const deleteCommandeWithPlanning = useCallback(async (id) => {
+    try {
+      const { error } = await supabase
+        .from("planning")
+        .delete()
+        .eq("commandeId", id);
+
+      if (error) {
+        return { error };
+      }
+
+      const { error: deleteError } = await supabase
+        .from("commandes")
+        .delete()
+        .eq("id", id);
+
+      if (deleteError) {
+        return { error: deleteError };
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err };
+    }
+  }, []);
+
   return {
     commandes,
     setCommandes,
@@ -123,6 +164,10 @@ export default function useCommandesData() {
     planning,
     linkableCommandes,
     nettoyageRules,
-    reloadData, // reloadData(day?: Date) -> borne la journée Paris côté requête planning
+    loading,
+    error,
+    reloadData,
+    refreshCommandes,
+    deleteCommandeWithPlanning,
   };
 }

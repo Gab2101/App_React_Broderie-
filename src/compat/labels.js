@@ -1,7 +1,7 @@
 // src/compat/labels.js
 // Scenario label extraction and job specification handling
 
-import { toNormalizedSet, toNormalizedArray } from './normalize.js';
+import { toNormalizedSet } from './normalize.js';
 
 /**
  * Extract normalized labels from a scenario object

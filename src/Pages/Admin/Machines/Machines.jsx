@@ -1,5 +1,5 @@
 // src/pages/Machines/Machines.js
-import React, { useState, useEffect, useContext, useCallback, useMemo } from "react";
+import { useState, useEffect, useContext, useCallback, useMemo } from "react";
 import "./Machines.css";
 import "../../../styles/Common.css";
 import { EtiquettesContext } from "../../../context/EtiquettesContext";

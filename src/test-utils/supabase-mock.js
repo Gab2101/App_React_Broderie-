@@ -14,39 +14,66 @@ export function createSupabaseMock(options = {}) {
   const mockRow = insertData || updateData || {};
 
   const mock = {
+    // Real Supabase chaining: from() returns an object with select(), insert(), etc.
     from: vi.fn((table) => ({
+      // select() returns a chainable query builder
       select: vi.fn((columns = '*') => ({
+        // Each method returns the query builder for chaining
+        eq: vi.fn((column, value) => ({
+          data: selectData.filter(item =>
+            String(item[column]) === String(value)
+          ),
+          error: selectError,
+          // Add more chaining methods as needed
+          single: vi.fn(() => ({
+            data: selectData.find(item =>
+              String(item[column]) === String(value)
+            ) || null,
+            error: selectError,
+          })),
+        })),
+        in: vi.fn((column, values) => ({
+          data: selectData.filter(item =>
+            values.includes(String(item[column]))
+          ),
+          error: selectError,
+        })),
+        gte: vi.fn((column, value) => ({
+          lt: vi.fn((column2, value2) => ({
+            data: selectData.filter(item =>
+              new Date(item[column]).getTime() >= new Date(value).getTime() &&
+              new Date(item[column2]).getTime() < new Date(value2).getTime()
+            ),
+            error: selectError,
+          })),
+          data: [],
+          error: selectError,
+        })),
+        order: vi.fn((column, opts) => ({
+          data: selectData.sort(),
+          error: selectError,
+        })),
+        // Direct resolution for simple queries
         data: selectData,
         error: selectError,
-        eq: vi.fn(() => ({
-          data: selectData,
-          error: selectError,
-        })),
-        in: vi.fn(() => ({
-          data: selectData,
-          error: selectError,
-        })),
-        order: vi.fn(() => ({
-          data: selectData,
-          error: selectError,
-        })),
         single: vi.fn(() => ({
           data: selectData[0] || null,
           error: selectError,
         })),
       })),
-      
+
+      // insert() returns a chainable query builder
       insert: vi.fn((data) => ({
         select: vi.fn(() => ({
           single: vi.fn(() => ({
-            data: insertData || data,
+            data: insertData || (Array.isArray(data) ? data[0] : data),
             error: selectError,
           })),
           data: Array.isArray(data) ? data : [data],
           error: selectError,
         })),
       })),
-      
+
       update: vi.fn((data) => ({
         eq: vi.fn((col, val) => ({
           select: vi.fn(() => ({
@@ -56,27 +83,19 @@ export function createSupabaseMock(options = {}) {
             })),
           })),
         })),
+        error: selectError,
       })),
-      
+
       delete: vi.fn(() => ({
         eq: vi.fn((col, val) => ({
           error: deleteError,
         })),
       })),
-      
-      upsert: vi.fn((data) => ({
-        select: vi.fn(() => ({
-          single: vi.fn(() => ({
-            data: insertData || data,
-            error: selectError,
-          })),
-        })),
-      })),
     })),
-    
+
     channel: vi.fn((channelName) => {
       const handlers = [];
-      
+
       return {
         on: vi.fn((event, filter, callback) => {
           handlers.push({ event, filter, callback });
@@ -96,9 +115,9 @@ export function createSupabaseMock(options = {}) {
         _handlers: handlers, // For test inspection
       };
     }),
-    
+
     removeChannel: vi.fn(() => 'ok'),
-    
+
     auth: {
       getSession: vi.fn(() => Promise.resolve({
         data: { session: null },
@@ -110,7 +129,7 @@ export function createSupabaseMock(options = {}) {
         };
       }),
     },
-    
+
     storage: {
       from: vi.fn((bucket) => ({
         upload: vi.fn(() => Promise.resolve({ data: {}, error: null })),

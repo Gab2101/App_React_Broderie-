@@ -1,5 +1,5 @@
 // src/context/EtiquettesContext.jsx
-import React, { createContext, useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useState, useEffect, useCallback, useMemo } from "react";
 import supabase from '@/lib/supabaseClient'
 import { useError } from "../hooks/useError";
 

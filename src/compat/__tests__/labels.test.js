@@ -2,8 +2,7 @@
 // Comprehensive tests for machine compatibility and label parsing
 
 import { describe, it, expect } from 'vitest';
-import { buildNeededSet, extractScenarioLabels } from '../labels.js';
-import { toNormalizedSet, toNormalizedArray } from '../normalize.js';
+import { buildNeededSet } from '../labels.js';
 
 // Mock test data
 const mockFormData = {

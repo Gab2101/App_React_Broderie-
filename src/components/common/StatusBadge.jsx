@@ -1,5 +1,4 @@
 // src/components/common/StatusBadge.jsx
-import React from "react";
 import { getStatusTheme } from "../../utils/statusTheme";
 
 function StatusBadge({ statut, size = "md" }) {

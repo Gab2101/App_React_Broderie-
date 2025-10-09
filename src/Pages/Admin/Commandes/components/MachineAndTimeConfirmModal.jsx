@@ -1,6 +1,4 @@
 import React from "react";
-import { convertHoursToHHMM } from "../../../../utils/time";
-import { computeProvisionalEnd } from "../utils/timeRealtime";
 import { calculerDurees } from "../../../../utils/calculs";
 import { DEFAULT_WORKDAY, snapToNextWorkStart, addMinutesWithinWorkHours } from "../utils/workhours";
 

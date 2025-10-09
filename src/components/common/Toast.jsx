@@ -1,7 +1,7 @@
 // src/components/common/Toast.jsx
 // Toast notification system for non-blocking user feedback
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import './Toast.css';
 import * as errorHandler from '../../utils/errorHandler';
 

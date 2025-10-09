@@ -1,4 +1,3 @@
-import React from "react";
 import "./Banner.css";
 import defaultLogo from "../../assets/images/Logo_pubos.png";
 

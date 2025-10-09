@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/components/MultiMachineSplitModal.jsx
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { roundMinutesTo5, computeProvisionalEnd } from "../utils/timeRealtime";
 // (optionnel pour affichage) import { convertHoursToHHMM } from "../../../../utils/time";
 

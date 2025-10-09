@@ -1,5 +1,5 @@
 // src/Pages/Admin/Planning/PlanningPage.jsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import supabase from "../../../lib/supabaseClient";
 import "./PlanningPage.css";
 import { WORKDAY } from "../../../utils/time";

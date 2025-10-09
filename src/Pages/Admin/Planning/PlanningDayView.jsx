@@ -1,5 +1,5 @@
 // src/Pages/Admin/Planning/PlanningDayView.jsx
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import "./PlanningDayView.css";
 
 const PARIS_TZ = "Europe/Paris";

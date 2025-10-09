@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/components/TagsPicker.jsx
-import React, { memo, useMemo } from "react";
+import { memo, useMemo } from "react";
 
 /**
  * TagsPicker

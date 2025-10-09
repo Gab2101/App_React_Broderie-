@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeLabel, SYNONYMS, toNormalizedArray, toNormalizedSet } from '../normalize.js';
+import { normalizeLabel, toNormalizedArray, toNormalizedSet } from '../normalize.js';
 
 describe('normalizeLabel core functionality', () => {
   it('should normalize basic clothing types', () => {
