@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { calculerDurees } from "../../../../utils/calculs";
 import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
 import { computeNettoyageSecondsForOrder } from "../../../../utils/nettoyageRules";
-import { toLabelArray } from "../utils/labels";
+import { buildNeededSet } from '@/compat/labels';
+import { toLabelArray, toNormalizedSet, normalizeLabel } from '../utils/labels';
 import { roundMinutesTo5 } from "../utils/timeRealtime";
 import { getLinkedLastFinishAndMachineId } from "../utils/linked";
 
@@ -29,14 +30,35 @@ export default function useSimulation(opts = {}) {
   const [monoUnitsUsed, setMonoUnitsUsed] = useState(1);
 
   // Lance une simulation pour toutes les machines compatibles
-  const handleSimulation = async () => {
-    const neededTypes = toLabelArray(formData.types);
-    const neededOptions = toLabelArray(formData.options);
+  const handleSimulation = async (freshFormData) => {
+    // Use fresh form data if provided, otherwise fall back to hook data
+    const currentFormData = freshFormData || formData;
 
-    const machinesWithLabels = machines.map((m) => ({
-      ...m,
-      _labels: toLabelArray(m.etiquettes),
-    }));
+    // CRITICAL FIX: Use normalized Sets for case-insensitive matching
+    const neededTypesSet = toNormalizedSet(toLabelArray(currentFormData.types));
+    const neededOptionsSet = toNormalizedSet(toLabelArray(currentFormData.options));
+
+    // Process machine labels - PostgreSQL stores them as JSON strings
+    const machinesWithLabels = machines.map((m) => {
+      // Parse JSON string to array, handle backwards compatibility
+      let etiquettesArray;
+      try {
+        // PostgreSQL stores arrays as JSON strings in Supabase
+        etiquettesArray = JSON.parse(m.etiquettes || '[]');
+      } catch (e) {
+        // Legacy fallback: assume it's already an array
+        etiquettesArray = Array.isArray(m.etiquettes) ? m.etiquettes : [];
+      }
+
+      // Normalize and deduplicate labels
+      const normalizedLabels = etiquettesArray.map(normalizeLabel).filter(n => n);
+      const labelSet = new Set(normalizedLabels);
+
+      return {
+        ...m,
+        _labels: labelSet,
+      };
+    });
 
     // Gestion éventuelle du chaînage
     let debutMinOverride = null;
@@ -53,25 +75,31 @@ export default function useSimulation(opts = {}) {
 
     // Compat strict (types + options), sinon fallback (types)
     const compatiblesStrict = machinesWithLabels.filter((m) => {
-      const hasTypes = neededTypes.every((t) => m._labels.includes(t));
-      const hasOptions = neededOptions.every((o) => m._labels.includes(o));
+      // Use Set.has() for proper normalized matching (case insensitive!)
+      const hasTypes = Array.from(neededTypesSet).every(t => m._labels.has(t));
+      const hasOptions = Array.from(neededOptionsSet).every(o => m._labels.has(o));
+
       return hasTypes && hasOptions;
     });
 
-    const compatibles =
-      compatiblesStrict.length > 0
-        ? compatiblesStrict
-        : machinesWithLabels.filter((m) => neededTypes.every((t) => m._labels.includes(t)));
+    const compatiblesFallback = machinesWithLabels.filter((m) =>
+      // Fallback to types only, using Set.has() as well
+      Array.from(neededTypesSet).every(t => m._labels.has(t))
+    );
 
-    // Debug: Log matching details for troubleshooting
-    console.log('[useSimulation] Machine compatibility debug:', {
-      neededTypes,
-      neededOptions,
+    const compatibles = compatiblesStrict.length > 0 ? compatiblesStrict : compatiblesFallback;
+
+    // Debug info available for troubleshooting if needed
+    const debugInfo = process.env.NODE_ENV === 'development' ? {
+      rawTypes: formData.types,
+      rawOptions: formData.options,
+      normalizedTypes: Array.from(neededTypesSet),
+      normalizedOptions: Array.from(neededOptionsSet),
       compatiblesStrictCount: compatiblesStrict.length,
       compatiblesCount: compatibles.length,
-      machinesLabels: machinesWithLabels.map(m => ({ id: m.id, nom: m.nom, labels: m._labels })),
-      compatiblesLabels: compatibles.map(m => ({ id: m.id, nom: m.nom, labels: m._labels }))
-    });
+      machinesLabels: machinesWithLabels.map(m => ({ id: m.id, nom: m.nom, raw: Array.from(toLabelArray(m.etiquettes)), normalized: Array.from(m._labels) })),
+      compatiblesLabels: compatibles.map(m => ({ id: m.id, nom: m.nom, labels: Array.from(m._labels) }))
+    } : null;
 
     if (compatibles.length === 0) {
       alert("Aucune machine compatible. Vérifie 'types' / 'options' (casse/espaces).");
@@ -94,10 +122,10 @@ export default function useSimulation(opts = {}) {
       const debut = snapToNextWorkStart(anchor, DEFAULT_WORKDAY);
 
       // Nettoyage par article (secondes)
-      const etiquetteArticle = formData.types?.[0] || null;
+      const etiquetteArticle = currentFormData.types?.[0] || null;
       const nettoyageParArticleSec = computeNettoyageSecondsForOrder(
         etiquetteArticle,
-        formData.options,
+        currentFormData.options,
         nettoyageRules,
         articleTags
       );
@@ -106,9 +134,9 @@ export default function useSimulation(opts = {}) {
       // NB: ici on utilise m.nbTetes (1 pour une mono). Le parallélisme de plusieurs mono
       // sera appliqué plus tard via monoUnitsUsed.
       const { dureeBroderieHeures, dureeNettoyageHeures, dureeTotaleHeures } = calculerDurees({
-        quantite: Number(formData.quantite || 0),
-        points: Number(formData.points || 0),
-        vitesse: Number(formData.vitesseMoyenne || 680), // stitches/min machine
+        quantite: Number(currentFormData.quantite || 0),
+        points: Number(currentFormData.points || 0),
+        vitesse: Number(currentFormData.vitesseMoyenne || 680), // stitches/min machine
         nbTetes: Number(m.nbTetes || 1),
         nettoyageParArticleSec,
       });

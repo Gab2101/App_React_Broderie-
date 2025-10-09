@@ -1,5 +1,5 @@
 // src/Pages/Admin/Commandes/services/assignationsApi.js
-import { supabase } from "../../../../supabaseClient";
+import supabase from '@/lib/supabaseClient';
 
 /* ===== Helpers locaux sûrs ===== */
 const toUTCISOStringSafe = (v) => {

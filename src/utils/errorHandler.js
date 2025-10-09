@@ -212,3 +212,100 @@ export function getToastTypeForSeverity(severity) {
       return 'error';
   }
 }
+
+// ============================================================================
+// DEV-FRIENDLY ERROR HANDLING UTILITIES (THROW INSTEAD OF RETURN)
+// ============================================================================
+
+/**
+ * Custom error class for Supabase operations with rich context
+ */
+export class SupabaseError extends Error {
+  constructor(operation, error) {
+    super(`[Supabase ${operation}] ${error.message}`);
+    this.name = 'SupabaseError';
+    this.code = error.code;
+    this.details = error.details;
+    this.hint = error.hint;
+    this.statusCode = error.statusCode;
+    this.operation = operation;
+  }
+}
+
+/**
+ * Asserts that a Supabase operation succeeded, throwing a detailed error if not
+ * @param {Object} response - Supabase response { data, error }
+ * @param {string} operation - Descriptive operation name for error context
+ * @returns {*} The response data if successful
+ * @throws {SupabaseError} If operation failed, with rich error context
+ */
+export function assertNoSupabaseError(response, operation = 'operation') {
+  if (response.error) {
+    throw new SupabaseError(operation, response.error);
+  }
+  return response.data;
+}
+
+/**
+ * Wraps async Supabase operations with error assertion
+ * @param {Promise} promise - Promise that resolves to Supabase response
+ * @param {string} operation - Descriptive operation name
+ * @returns {*} Operation result data
+ * @throws {SupabaseError} If operation failed
+ */
+export async function assertSupabase(promise, operation) {
+  const response = await promise;
+  return assertNoSupabaseError(response, operation);
+}
+
+// ============================================================================
+// PRODUCTION MONITORING & ERROR TRACKING
+// ============================================================================
+
+/**
+ * Initialize production monitoring
+ */
+export function initMonitoring() {
+  // Track page load performance
+  window.addEventListener('load', () => {
+    const loadTime = performance.now();
+    if (import.meta.env.PROD && loadTime > 3000) {
+      console.warn(`Slow page load: ${loadTime.toFixed(2)}ms`);
+    }
+  });
+
+  // Track unhandled errors
+  window.addEventListener('error', (event) => {
+    console.error('[Production Error]', event.error);
+  });
+
+  // Track unhandled promise rejections
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[Production Promise Rejection]', event.reason);
+  });
+
+  console.info('🔍 Production monitoring initialized');
+}
+
+/**
+ * Report error to monitoring (expandable for external services)
+ */
+export function reportError(error, context = {}) {
+  console.error('[Error Report]', error, context);
+}
+
+/**
+ * Report performance metrics
+ */
+export function reportPerformance(metrics) {
+  console.info('[Performance]', metrics);
+}
+
+/**
+ * Track user interactions
+ */
+export function trackInteraction(action, details = {}) {
+  if (!import.meta.env.PROD) {
+    console.debug('[Interaction]', action, details);
+  }
+}

@@ -11,6 +11,12 @@ import CommandesPage from "./Pages/Admin/Commandes/CommandesPage.jsx";
 import { ToastProvider } from "./components/common/Toast.jsx";
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 import Diagnostics from "./components/common/Diagnostics.jsx";
+import { initMonitoring } from "./utils/errorHandler.js";
+
+// Initialize production monitoring
+if (import.meta.env.PROD) {
+  initMonitoring();
+}
 
 function AppContent() {
   const location = useLocation();

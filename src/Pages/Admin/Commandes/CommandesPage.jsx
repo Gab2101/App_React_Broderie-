@@ -1,41 +1,29 @@
 // src/Pages/Admin/Commandes/CommandesPage.jsx
-import React, { useContext, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import "../../../styles/Commandes.css";
 
 import NewButton from "@/components/common/NewButton.jsx";
-import { EtiquettesContext } from "@/context/EtiquettesContext.jsx";
 
 import CommandeFormModal from "./components/CommandeFormModal.jsx";
 import MachineAndTimeConfirmModal from "./components/MachineAndTimeConfirmModal.jsx";
-import MultiMachineConfirmModal from "./components/MultiMachineConfirmModal.jsx";
 import CommandeCard from "./components/CommandeCard.jsx";
 
 import useCommandesData from "./hooks/useCommandesData";
 import useForm from "./hooks/useForm";
-import useLinkedCommande from "./hooks/useLinkedCommande";
 import useSimulation from "./hooks/useSimulation";
 import useStatut from "./hooks/useStatut";
 import { groupAndSortByMachine, groupByMachineAndDate } from "./utils/grouping";
 
-import {
-  parseLocalDatetime,
-  toUTCISOString,
-  snapToNextWorkStart,
-  addMinutesWithinWorkHours,
-  DEFAULT_WORKDAY,
-} from "./utils/workhours";
+
 
 import {
   createCommandeAndPlanning,
   updateCommande as apiUpdateCommande,
   deleteCommandeWithPlanning,
 } from "./services/commandesApi";
-import { createCommandeWithAssignations } from "./services/assignationsApi";
 import supabase from '@/lib/supabaseClient' // ✅ pour la MAJ "déballé"
 
 export default function CommandesPage() {
-  // Étiquettes (context)
-  const { articleTags, broderieTags } = useContext(EtiquettesContext);
 
   // Données distantes + reload
   const {
@@ -44,13 +32,11 @@ export default function CommandesPage() {
     machines,
     planning,
     nettoyageRules,
-    linkableCommandes,
     reloadData,
   } = useCommandesData();
 
-  // État formulaire + lien commande
+  // État formulaire
   const form = useForm();
-  const linked = useLinkedCommande({ planning, commandes, machines });
 
   // Simulation (durées / scénarios)
   const sim = useSimulation({
@@ -58,13 +44,6 @@ export default function CommandesPage() {
     machines,
     planning,
     nettoyageRules,
-    articleTags,
-    linked: {
-      isLinked: linked.isLinked,
-      linkedCommandeId: linked.linkedCommandeId,
-      sameMachineAsLinked: linked.sameMachineAsLinked,
-      startAfterLinked: linked.startAfterLinked,
-    },
   });
 
   // Statuts
@@ -75,12 +54,8 @@ export default function CommandesPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false); // mono
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // "idle" | "mono" | "multi"
+  // Always "mono" - single machine workflow only
   const [creationFlow, setCreationFlow] = useState("idle");
-
-  // Confirmation MULTI
-  const [isMultiConfirmOpen, setIsMultiConfirmOpen] = useState(false);
-  const [pendingMultiPayload, setPendingMultiPayload] = useState(null);
 
   // Archive toggle for finished orders
   const [showArchive, setShowArchive] = useState(false);
@@ -182,19 +157,12 @@ export default function CommandesPage() {
   const resetCreationState = () => {
     form.resetForm();
 
-    linked.setIsLinked(false);
-    linked.setLinkedCommandeId(null);
-    linked.setSameMachineAsLinked(false);
-    linked.setStartAfterLinked(true);
-
     sim.setSelectedScenario(null);
     sim.setMachineAssignee(null);
     sim.setConfirmCoef(200);
     sim.setMonoUnitsUsed(1);
 
     setIsConfirmOpen(false);
-    setIsMultiConfirmOpen(false);
-    setPendingMultiPayload(null);
     setCreationFlow("idle");
   };
 
@@ -208,8 +176,6 @@ export default function CommandesPage() {
       urgence: 3,                // Default medium priority
       client: '',
       numero: '',
-      types: [],
-      options: [],
       dateLivraison: '',
       deballe: false,
     });
@@ -224,11 +190,6 @@ export default function CommandesPage() {
       points: String(cmd.points),
       urgence: String(cmd.urgence),
     });
-
-    linked.setIsLinked(Boolean(cmd.linked_commande_id));
-    linked.setLinkedCommandeId(cmd.linked_commande_id || null);
-    linked.setSameMachineAsLinked(Boolean(cmd.same_machine_as_linked));
-    linked.setStartAfterLinked(Boolean(cmd.start_after_linked ?? true));
 
     form.setSaved(false);
     sim.setSelectedScenario(null);
@@ -268,108 +229,40 @@ export default function CommandesPage() {
         return;
       }
 
-      // CRÉATION : Par défaut MONO (multi-machines removed)
-      // Update form data with submitted values for simulation
-      form.setFormData(formData);
-
-      await sim.handleSimulation();
-      if (sim.selectedScenario) {
+      // CRÉATION : Check if we have machines available
+      if (machines.length > 0) {
         setCreationFlow("mono");
         setIsFormOpen(false);
         setIsConfirmOpen(true);
       } else {
-        alert("Impossible de créer la commande - aucun scénario disponible.");
+        alert("Impossible de créer la commande - aucune machine disponible.");
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Enregistrement final MULTI
-  const handleConfirmMultiSave = async ({
-    perMachine,
-    meta,
-    plannedStartLocal,
-    respectWorkHours,
-  }) => {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      let baseLocal = parseLocalDatetime(plannedStartLocal);
-      if (respectWorkHours) baseLocal = snapToNextWorkStart(baseLocal, DEFAULT_WORKDAY);
 
-      const enriched = perMachine.map((r) => {
-        const dur = Number(r.durationCalcMinutes || r.durationTheoreticalMinutes || 0) || 0;
-        const { end } = respectWorkHours
-          ? addMinutesWithinWorkHours(baseLocal, dur, DEFAULT_WORKDAY)
-          : { end: new Date(baseLocal.getTime() + dur * 60000) };
-        return {
-          ...r,
-          planned_start_iso_utc: toUTCISOString(baseLocal),
-          planned_end_iso_utc: toUTCISOString(end),
-        };
-      });
-
-      const { errorCmd, errorAssign } = await createCommandeWithAssignations({
-        formData: {
-          ...form.formData,
-          linked_commande_id: linked.linkedCommandeId,
-          same_machine_as_linked: linked.sameMachineAsLinked,
-          start_after_linked: linked.startAfterLinked,
-        },
-        perMachine: enriched.map((r) => ({
-          machineId: r.machineId,
-          quantity: r.quantity,
-          durationTheoreticalMinutes: r.durationTheoreticalMinutes,
-          durationCalcMinutes: r.durationCalcMinutes,
-          planned_start: r.planned_start_iso_utc,
-          planned_end: r.planned_end_iso_utc,
-        })),
-        meta,
-        plannedStartISO: null,
-      });
-
-      if (errorCmd || errorAssign) {
-        console.error("Erreur création multi-machines:", errorCmd || errorAssign);
-        alert("Erreur lors de la création (multi-machines).");
-        return;
-      }
-
-      setIsMultiConfirmOpen(false);
-      setPendingMultiPayload(null);
-      setCreationFlow("idle");
-
-      await reloadData();
-      form.resetForm();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // Enregistrement final MONO
-  const handleConfirmCreation = async ({ machineId, coef, monoUnitsUsed }) => {
+  const handleConfirmCreation = async ({ machineId }) => {
     const machine = machines.find((m) => String(m.id) === String(machineId));
     if (!machine) {
       alert("Machine invalide.");
       return;
     }
 
+    // Simplified creation - using basic parameters
     const { errorCmd, errorPlanning } = await createCommandeAndPlanning({
       formData: form.formData,
       machine,
-      coef,
-      monoUnitsUsed,
+      coef: 200, // Default coefficient
+      monoUnitsUsed: 1, // Default mono units
       planning,
       commandes,
       machines,
       nettoyageRules,
-      articleTags,
-      linked: {
-        isLinked: linked.isLinked,
-        linkedCommandeId: linked.linkedCommandeId,
-        sameMachineAsLinked: linked.sameMachineAsLinked,
-        startAfterLinked: linked.startAfterLinked,
-      },
+      articleTags: [], // Empty since we removed tag system
     });
 
     if (errorCmd) {
@@ -543,10 +436,21 @@ export default function CommandesPage() {
     return m || null;
   };
 
-  const getMachineLabel = (key, orderCount = 0) => {
+  const getMachineLabel = (key, orders = []) => {
     const m = findMachineByKey(key);
     const machineName = m?.nom || m?.name || m?.label || String(key);
-    return `${machineName} (${orderCount > 1 ? orderCount + ' commandes' : '1 commande'})`;
+    const orderCount = orders.length || 0;
+
+    if (orderCount === 0) {
+      return `${machineName}`;
+    }
+
+    // Show machine name with order numbers like: "Machine A (#123, #456, #789)"
+    const orderNumbers = orders.slice(0, 3).map(cmd => cmd.numero ? `#${cmd.numero}` : `#${cmd.id}`.slice(-6)).join(', ');
+    const moreSuffix = orderCount > 3 ? ` +${orderCount - 3}` : '';
+    const countText = `(${orderNumbers}${moreSuffix})`;
+
+    return `${machineName} ${countText}`;
   };
 
   // 2) Couleur de la machine (barre sous le titre + cartes)
@@ -812,11 +716,6 @@ export default function CommandesPage() {
         onClose={() => !isSubmitting && setIsFormOpen(false)}
         onSave={handleSubmitForm}
         commande={form.formData}
-        linkedCommandeId={linked.linkedCommandeId}
-        setLinkedCommandeId={linked.setLinkedCommandeId}
-        linkableCommandes={linkableCommandes}
-        articleTags={articleTags}
-        broderieTags={broderieTags}
       />
 
       {/* Confirmation MONO */}
@@ -825,30 +724,12 @@ export default function CommandesPage() {
         onClose={() => !isSubmitting && setIsConfirmOpen(false)}
         machines={machines}
         formData={form.formData}
-        selectedScenario={sim.selectedScenario}
-        scenarioByMachineId={sim.scenarioByMachineId}
-        currentScenario={sim.currentScenario}
-        confirmCoef={sim.confirmCoef}
-        setConfirmCoef={sim.setConfirmCoef}
-        minutesReellesAppliquees={sim.minutesReellesAppliquees}
         machineAssignee={sim.machineAssignee}
         setMachineAssignee={sim.setMachineAssignee}
-        monoUnitsUsed={sim.monoUnitsUsed}
-        setMonoUnitsUsed={sim.setMonoUnitsUsed}
-        onConfirm={({ machineId, coef, monoUnitsUsed }) =>
-          handleConfirmCreation({ machineId, coef, monoUnitsUsed })
-        }
+        onConfirm={({ machineId }) => handleConfirmCreation({ machineId })}
       />
 
-      {/* Confirmation MULTI */}
-      <MultiMachineConfirmModal
-        isOpen={isMultiConfirmOpen && creationFlow === "multi"}
-        onClose={() => !isSubmitting && setIsMultiConfirmOpen(false)}
-        onSubmit={handleSubmitForm}
-        payload={pendingMultiPayload}
-        machines={machines}
-        onConfirm={handleConfirmMultiSave}
-      />
+
 
       {/* Sections par machine avec sous-sections par date */}
       <div className="sections-container">
@@ -872,7 +753,7 @@ export default function CommandesPage() {
             totalOrders = orders.length;
           }
 
-          const machineLabel = getMachineLabel(machineKey, totalOrders);
+          const machineLabel = getMachineLabel(machineKey, orders);
 
           // Récupérer le group_label de la machine pour data-group
           const machineObj = findMachineByKey(machineKey);

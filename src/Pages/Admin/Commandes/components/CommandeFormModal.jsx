@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import useSimulation from '../hooks/useSimulation'
-import TagsPicker from './TagsPicker'
 
 export default function CommandeFormModal(props = {}) {
-  const { isOpen, onClose, onSave, commande, linkedCommandeId, setLinkedCommandeId, linkableCommandes, articleTags, broderieTags } = props
+  const { isOpen, onClose, onSave, commande, linkedCommandeId, setLinkedCommandeId, linkableCommandes } = props
 
   // 1) Initialise une seule fois à l'ouverture, ou quand l'ID change
   const [form, setForm] = useState(() => commande ?? {})
@@ -255,7 +254,7 @@ export default function CommandeFormModal(props = {}) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            marginBottom: '20px',
+            marginBottom: '16px',
             fontWeight: '500',
             color: '#374151',
             cursor: 'pointer',
@@ -272,50 +271,29 @@ export default function CommandeFormModal(props = {}) {
             Commande déjà déballée
           </label>
 
-          {/* ----- TAGS ----- */}
-          <div style={{
+          {/* ✅ Validation client */}
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             marginBottom: '20px',
+            fontWeight: '500',
+            color: '#374151',
+            cursor: 'pointer',
           }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151',
-            }}>Types :</label>
-            <TagsPicker
-              items={articleTags || []}
-              selected={form.types || []}
-              onToggle={(label) => {
-                const types = form.types || []
-                const newTypes = types.includes(label)
-                  ? types.filter(t => t !== label)
-                  : [...types, label];
-                handleChange({ types: newTypes });
+            <input
+              type="checkbox"
+              checked={Boolean(form.validation_client)}
+              onChange={(e) => handleChange({ validation_client: e.target.checked })}
+              style={{
+                width: '16px',
+                height: '16px',
               }}
             />
-          </div>
+            Validation client
+          </label>
 
-          <div style={{
-            marginBottom: '24px',
-          }}>
-            <label style={{
-              display: 'block',
-              marginBottom: '8px',
-              fontWeight: '500',
-              color: '#374151',
-            }}>Options :</label>
-            <TagsPicker
-              items={broderieTags || []}
-              selected={form.options || []}
-              onToggle={(label) => {
-                const options = form.options || []
-                const newOptions = options.includes(label)
-                  ? options.filter(o => o !== label)
-                  : [...options, label];
-                handleChange({ options: newOptions });
-              }}
-            />
-          </div>
+
 
           {/* submit button */}
           <button

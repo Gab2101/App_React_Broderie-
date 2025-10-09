@@ -1,5 +1,6 @@
 // src/Pages/Admin/Commandes/hooks/useForm.js
 import { useState } from "react";
+import { calculateDeliveryDateAndUrgency } from "@/utils/dateCalculations";
 
 export default function useForm(initialState = {}) {
   const defaultEmptyForm = {
@@ -19,12 +20,6 @@ export default function useForm(initialState = {}) {
 
   const [formData, setFormData] = useState(emptyForm);
   const [saved, setSaved] = useState(false);
-
-  // Force une date à minuit (00:00) du jour local (Europe/Paris côté app)
-  const parisAtMidnight = (dateLike) => {
-    const d = new Date(dateLike);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-  };
 
   const handleChange = (nameOrEvent, value) => {
     let name, val;
@@ -55,21 +50,11 @@ export default function useForm(initialState = {}) {
       return;
     }
 
-    const selectedDate = parisAtMidnight(value);
-    const today = parisAtMidnight(new Date());
-
-    // Différence en jours calendaires (pas impactée par l'heure courante)
-    const diffDays = Math.ceil((selectedDate - today) / (1000 * 60 * 60 * 24));
-
-    let urgence = 1;
-    if (diffDays < 2) urgence = 5;
-    else if (diffDays < 5) urgence = 4;
-    else if (diffDays < 10) urgence = 3;
-    else if (diffDays < 15) urgence = 2;
+    const { date, urgence } = calculateDeliveryDateAndUrgency(value);
 
     setFormData((prev) => ({
       ...prev,
-      dateLivraison: value, // on conserve le string "YYYY-MM-DD" pour l'input
+      dateLivraison: date, // Keep string format for form input
       urgence,
     }));
   };

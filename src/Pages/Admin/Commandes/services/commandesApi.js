@@ -1,6 +1,6 @@
 // src/Pages/Admin/Commandes/services/commandesApi.js
 import supabase from '@/lib/supabaseClient'
-import { toLabelArray } from "../utils/labels";
+import { buildNeededSet } from '@/compat/labels';
 import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
 import { calculerDurees } from "@/utils/calculs";
 import {
@@ -31,14 +31,18 @@ export async function createCommandeAndPlanning({
   machines,
   nettoyageRules,
   articleTags,
-  linked: { isLinked, linkedCommandeId, sameMachineAsLinked, startAfterLinked },
+  linked = {},
 }) {
-  // Validation compatibilité
-  const machineLabels = toLabelArray(machine.etiquettes);
-  const neededTypes = toLabelArray(formData.types);
-  const ok = neededTypes.every((t) => machineLabels.includes(t));
-  if (!ok) {
-    return { errorCmd: { message: "Machine incompatible (types)." } };
+  const { isLinked, linkedCommandeId, sameMachineAsLinked, startAfterLinked } = linked;
+  // Validation compatibilité - using new unified label system
+  const neededTypesSet = buildNeededSet(formData); // Extracts and normalizes from formData.types
+  const machineLabelsSet = buildNeededSet({ etiquettes: machine.etiquettes }); // Normalize machine labels
+
+  // Check if machine has all required types
+  for (const requiredType of neededTypesSet) {
+    if (!machineLabelsSet.has(requiredType)) {
+      return { errorCmd: { message: `Machine incompatible : type "${requiredType}" manquant.` } };
+    }
   }
 
   let debutMinOverride = null;

@@ -1,16 +1,7 @@
 // src/utils/nettoyageRules.js
 import supabase from '@/lib/supabaseClient'
+import { normalizeLabel } from '@/compat/normalize'
 
-/** Normalise un label en string lowercased/trimmed */
-export function normalizeLabel(v) {
-  if (v == null) return "";
-  if (typeof v === "string") return v.trim().toLowerCase();
-  if (typeof v === "object") {
-    const cand = v.label ?? v.name ?? v.value ?? "";
-    return String(cand).trim().toLowerCase();
-  }
-  return String(v).trim().toLowerCase();
-}
 // alias pour compat
 export const normalizeOne = normalizeLabel;
 

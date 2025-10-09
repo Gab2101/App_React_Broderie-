@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import StatusBadge from "@/components/common/StatusBadge.jsx";
 import { convertDecimalToTime } from "@/utils/time";
-import { STATUTS } from "../utils/statut";
+
+const STATUTS = ["A commencer", "En cours", "Terminée"];
 
 const noop = () => {}
 const asFn = (fn, name) => {

@@ -292,5 +292,145 @@ export function ajusterHeureFin(debut, dureeHeures, opts = {}) {
   return addWorkingHours(debut, dureeHeures, opts);
 }
 
-/** Exports complémentaires provenant de ./slots si tu les utilises déjà */
-export { configureSlots, expandToHourSlots } from "./slots";
+// ========================================
+// SLOTS FUNCTIONALITY (previously in slots.js)
+// ========================================
+
+const TZ = 'Europe/Paris';
+let HOLIDAYS = new Set();
+let SKIP_NON_BUSINESS = false;
+
+export function configureSlots({ skipNonBusiness = false, holidays = new Set() } = {}) {
+  SKIP_NON_BUSINESS = !!skipNonBusiness;
+  HOLIDAYS = holidays;
+}
+
+function tzParts(ms) {
+  if (typeof ms === 'string') {
+    const parsed = Date.parse(ms);
+    if (!Number.isFinite(parsed)) throw new Error('[time.tzParts] startMs string invalide: ' + ms);
+    ms = parsed;
+  }
+  if (!Number.isFinite(ms)) throw new Error('[time.tzParts] startMs non numérique: ' + ms);
+
+  const d = new Date(ms);
+  if (!Number.isFinite(d.getTime())) throw new Error('[time.tzParts] Date invalide');
+
+  const parts = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  }).formatToParts(d).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+
+  return {
+    Y: +parts.year, M: +parts.month, D: +parts.day,
+    h: +parts.hour, m: +parts.minute, s: +parts.second
+  };
+}
+
+function ymdKey(ms) {
+  const {Y,M,D} = tzParts(ms);
+  const pad = (n)=> String(n).padStart(2,'0');
+  return `${Y}-${pad(M)}-${pad(D)}`;
+}
+
+function isBusinessDayTZ(ms) {
+  const d = new Date(ms);
+  const day = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, weekday: 'short' }).format(d);
+  const isWeekend = (day === 'Sat' || day === 'Sun');
+  if (isWeekend) return false;
+  if (!SKIP_NON_BUSINESS) return true;
+  return !HOLIDAYS.has(ymdKey(ms));
+}
+
+function atTZ({Y,M,D,h=0,m=0,s=0}) {
+  if (h >= 24) {
+    const daysToAdd = Math.floor(h / 24);
+    h = h % 24;
+    const base = Date.UTC(Y, M - 1, D) + daysToAdd * 24 * 3_600_000;
+    const np = tzParts(base);
+    Y = np.Y; M = np.M; D = np.D;
+  }
+  const guess = Date.UTC(Y, M-1, D, h, m, s);
+  const shown = tzParts(guess);
+  if (shown.h !== h) return guess + (h - shown.h) * 3_600_000;
+  return guess;
+}
+
+function floorToHourTZ(ms) {
+  const p = tzParts(ms);
+  return atTZ({...p, m:0, s:0});
+}
+
+function addOneHourTZ(ms) {
+  const p = tzParts(ms);
+  return atTZ({ ...p, h: p.h + 1, m: 0, s: 0 });
+}
+
+function isWorkHourTZ(ms) {
+  const {h} = tzParts(ms);
+  return (h >= WORKDAY.start && h < WORKDAY.lunchStart) || (h >= WORKDAY.lunchEnd && h < WORKDAY.end);
+}
+
+function nextBusinessMorningTZ(ms) {
+  let t = ms;
+  do {
+    const p = tzParts(t);
+    const midnightNextUTC = Date.UTC(p.Y, p.M-1, p.D) + 24*3_600_000;
+    const np = tzParts(midnightNextUTC);
+    t = atTZ({...np, h:WORKDAY.start, m:0, s:0});
+  } while (!isBusinessDayTZ(t));
+  return t;
+}
+
+function nextWorkStartTZ(ms) {
+  let t = floorToHourTZ(ms);
+  const p = tzParts(t);
+  if (!isBusinessDayTZ(t)) t = nextBusinessMorningTZ(t);
+  else if (p.h < WORKDAY.start) t = atTZ({...p, h:WORKDAY.start, m:0, s:0});
+  else if (p.h === WORKDAY.lunchStart) t = atTZ({...p, h:WORKDAY.lunchEnd, m:0, s:0});
+  else if (p.h >= WORKDAY.end) t = nextBusinessMorningTZ(t);
+
+  if (!isWorkHourTZ(t)) {
+    const pp = tzParts(t);
+    if (pp.h < WORKDAY.start) t = atTZ({...pp, h:WORKDAY.start, m:0, s:0});
+    else if (pp.h === WORKDAY.lunchStart) t = atTZ({...pp, h:WORKDAY.lunchEnd, m:0, s:0});
+    else if (pp.h >= WORKDAY.end) t = nextBusinessMorningTZ(t);
+  }
+  return t;
+}
+
+function hourKey(ms) {
+  const {Y,M,D,h} = tzParts(ms);
+  const pad = (n)=> String(n).padStart(2,'0');
+  return `${Y}-${pad(M)}-${pad(D)} ${pad(h)}:00`;
+}
+
+export function expandToHourSlots(startMs, durationMin) {
+  const startMsNum = (typeof startMs === 'string') ? Date.parse(startMs) : startMs;
+  if (!Number.isFinite(startMsNum)) {
+    console.warn('[time.expandToHourSlots] startMs invalide:', startMs);
+    return [];
+  }
+
+  const durationMinNum = Number(durationMin);
+  const remainingSlotsInit = Math.ceil((Number.isFinite(durationMinNum) ? durationMinNum : 0) / 60);
+
+  let remainingSlots = Math.max(0, remainingSlotsInit);
+  let slotStart = floorToHourTZ(startMsNum);
+  slotStart = isWorkHourTZ(slotStart) ? slotStart : nextWorkStartTZ(slotStart);
+
+  const slots = [];
+  while (remainingSlots > 0) {
+    if (!isBusinessDayTZ(slotStart) || !isWorkHourTZ(slotStart)) {
+      slotStart = nextWorkStartTZ(slotStart);
+      continue;
+    }
+    slots.push({ key: hourKey(slotStart), startMs: slotStart });
+    slotStart = addOneHourTZ(slotStart);
+    remainingSlots -= 1;
+  }
+  return slots;
+}
