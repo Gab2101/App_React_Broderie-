@@ -7,6 +7,20 @@ import { buildNeededSet } from "../../../../compat/labels";
 const parisFormat = (d, options = {}) =>
   new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...options });
 
+// Format minutes to hours and minutes (e.g., "2h 30min", "45min", "3h")
+const formatMinutesToHoursAndMinutes = (minutes) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hours === 0) {
+    return `${mins}min`;
+  } else if (mins === 0) {
+    return `${hours}h`;
+  } else {
+    return `${hours}h ${mins}min`;
+  }
+};
+
 export default function MachineAndTimeConfirmModal({
   isOpen,
   onClose,
@@ -18,76 +32,78 @@ export default function MachineAndTimeConfirmModal({
   articleTags = [],
   selectedArticleTags = [],
   onArticleTagsChange,
+  onBack,
 }) {
   // ALL HOOKS MUST BE BEFORE ANY CONDITIONAL LOGIC
-  // State for selected article tags
-  const [localSelectedTags, setLocalSelectedTags] = useState(selectedArticleTags || []);
+  // Simplify: Use single state for selected tags
+  const [selectedTags, setSelectedTags] = useState([]);
 
   // State for efficiency coefficient
   const [efficiencyCoef, setEfficiencyCoef] = useState(200); // Default 200%
 
+  // Helper function for machine compatibility checking
+  const isMachineCompatible = (machine, selectedTagLabel) => {
+    if (!machine.etiquettes) return true; // No labels = universal compatibility
+
+    let machineLabels = [];
+
+    // Parse machine labels consistently
+    try {
+      const etiquettes = machine.etiquettes;
+      if (typeof etiquettes === 'string') {
+        try {
+          machineLabels = JSON.parse(etiquettes);
+        } catch {
+          machineLabels = etiquettes.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+        }
+      } else if (Array.isArray(etiquettes)) {
+        machineLabels = etiquettes;
+      }
+
+      // Case-insensitive comparison
+      return machineLabels.some(label =>
+        typeof label === 'string' && label.toLowerCase() === selectedTagLabel.toLowerCase()
+      );
+    } catch (error) {
+      // Silent fallback - assume compatible if parsing fails
+      console.warn('Label parsing error for machine:', machine.id, error);
+      return true;
+    }
+  };
+
   // Filter compatible machines based on selected article tags
   const compatibleMachines = useMemo(() => {
-    if (!localSelectedTags.length) return machines;
+    if (!selectedTags.length) return machines;
 
     return machines.filter(machine => {
-      let machineLabelsSet = new Set();
-
-      // Custom parsing logic to handle JSON strings, arrays, and comma-separated values
-      try {
-        if (typeof machine.etiquettes === 'string') {
-          // Try to parse as JSON first
-          try {
-            const parsed = JSON.parse(machine.etiquettes);
-            if (Array.isArray(parsed)) {
-              parsed.forEach(label => machineLabelsSet.add(label.toLowerCase()));
-            }
-          } catch {
-            // Fallback to comma/semicolon/space separated
-            machine.etiquettes.split(/[,;\s]+/).forEach(label => {
-              label = label.trim();
-              if (label) machineLabelsSet.add(label.toLowerCase());
-            });
-          }
-        } else if (Array.isArray(machine.etiquettes)) {
-          machine.etiquettes.forEach(label => machineLabelsSet.add(label.toLowerCase()));
-        }
-      } catch (error) {
-        console.warn('Failed to parse machine etiquettes:', error, machine.etiquettes);
-      }
-
-      // Comparison logic with error handling
-      try {
-        const selectedLabels = localSelectedTags.map(tag => tag.label);
-
-        // If machine has no labels, assume it's compatible (open-ended compatibility)
-        if (machineLabelsSet.size === 0) return true;
-
-        // Check if any selected tag matches machine labels - normalize to lowercase for case-insensitive comparison
-        return selectedLabels.some(selectedLabel => {
-          if (typeof selectedLabel !== 'string') return false;
-          return machineLabelsSet.has(selectedLabel.toLowerCase());
-        });
-
-      } catch (error) {
-        console.error('Error in compatibility check for machine:', machine.id, error);
-        return false; // Default to filtering out on error
-      }
+      // Machine is compatible if it can handle ANY selected tag
+      return selectedTags.some(selectedTag =>
+        isMachineCompatible(machine, selectedTag.label)
+      );
     });
-  }, [machines, localSelectedTags]);
+  }, [machines, selectedTags]);
 
   // Clear machine selection when tags change
   useEffect(() => {
-    if (localSelectedTags.length !== (selectedArticleTags || []).length ||
-        !localSelectedTags.every(tag => selectedArticleTags.some(s => s.label === tag.label))) {
-      setMachineAssignee?.(null);
-    }
-  }, [localSelectedTags, selectedArticleTags, setMachineAssignee]);
+    setMachineAssignee?.(null);
+  }, [selectedTags, setMachineAssignee]);
 
-  // Handle tag changes with parent callback
-  const handleTagsChange = (newTags) => {
-    setLocalSelectedTags(newTags);
-    onArticleTagsChange?.(newTags);
+  // Simple tag change handler - no double state management
+  const handleTagSelect = (selectedLabelList) => {
+    // For TagsPicker, selectedLabelList is a single label on toggle
+    const labelToToggle = selectedLabelList;
+
+    // Find existing tag or create temp one
+    const foundTag = articleTags.find(tag => tag.label === labelToToggle);
+    const tagToToggle = foundTag || { id: `temp-${labelToToggle}`, label: labelToToggle };
+
+    // Toggle the tag
+    const newSelectedTags = selectedTags.some(t => t.label === labelToToggle)
+      ? selectedTags.filter(t => t.label !== labelToToggle) // Remove if exists
+      : [...selectedTags, tagToToggle]; // Add if not exists
+
+    setSelectedTags(newSelectedTags);
+    onArticleTagsChange?.(newSelectedTags);
   };
 
   // Calculate time coefficient (applies only to stitching time)
@@ -120,7 +136,8 @@ export default function MachineAndTimeConfirmModal({
           })}`
         : '';
 
-      const label = `${machine.nom || machine.name || `Machine ${machine.id}`} (${adjustedMinutes} min)${finLabel}`;
+      const durationLabel = formatMinutesToHoursAndMinutes(adjustedMinutes);
+      const label = `${machine.nom || machine.name || `Machine ${machine.id}`} (${durationLabel})${finLabel}`;
 
       return { machine, label, totalMinutes: adjustedMinutes };
     });
@@ -267,12 +284,9 @@ export default function MachineAndTimeConfirmModal({
 
           <TagsPicker
             items={articleTags.map(tag => ({ id: tag.id, label: tag.label }))}
-            selected={localSelectedTags.map(tag => tag.label)}
-            onToggle={(label) => {
-              const newTags = localSelectedTags.some(t => t.label === label)
-                ? localSelectedTags.filter(t => t.label !== label) // Remove if exists
-                : [...localSelectedTags, { id: `temp-${label}`, label }].slice(0, 3); // Add if not exists, limit to 3
-              handleTagsChange(newTags);
+            selected={selectedTags.map(tag => tag.label)}
+            onToggle={(selectedLabels) => {
+              handleTagSelect(selectedLabels);
             }}
             variant="button"
           />
@@ -396,6 +410,33 @@ export default function MachineAndTimeConfirmModal({
           >
             Annuler
           </button>
+
+          {onBack && (
+            <button
+              onClick={() => {
+                onClose(); // Close current modal
+                onBack(); // Re-open form modal
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#4b5563';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#6b7280';
+              }}
+            >
+              ◀️ Retour au formulaire
+            </button>
+          )}
 
           <button
             onClick={handleConfirm}

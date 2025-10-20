@@ -58,8 +58,7 @@ export default function CommandesPage() {
   // Article tags for machine filtering
   const [selectedArticleTags, setSelectedArticleTags] = useState([]);
 
-  // Always "mono" - single machine workflow only
-  const [creationFlow, setCreationFlow] = useState("idle");
+  // Simplified - no creationFlow needed for single machine workflow
 
   // Archive toggle for finished orders
   const [showArchive, setShowArchive] = useState(false);
@@ -168,16 +167,15 @@ export default function CommandesPage() {
 
     setSelectedArticleTags([]); // Reset article tags selection
     setIsConfirmOpen(false);
-    setCreationFlow("idle");
   };
 
   // Handle article tag changes in modal
   const handleArticleTagsChange = (tags) => {
     setSelectedArticleTags(tags);
-    // Store selected tags in form data for submission
+    // Store selected tags as array in form data for API compatibility
     form.setFormData(prev => ({
       ...prev,
-      types: Array.isArray(tags) ? tags.map(t => t.label).join('') : ''
+      types: Array.isArray(tags) ? tags.map(t => t.label) : []
     }));
   };
 
@@ -248,7 +246,8 @@ export default function CommandesPage() {
 
       // CRÉATION : Check if we have machines available
       if (machines.length > 0) {
-        setCreationFlow("mono");
+        // Update form state with validated values before modal transition
+        form.setFormData(formData);
         setIsFormOpen(false);
         setIsConfirmOpen(true);
       } else {
@@ -264,11 +263,21 @@ export default function CommandesPage() {
 
   // Enregistrement final MONO
   const handleConfirmCreation = async ({ machineId }) => {
+    // DEBUG: Log data flow
+    console.log("🔍 DEBUG - handleConfirmCreation:");
+    console.log("🤖 machineId:", machineId);
+    console.log("🏷️ selectedArticleTags:", selectedArticleTags);
+    console.log("📋 form.formData.types:", form.formData.types);
+    console.log("💻 Article Tags from props:", articleTags);
+
     const machine = machines.find((m) => String(m.id) === String(machineId));
     if (!machine) {
       alert("Machine invalide.");
       return;
     }
+
+    console.log("🤖 Found machine:", machine);
+    console.log("🏷️ Machine etiquettes:", machine.etiquettes);
 
     // Simplified creation - using selected article tags
     const { errorCmd, errorPlanning } = await createCommandeAndPlanning({
@@ -306,7 +315,6 @@ export default function CommandesPage() {
     sim.setMonoUnitsUsed(1);
 
     setIsConfirmOpen(false);
-    setCreationFlow("idle");
 
     await reloadData();
     form.resetForm();
@@ -736,10 +744,11 @@ export default function CommandesPage() {
         commande={form.formData}
       />
 
-      {/* Confirmation MONO */}
+      {/* Single Machine Confirmation */}
       <MachineAndTimeConfirmModal
-        isOpen={isConfirmOpen && creationFlow !== "multi"}
+        isOpen={isConfirmOpen}
         onClose={() => !isSubmitting && setIsConfirmOpen(false)}
+        onBack={() => setIsFormOpen(true)} // Re-open the form modal
         machines={machines}
         formData={form.formData}
         machineAssignee={sim.machineAssignee}

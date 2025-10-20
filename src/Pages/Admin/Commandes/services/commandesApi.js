@@ -1,6 +1,7 @@
 // src/Pages/Admin/Commandes/services/commandesApi.js
 import supabase from '@/lib/supabaseClient'
 import { buildNeededSet } from '@/compat/labels';
+import { toNormalizedSet } from '@/compat/normalize';
 import {snapToNextWorkStart,addMinutesWithinWorkHours,roundUpToNextHourParis,DEFAULT_WORKDAY,} from "../utils/workhours";
 import { calculerDurees } from "@/utils/calculs";
 import {
@@ -35,15 +36,47 @@ export async function createCommandeAndPlanning({
 }) {
   const { isLinked, linkedCommandeId, sameMachineAsLinked, startAfterLinked } = linked;
   // Validation compatibilité - using new unified label system
-  const neededTypesSet = buildNeededSet(formData); // Extracts and normalizes from formData.types
-  const machineLabelsSet = buildNeededSet({ etiquettes: machine.etiquettes }); // Normalize machine labels
+  console.log("🐛 DEBUG API - Compatibility Check:");
+  console.log("📋 formData:", formData);
+  console.log("🏷️ formData.types:", formData.types);
+  console.log("🤖 machine:", machine);
+  console.log("🏷️ machine.etiquettes:", machine.etiquettes);
+
+  // Pre-process and normalize both needed types and machine labels
+  const rawNeededTypes = formData.types;
+  const neededTypesArray = Array.isArray(rawNeededTypes) ? rawNeededTypes : [];
+  const neededTypesSet = toNormalizedSet(neededTypesArray);
+
+  // Pre-process machine labels - handle JSON string format
+  let machineLabels = machine.etiquettes;
+  try {
+    if (typeof machineLabels === 'string' && machineLabels.trim().startsWith('[')) {
+      machineLabels = JSON.parse(machineLabels);
+    }
+  } catch (e) {
+    console.error('Failed to parse machine etiquettes JSON', machineLabels, e);
+    machineLabels = [];
+  }
+
+  const machineLabelsSet = toNormalizedSet(machineLabels);
+
+  console.log("🔍 Raw needed types:", rawNeededTypes);
+  console.log("🔍 neededTypesSet:", neededTypesSet);
+  console.log("🔍 machineLabelsSet:", machineLabelsSet);
+  console.log("🔍 Pre-processed machineLabels:", machineLabels);
 
   // Check if machine has all required types
   for (const requiredType of neededTypesSet) {
+    console.log(`🔎 Checking if machine has "${requiredType}"...`);
+    console.log(`   machineLabelsSet.has("${requiredType}") =`, machineLabelsSet.has(requiredType));
+
     if (!machineLabelsSet.has(requiredType)) {
+      console.log(`❌ MISSING: "${requiredType}" not found in machine labels`);
       return { errorCmd: { message: `Machine incompatible : type "${requiredType}" manquant.` } };
     }
   }
+
+  console.log("✅ All required types found - compatibility OK!");
 
   let debutMinOverride = null;
   if (isLinked && linkedCommandeId && startAfterLinked) {
