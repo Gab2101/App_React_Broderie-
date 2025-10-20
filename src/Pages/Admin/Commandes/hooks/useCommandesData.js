@@ -12,6 +12,7 @@ export default function useCommandesData() {
   const [planning, setPlanning] = useState([]);
   const [linkableCommandes, setLinkableCommandes] = useState([]);
   const [nettoyageRules, setNettoyageRules] = useState([]);
+  const [articleTags, setArticleTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -34,11 +35,27 @@ export default function useCommandesData() {
         { data: commandesData, error: err1 },
         { data: machinesData, error: err2 },
         { data: planningData, error: err3 },
+        { data: articleTagsData, error: err4 },
       ] = await Promise.all([
         supabase.from("commandes").select("*"),
         supabase.from("machines").select("*"),
         planningQuery,
+        supabase.from("articleTags").select("*"),
       ]);
+
+      if (err1 || err2 || err3 || err4) {
+        console.error("Erreur chargement données:", err1, err2, err3, err4);
+        setError(err1 || err2 || err3 || err4);
+        // Set empty arrays to prevent app crash
+        setCommandes([]);
+        setMachines([]);
+        setPlanning([]);
+        setLinkableCommandes([]);
+        setNettoyageRules([]);
+        setArticleTags([]);
+        setLoading(false);
+        return;
+      }
 
       if (err1 || err2 || err3) {
         console.error("Erreur chargement données:", err1, err2, err3);
@@ -56,6 +73,7 @@ export default function useCommandesData() {
       setCommandes(commandesData || []);
       setMachines(machinesData || []);
       setPlanning(planningData || []);
+      setArticleTags(articleTagsData || []);
 
       // Commandes "liables" = statuts actifs
       const { data: cmdLinkables, error: errLink } = await supabase
@@ -164,6 +182,7 @@ export default function useCommandesData() {
     planning,
     linkableCommandes,
     nettoyageRules,
+    articleTags,
     loading,
     error,
     reloadData,

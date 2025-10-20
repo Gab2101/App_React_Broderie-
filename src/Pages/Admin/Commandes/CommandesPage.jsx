@@ -32,6 +32,7 @@ export default function CommandesPage() {
     machines,
     planning,
     nettoyageRules,
+    articleTags,
     reloadData,
   } = useCommandesData();
 
@@ -53,6 +54,9 @@ export default function CommandesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false); // mono
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Article tags for machine filtering
+  const [selectedArticleTags, setSelectedArticleTags] = useState([]);
 
   // Always "mono" - single machine workflow only
   const [creationFlow, setCreationFlow] = useState("idle");
@@ -162,8 +166,19 @@ export default function CommandesPage() {
     sim.setConfirmCoef(200);
     sim.setMonoUnitsUsed(1);
 
+    setSelectedArticleTags([]); // Reset article tags selection
     setIsConfirmOpen(false);
     setCreationFlow("idle");
+  };
+
+  // Handle article tag changes in modal
+  const handleArticleTagsChange = (tags) => {
+    setSelectedArticleTags(tags);
+    // Store selected tags in form data for submission
+    form.setFormData(prev => ({
+      ...prev,
+      types: Array.isArray(tags) ? tags.map(t => t.label).join('') : ''
+    }));
   };
 
   const openFormForNew = () => {
@@ -255,7 +270,7 @@ export default function CommandesPage() {
       return;
     }
 
-    // Simplified creation - using basic parameters
+    // Simplified creation - using selected article tags
     const { errorCmd, errorPlanning } = await createCommandeAndPlanning({
       formData: form.formData,
       machine,
@@ -265,7 +280,7 @@ export default function CommandesPage() {
       commandes,
       machines,
       nettoyageRules,
-      articleTags: [], // Empty since we removed tag system
+      articleTags: selectedArticleTags, // Use selected article tags
     });
 
     if (errorCmd) {
@@ -730,6 +745,9 @@ export default function CommandesPage() {
         machineAssignee={sim.machineAssignee}
         setMachineAssignee={sim.setMachineAssignee}
         onConfirm={({ machineId }) => handleConfirmCreation({ machineId })}
+        articleTags={articleTags}
+        selectedArticleTags={selectedArticleTags}
+        onArticleTagsChange={handleArticleTagsChange}
       />
 
 

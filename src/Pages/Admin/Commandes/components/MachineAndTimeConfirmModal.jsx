@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { calculerDurees } from "../../../../utils/calculs";
 import { DEFAULT_WORKDAY, snapToNextWorkStart, addMinutesWithinWorkHours } from "../utils/workhours";
+import TagsPicker from "../components/TagsPicker.jsx";
+import { buildNeededSet } from "../../../../compat/labels";
 
 const parisFormat = (d, options = {}) =>
   new Date(d).toLocaleString("fr-FR", { timeZone: "Europe/Paris", ...options });
@@ -13,22 +15,91 @@ export default function MachineAndTimeConfirmModal({
   machineAssignee,
   setMachineAssignee,
   onConfirm,
+  articleTags = [],
+  selectedArticleTags = [],
+  onArticleTagsChange,
 }) {
-  if (!isOpen) return null;
+  // ALL HOOKS MUST BE BEFORE ANY CONDITIONAL LOGIC
+  // State for selected article tags
+  const [localSelectedTags, setLocalSelectedTags] = useState(selectedArticleTags || []);
 
   // State for efficiency coefficient
-  const [efficiencyCoef, setEfficiencyCoef] = React.useState(200); // Default 200%
+  const [efficiencyCoef, setEfficiencyCoef] = useState(200); // Default 200%
+
+  // Filter compatible machines based on selected article tags
+  const compatibleMachines = useMemo(() => {
+    if (!localSelectedTags.length) return machines;
+
+    return machines.filter(machine => {
+      let machineLabelsSet = new Set();
+
+      // Custom parsing logic to handle JSON strings, arrays, and comma-separated values
+      try {
+        if (typeof machine.etiquettes === 'string') {
+          // Try to parse as JSON first
+          try {
+            const parsed = JSON.parse(machine.etiquettes);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(label => machineLabelsSet.add(label.toLowerCase()));
+            }
+          } catch {
+            // Fallback to comma/semicolon/space separated
+            machine.etiquettes.split(/[,;\s]+/).forEach(label => {
+              label = label.trim();
+              if (label) machineLabelsSet.add(label.toLowerCase());
+            });
+          }
+        } else if (Array.isArray(machine.etiquettes)) {
+          machine.etiquettes.forEach(label => machineLabelsSet.add(label.toLowerCase()));
+        }
+      } catch (error) {
+        console.warn('Failed to parse machine etiquettes:', error, machine.etiquettes);
+      }
+
+      // Comparison logic with error handling
+      try {
+        const selectedLabels = localSelectedTags.map(tag => tag.label);
+
+        // If machine has no labels, assume it's compatible (open-ended compatibility)
+        if (machineLabelsSet.size === 0) return true;
+
+        // Check if any selected tag matches machine labels - normalize to lowercase for case-insensitive comparison
+        return selectedLabels.some(selectedLabel => {
+          if (typeof selectedLabel !== 'string') return false;
+          return machineLabelsSet.has(selectedLabel.toLowerCase());
+        });
+
+      } catch (error) {
+        console.error('Error in compatibility check for machine:', machine.id, error);
+        return false; // Default to filtering out on error
+      }
+    });
+  }, [machines, localSelectedTags]);
+
+  // Clear machine selection when tags change
+  useEffect(() => {
+    if (localSelectedTags.length !== (selectedArticleTags || []).length ||
+        !localSelectedTags.every(tag => selectedArticleTags.some(s => s.label === tag.label))) {
+      setMachineAssignee?.(null);
+    }
+  }, [localSelectedTags, selectedArticleTags, setMachineAssignee]);
+
+  // Handle tag changes with parent callback
+  const handleTagsChange = (newTags) => {
+    setLocalSelectedTags(newTags);
+    onArticleTagsChange?.(newTags);
+  };
 
   // Calculate time coefficient (applies only to stitching time)
   const timeMultiplier = efficiencyCoef / 100; // Convert % to multiplier
 
-  // Calculate times for all machines
-  const machineOptions = React.useMemo(() => {
-    return machines.map((machine) => {
+  // Calculate times for compatible machines only
+  const machineOptions = useMemo(() => {
+    return compatibleMachines.map((machine) => {
       const { dureeTotaleHeures } = calculerDurees({
-        quantite: Number(formData.quantite || 0),
-        points: Number(formData.points || 0),
-        vitesse: Number(formData.vitesseMoyenne || 750), // Default stitches/min
+        quantite: Number((formData && formData.quantite) || 0),
+        points: Number((formData && formData.points) || 0),
+        vitesse: Number((formData && formData.vitesseMoyenne) || 750), // Default stitches/min
         nbTetes: Number(machine.nbTetes || 1),
         nettoyageParArticleSec: 0, // Simplified - no cleaning calculation
       });
@@ -53,7 +124,12 @@ export default function MachineAndTimeConfirmModal({
 
       return { machine, label, totalMinutes: adjustedMinutes };
     });
-  }, [machines, formData, efficiencyCoef]);
+  }, [compatibleMachines, formData, efficiencyCoef]);
+
+  // Early return ONLY after ALL hooks are called - this is critical for React Rules of Hooks
+  if (!isOpen) return null;
+
+  // Clean implementation - removing debug logs after successful implementation
 
   // Get selected machine for preview
   const selectedMachine = machines.find(m => String(m.id) === String(machineAssignee));
@@ -135,39 +211,80 @@ export default function MachineAndTimeConfirmModal({
           }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
-                <strong>Numéro:</strong> {formData.numero || 'N/A'}
+                <strong>Numéro:</strong> {(formData && formData.numero) || 'N/A'}
               </div>
               <div>
-                <strong>Client:</strong> {formData.client || 'N/A'}
+                <strong>Client:</strong> {(formData && formData.client) || 'N/A'}
               </div>
               <div>
-                <strong>Quantité:</strong> {formData.quantite || 0}
+                <strong>Quantité:</strong> {(formData && formData.quantite) || 0}
               </div>
               <div>
-                <strong>Points:</strong> {formData.points || 0}
+                <strong>Points:</strong> {(formData && formData.points) || 0}
               </div>
               <div>
-                <strong>Vitesse:</strong> {formData.vitesseMoyenne || 750} pts/min
+                <strong>Vitesse:</strong> {(formData && formData.vitesseMoyenne) || 750} pts/min
               </div>
               <div>
-                <strong>Urgence:</strong> {formData.urgence || 3}/5
+                <strong>Urgence:</strong> {(formData && formData.urgence) || 3}/5
               </div>
             </div>
 
             <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px', marginTop: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <strong>État:</strong> {formData.deballe ? 'Déballée' : 'À déballer'}
+                  <strong>État:</strong> {(formData && formData.deballe) ? 'Déballée' : 'À déballer'}
                 </div>
                 <div>
-                  <strong>Validation:</strong> {formData.validation_client ? 'Validée' : 'À valider'}
+                  <strong>Validation:</strong> {(formData && formData.validation_client) ? 'Validée' : 'À valider'}
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <strong>Date livraison:</strong> {formData.dateLivraison ? new Date(formData.dateLivraison).toLocaleDateString('fr-FR') : 'Non spécifiée'}
+                  <strong>Date livraison:</strong> {(formData && formData.dateLivraison) ? new Date(formData.dateLivraison).toLocaleDateString('fr-FR') : 'Non spécifiée'}
                 </div>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Article Tags Selection */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '12px',
+            fontWeight: '500',
+            color: '#374151',
+          }}>
+            Type(s) d'article à broder
+            <span style={{
+              fontSize: '12px',
+              color: '#6b7280',
+              fontWeight: 'normal',
+              marginLeft: '4px'
+            }}>
+              (optionnel - filtre la liste des machines)
+            </span>
+          </label>
+
+          <TagsPicker
+            items={articleTags.map(tag => ({ id: tag.id, label: tag.label }))}
+            selected={localSelectedTags.map(tag => tag.label)}
+            onToggle={(label) => {
+              const newTags = localSelectedTags.some(t => t.label === label)
+                ? localSelectedTags.filter(t => t.label !== label) // Remove if exists
+                : [...localSelectedTags, { id: `temp-${label}`, label }].slice(0, 3); // Add if not exists, limit to 3
+              handleTagsChange(newTags);
+            }}
+            variant="button"
+          />
+
+          <p style={{
+            marginTop: '8px',
+            fontSize: '12px',
+            color: '#6b7280',
+            lineHeight: '1.4',
+          }}>
+            Sélectionnez les types d'articles pour voir uniquement les machines capables de les produire.
+          </p>
         </div>
 
         {/* Efficiency coefficient slider */}
