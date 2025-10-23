@@ -445,6 +445,37 @@ export default function CommandesPage() {
   };
 
   /* =========================
+     Toggle "marchandise recue" (persistant)
+     ========================= */
+  const handleToggleMarchandise = async (id, recue) => {
+    // UI optimiste (snapshot pour rollback)
+    const prev = commandes;
+    setCommandes((list) =>
+      list.map((c) => (String(c.id) === String(id) ? { ...c, marchandise_recue: recue } : c))
+    );
+
+    try {
+      const { data, error } = await supabase
+        .from("commandes")
+        .update({ marchandise_recue: recue })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Optionnel : réappliquer la ligne retournée (source de vérité)
+      setCommandes((list) =>
+        list.map((c) => (String(c.id) === String(id) ? { ...c, ...data } : c))
+      );
+    } catch (e) {
+      console.error("MAJ marchandise_recue échouée", e);
+      setCommandes(prev); // rollback
+      alert("Impossible d'enregistrer l'état marchandise reçue. Réessaie.");
+    }
+  };
+
+  /* =========================
      Étape 2 + 3 : sections + barre colorée
      ========================= */
 
@@ -855,6 +886,7 @@ export default function CommandesPage() {
                               onDelete={handleDelete}
                               onDeballeChange={(id, checked) => handleToggleDeballe(id, checked)}
                               onValidationChange={(id, checked) => handleToggleValidation(id, checked)}
+                              onMarchandiseChange={(id, checked) => handleToggleMarchandise(id, checked)}
                               livraisonLabel={livraisonLabel}
                               t={cmd.duree_totale_heures}
                             />
@@ -891,6 +923,7 @@ export default function CommandesPage() {
                         onDelete={handleDelete}
                         onDeballeChange={(id, checked) => handleToggleDeballe(id, checked)}
                         onValidationChange={(id, checked) => handleToggleValidation(id, checked)}
+                        onMarchandiseChange={(id, checked) => handleToggleMarchandise(id, checked)}
                         livraisonLabel={livraisonLabel}
                         t={cmd.duree_totale_heures}
                       />

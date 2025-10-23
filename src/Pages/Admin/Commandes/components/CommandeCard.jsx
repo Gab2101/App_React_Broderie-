@@ -21,6 +21,7 @@ export default function CommandeCard(props = {}) {
   const onDelete = asFn(props.onDelete, 'onDelete')
   const onDeballeChange = asFn(props.onDeballeChange ?? props.onToggleDeballe, 'onDeballeChange')
   const onValidationChange = asFn(props.onValidationChange ?? props.onClientValidationChange, 'onValidationChange')
+  const onMarchandiseChange = asFn(props.onMarchandiseChange, 'onMarchandiseChange')
 
   const {
     hideADeballerUI = false,
@@ -37,6 +38,8 @@ export default function CommandeCard(props = {}) {
   const [localStatut, setLocalStatut] = useState(commande?.statut ?? 'A commencer')
   const [savingValidation, setSavingValidation] = useState(false)
   const [validationLocal, setValidationLocal] = useState(Boolean(commande?.validation_client))
+  const [savingMarchandise, setSavingMarchandise] = useState(false)
+  const [marchandiseLocal, setMarchandiseLocal] = useState(Boolean(commande?.marchandise_recue))
 
   // Sync depuis props quand la commande change / quand son statut/flag change côté parent
   useEffect(() => {
@@ -50,6 +53,10 @@ export default function CommandeCard(props = {}) {
   useEffect(() => {
     setValidationLocal(Boolean(commande?.validation_client))
   }, [commande?.id, commande?.validation_client])
+
+  useEffect(() => {
+    setMarchandiseLocal(Boolean(commande?.marchandise_recue))
+  }, [commande?.id, commande?.marchandise_recue])
 
   // --- HANDLERS ---
   const handleDeballeChange = useCallback(async (checked) => {
@@ -90,6 +97,16 @@ export default function CommandeCard(props = {}) {
       setSavingValidation(false)
     }
   }, [commande?.id, onValidationChange])
+
+  const handleMarchandiseChange = useCallback(async (checked) => {
+    setSavingMarchandise(true)
+    setMarchandiseLocal(checked)             // UI optimiste
+    try {
+      await onMarchandiseChange(commande.id, checked)
+    } finally {
+      setSavingMarchandise(false)
+    }
+  }, [commande?.id, onMarchandiseChange])
 
   return (
     <div
@@ -150,6 +167,23 @@ export default function CommandeCard(props = {}) {
             À valider
           </div>
         )}
+
+        {marchandiseLocal === false && (
+          <div
+            style={{
+              backgroundColor: "#17a2b8",
+              color: "white",
+              padding: "4px 8px",
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: "bold",
+              pointerEvents: 'none'
+            }}
+            title="Marchandise non reçue"
+          >
+            March. non reçue
+          </div>
+        )}
       </div>
 
       <div
@@ -200,6 +234,27 @@ export default function CommandeCard(props = {}) {
         />
         <span style={{ fontSize: "14px", fontWeight: "400" }}>
           Validation client {savingValidation ? "…" : ""}
+        </span>
+      </div>
+
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: "6px"
+      }}>
+        <input
+          type="checkbox"
+          checked={marchandiseLocal}
+          onChange={(e) => handleMarchandiseChange(e.target.checked)}
+          disabled={savingMarchandise}
+          style={{
+            width: "16px",
+            height: "16px"
+          }}
+        />
+        <span style={{ fontSize: "14px", fontWeight: "400" }}>
+          Marchandise reçue {savingMarchandise ? "…" : ""}
         </span>
       </div>
 

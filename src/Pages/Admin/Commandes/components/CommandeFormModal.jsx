@@ -276,7 +276,7 @@ export default function CommandeFormModal(props = {}) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            marginBottom: '20px',
+            marginBottom: '16px',
             fontWeight: '500',
             color: '#374151',
             cursor: 'pointer',
@@ -291,6 +291,28 @@ export default function CommandeFormModal(props = {}) {
               }}
             />
             Validation client
+          </label>
+
+          {/* ✅ Marchandise reçue ? */}
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: '20px',
+            fontWeight: '500',
+            color: '#374151',
+            cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={Boolean(form.marchandise_recue)}
+              onChange={(e) => handleChange({ marchandise_recue: e.target.checked })}
+              style={{
+                width: '16px',
+                height: '16px',
+              }}
+            />
+            Marchandise reçue ?
           </label>
 
 

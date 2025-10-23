@@ -18,6 +18,7 @@ export default function CommandeModal({
   );
   const [deballe, setDeballe] = React.useState(Boolean(commande?.deballe));
   const [validationClient, setValidationClient] = React.useState(Boolean(commande?.validation_client));
+  const [marchandiseRecue, setMarchandiseRecue] = React.useState(Boolean(commande?.marchandise_recue));
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
@@ -28,7 +29,8 @@ export default function CommandeModal({
     );
     setDeballe(Boolean(commande?.deballe));
     setValidationClient(Boolean(commande?.validation_client));
-  }, [commande?.id, commande?.statut, commande?.dateLivraison, commande?.deballe, commande?.validation_client]);
+    setMarchandiseRecue(Boolean(commande?.marchandise_recue));
+  }, [commande?.id, commande?.statut, commande?.dateLivraison, commande?.deballe, commande?.validation_client, commande?.marchandise_recue]);
 
   const handleSave = async () => {
     if (!commande?.id) return;
@@ -38,7 +40,8 @@ export default function CommandeModal({
       (commande.statut ?? "A commencer") !== statut ||
       (commande.dateLivraison?.split('T')[0] ?? "") !== dateLivraison ||
       Boolean(commande?.deballe) !== deballe ||
-      Boolean(commande?.validation_client) !== validationClient
+      Boolean(commande?.validation_client) !== validationClient ||
+      Boolean(commande?.marchandise_recue) !== marchandiseRecue
     );
 
     if (!hasChanges) {
@@ -54,7 +57,8 @@ export default function CommandeModal({
       statut,
       dateLivraison: dateLivraison ? `${dateLivraison}T00:00:00` : commande.dateLivraison,
       deballe,
-      validation_client: validationClient
+      validation_client: validationClient,
+      marchandise_recue: marchandiseRecue
     };
     onOptimisticReplace?.(optimistic);
 
@@ -80,6 +84,15 @@ export default function CommandeModal({
           .update({ deballe })
           .eq("id", commande.id);
         if (deballeError) throw deballeError;
+      }
+
+      // Update marchandise_recue
+      if (Boolean(commande?.marchandise_recue) !== marchandiseRecue) {
+        const { error: marchandiseError } = await supabase
+          .from("commandes")
+          .update({ marchandise_recue: marchandiseRecue })
+          .eq("id", commande.id);
+        if (marchandiseError) throw marchandiseError;
       }
 
       // Si "Terminée" → coupe à l'heure pleine suivante côté planning (Paris)
@@ -240,7 +253,7 @@ export default function CommandeModal({
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            marginBottom: '20px',
+            marginBottom: '16px',
             fontWeight: '500',
             color: '#374151',
             cursor: 'pointer',
@@ -256,6 +269,28 @@ export default function CommandeModal({
               }}
             />
             Validation client
+          </label>
+
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: '20px',
+            fontWeight: '500',
+            color: '#374151',
+            cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={marchandiseRecue}
+              onChange={(e) => setMarchandiseRecue(e.target.checked)}
+              disabled={saving}
+              style={{
+                width: '16px',
+                height: '16px',
+              }}
+            />
+            Marchandise reçue ?
           </label>
 
           {error && (

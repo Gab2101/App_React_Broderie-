@@ -310,7 +310,7 @@ export default function PlanningGrid({
                     const color = b.color || commandeColorMap?.get?.(b.commandeId);
                     const title = `#${b.numero ?? b.commandeId} • ${b.client ?? ""} • ${b.statut ?? ""}`;
 
-                    const isValidated = b.validation_client !== false; // Default true if undefined
+                    const isValidated = b.validation_client !== false && b.marchandise_recue !== false; // Default true if undefined
 
                     return (
                       <div

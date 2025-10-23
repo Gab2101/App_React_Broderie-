@@ -511,6 +511,7 @@ export default function PlanningPage() {
         statut: com?.statut ?? "",
         client: com?.client || com?.client_nom || com?.client_name || "",
         validation_client: com?.validation_client ?? false,
+        marchandise_recue: com?.marchandise_recue ?? false,
       });
     }
 
