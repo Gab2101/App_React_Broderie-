@@ -13,16 +13,55 @@ function AdminNavbar() {
 
   return (
     <nav className="navbar">
-      <div className="navbar-links">
-        <NavLink to="/admin/commandes">Commandes</NavLink>
-        <NavLink to="/admin/machines">Machines</NavLink>
-        <NavLink to="/admin/planning">Planning</NavLink>
-        <NavLink to="/admin/parametres">Paramètres</NavLink>
-      </div>
+      <ul className="navbar__list">
+        <li className="navbar__item">
+          <NavLink
+            to="/admin/commandes"
+            className={({ isActive }) =>
+              `navbar__link ${isActive ? 'is-active' : ''}`
+            }
+          >
+            <span className="navbar__label">Commandes</span>
+          </NavLink>
+        </li>
+        <li className="navbar__item">
+          <NavLink
+            to="/admin/machines"
+            className={({ isActive }) =>
+              `navbar__link ${isActive ? 'is-active' : ''}`
+            }
+          >
+            <span className="navbar__label">Machines</span>
+          </NavLink>
+        </li>
+        <li className="navbar__item">
+          <NavLink
+            to="/admin/planning"
+            className={({ isActive }) =>
+              `navbar__link ${isActive ? 'is-active' : ''}`
+            }
+          >
+            <span className="navbar__label">Planning</span>
+          </NavLink>
+        </li>
+        <li className="navbar__item">
+          <NavLink
+            to="/admin/parametres"
+            className={({ isActive }) =>
+              `navbar__link ${isActive ? 'is-active' : ''}`
+            }
+          >
+            <span className="navbar__label">Paramètres</span>
+          </NavLink>
+        </li>
+      </ul>
       <div className="navbar-user">
-        <span className="user-email">{user?.username}</span>
+        <span className="user-info">
+          <span className="user-greeting">Bonjour,</span>
+          <span className="user-name">{user?.username}</span>
+        </span>
         <button onClick={handleLogout} className="logout-button">
-          Déconnexion
+          <span>Déconnexion</span>
         </button>
       </div>
     </nav>
