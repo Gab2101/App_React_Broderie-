@@ -13,11 +13,14 @@
 .navbar {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* occupe toute la largeur */
+  justify-content: space-between;
   width: 100%;
+  max-width: 1200px; /* limite la largeur maximale */
+  margin: 0 auto; /* centre horizontalement */
   background: var(--nav-bg);
   padding: var(--nav-pad-y) 16px;
   border-bottom: 1px solid var(--nav-border);
+  box-sizing: border-box;
 }
 
 .navbar-links {
@@ -181,6 +184,62 @@
 .navbar__label { white-space: nowrap; line-height: 1.2; }
 
 /* ============== Responsive ============== */
+@media (max-width: 768px) {
+  .navbar {
+    padding: var(--nav-pad-y) 12px;
+  }
+
+  .navbar-user {
+    gap: 12px;
+  }
+
+  .user-info {
+    font-size: 0.8rem;
+  }
+
+  .logout-button {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  :root {
+    --nav-gap: 16px;
+    --nav-pad-y: 10px;
+    --nav-font-size: 1.1rem;
+  }
+}
+
 @media (max-width: 480px) {
-  :root { --nav-gap: 14px; --nav-pad-y: 10px; --nav-font-size: 1.05rem; }
+  .navbar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .navbar__list {
+    width: 100%;
+    justify-content: space-around;
+  }
+
+  .navbar-user {
+    margin-left: 0;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .user-info {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .user-greeting {
+    display: none; /* hide greeting on very small screens */
+  }
+
+  :root {
+    --nav-gap: 8px;
+    --nav-pad-y: 8px;
+    --nav-font-size: 1rem;
+  }
 }
