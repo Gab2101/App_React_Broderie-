@@ -8,6 +8,6 @@
     { "source": "/(.*\\.webmanifest)", "destination": "/$1" },
     { "source": "/(manifest\\.json)", "destination": "/$1" },
     { "source": "/(.*\\.(?:js|css|png|jpg|jpeg|svg|ico|txt|map|webmanifest))", "destination": "/$1" },
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

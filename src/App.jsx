@@ -10,6 +10,9 @@ import { ToastProvider } from "./components/common/Toast.jsx";
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 import Diagnostics from "./components/common/Diagnostics.jsx";
 import { initMonitoring } from "./utils/errorHandler.js";
+import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
+import ProtectedRoute from "./components/common/ProtectedRoute.jsx";
+import LoginPage from "./Pages/Auth/LoginPage.jsx";
 
 // Initialize production monitoring
 if (import.meta.env.PROD) {
@@ -18,22 +21,77 @@ if (import.meta.env.PROD) {
 
 function AppContent() {
   const location = useLocation();
+  const { user, loading } = useAuth();
   const isAdmin = location.pathname.startsWith("/admin");
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        Chargement de l'application...
+      </div>
+    );
+  }
 
   return (
     <div className="App">
-      <Banner />
-      {isAdmin && <AdminNavbar />}
+      {user && <Banner />}
+      {user && isAdmin && <AdminNavbar />}
 
       <Routes>
-        <Route path="/" element={<Navigate to="/admin/commandes" replace />} />
-        <Route path="/admin/Commandes" element={<CommandesPage />} />
-        <Route path="/admin/Machines" element={<Machines />} />
-        <Route path="/admin/Planning" element={<PlanningPage />} />
-        <Route path="/admin/Parametres" element={<Parametres />} />
+        <Route
+          path="/"
+          element={
+            user ? <Navigate to="/admin/commandes" replace /> : <Navigate to="/login" replace />
+          }
+        />
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/admin/commandes"
+          element={
+            <ProtectedRoute>
+              <CommandesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/machines"
+          element={
+            <ProtectedRoute>
+              <Machines />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/planning"
+          element={
+            <ProtectedRoute>
+              <PlanningPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/parametres"
+          element={
+            <ProtectedRoute>
+              <Parametres />
+            </ProtectedRoute>
+          }
+        />
+        {/* Backward compatibility for old route */}
+        <Route path="/admin/Commandes" element={<Navigate to="/admin/commandes" replace />} />
+        <Route path="/admin/Machines" element={<Navigate to="/admin/machines" replace />} />
+        <Route path="/admin/Planning" element={<Navigate to="/admin/planning" replace />} />
+        <Route path="/admin/Parametres" element={<Navigate to="/admin/parametres" replace />} />
       </Routes>
 
-      <Diagnostics />
+      {user && <Diagnostics />}
     </div>
   );
 }
@@ -41,13 +99,15 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <EtiquettesProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </EtiquettesProvider>
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <EtiquettesProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </EtiquettesProvider>
+        </ToastProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
